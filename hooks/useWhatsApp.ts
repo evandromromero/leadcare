@@ -216,6 +216,8 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
                 'QRCODE_UPDATED',
                 'CONNECTION_UPDATE',
                 'MESSAGES_UPSERT',
+                'MESSAGES_UPDATE',
+                'SEND_MESSAGE',
               ],
             },
           }),

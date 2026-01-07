@@ -12,6 +12,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_access_logs: {
+        Row: {
+          id: string
+          super_admin_id: string
+          clinic_id: string
+          action: string
+          details: Json | null
+          ip_address: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          super_admin_id: string
+          clinic_id: string
+          action: string
+          details?: Json | null
+          ip_address?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          super_admin_id?: string
+          clinic_id?: string
+          action?: string
+          details?: Json | null
+          ip_address?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_access_logs_super_admin_id_fkey"
+            columns: ["super_admin_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_access_logs_clinic_id_fkey"
+            columns: ["clinic_id"]
+            isOneToOne: false
+            referencedRelation: "clinics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_tags: {
         Row: {
           chat_id: string
@@ -117,33 +162,45 @@ export type Database = {
           address: string | null
           created_at: string | null
           email: string | null
+          expires_at: string | null
           id: string
           logo_url: string | null
+          max_users: number | null
           name: string
           phone: string | null
+          plan: string | null
           slug: string
+          status: string | null
           updated_at: string | null
         }
         Insert: {
           address?: string | null
           created_at?: string | null
           email?: string | null
+          expires_at?: string | null
           id?: string
           logo_url?: string | null
+          max_users?: number | null
           name: string
           phone?: string | null
+          plan?: string | null
           slug: string
+          status?: string | null
           updated_at?: string | null
         }
         Update: {
           address?: string | null
           created_at?: string | null
           email?: string | null
+          expires_at?: string | null
           id?: string
           logo_url?: string | null
+          max_users?: number | null
           name?: string
           phone?: string | null
+          plan?: string | null
           slug?: string
+          status?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -318,7 +375,7 @@ export type Database = {
       users: {
         Row: {
           avatar_url: string | null
-          clinic_id: string
+          clinic_id: string | null
           created_at: string | null
           email: string
           id: string
@@ -329,7 +386,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
-          clinic_id: string
+          clinic_id?: string | null
           created_at?: string | null
           email: string
           id: string
@@ -340,7 +397,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
-          clinic_id?: string
+          clinic_id?: string | null
           created_at?: string | null
           email?: string
           id?: string

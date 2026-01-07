@@ -6,8 +6,8 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  role: 'Admin' | 'Atendente';
-  clinicId: string;
+  role: 'SuperAdmin' | 'Admin' | 'Atendente';
+  clinicId: string | null;
   avatarUrl: string;
   status: 'Ativo' | 'Inativo';
 }
@@ -25,8 +25,12 @@ interface UseAuthReturn {
   session: Session | null;
   loading: boolean;
   error: string | null;
+  isImpersonating: boolean;
+  impersonatedClinic: Clinic | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  startImpersonate: (clinicId: string, clinicName: string) => void;
+  stopImpersonate: () => void;
 }
 
 const AuthContext = createContext<UseAuthReturn | null>(null);
@@ -37,6 +41,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [impersonatedClinic, setImpersonatedClinic] = useState<Clinic | null>(null);
+
+  // Verificar se há impersonate ativo ao carregar
+  useEffect(() => {
+    const savedImpersonate = sessionStorage.getItem('impersonateClinic');
+    if (savedImpersonate) {
+      const clinicData = JSON.parse(savedImpersonate);
+      setIsImpersonating(true);
+      setImpersonatedClinic(clinicData);
+    }
+  }, []);
 
   const fetchUserProfile = async (authUser: SupabaseUser, accessToken: string) => {
     try {
@@ -63,26 +79,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Buscar clínica
-      const clinicResponse = await fetch(
-        `${supabaseUrl}/rest/v1/clinics?id=eq.${profile.clinic_id}&select=*`,
-        {
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${accessToken}`,
-          },
-        }
-      );
-      
-      const clinics = await clinicResponse.json();
-      const clinicData = clinics?.[0] || null;
+      // Buscar clínica (apenas se não for SuperAdmin)
+      let clinicData = null;
+      if (profile.clinic_id) {
+        const clinicResponse = await fetch(
+          `${supabaseUrl}/rest/v1/clinics?id=eq.${profile.clinic_id}&select=*`,
+          {
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          }
+        );
+        
+        const clinics = await clinicResponse.json();
+        clinicData = clinics?.[0] || null;
+      }
 
       setUser({
         id: profile.id,
         name: profile.name,
         email: profile.email,
-        role: profile.role as 'Admin' | 'Atendente',
-        clinicId: profile.clinic_id,
+        role: profile.role as 'SuperAdmin' | 'Admin' | 'Atendente',
+        clinicId: profile.clinic_id || null,
         avatarUrl: profile.avatar_url || '',
         status: profile.status as 'Ativo' | 'Inativo',
       });
@@ -188,6 +207,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setClinic(null);
     setSession(null);
+    setIsImpersonating(false);
+    setImpersonatedClinic(null);
+    sessionStorage.removeItem('impersonateClinic');
+  };
+
+  const startImpersonate = (clinicId: string, clinicName: string) => {
+    const clinicData = { id: clinicId, name: clinicName, slug: '', logoUrl: null };
+    sessionStorage.setItem('impersonateClinic', JSON.stringify(clinicData));
+    setIsImpersonating(true);
+    setImpersonatedClinic(clinicData);
+  };
+
+  const stopImpersonate = () => {
+    sessionStorage.removeItem('impersonateClinic');
+    setIsImpersonating(false);
+    setImpersonatedClinic(null);
   };
 
   const value = {
@@ -196,8 +231,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     loading,
     error,
+    isImpersonating,
+    impersonatedClinic,
     signIn,
     signOut,
+    startImpersonate,
+    stopImpersonate,
   };
 
   return (

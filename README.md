@@ -38,6 +38,24 @@ CRM de WhatsApp completo para clínicas com gestão de leads, caixa de entrada m
 | Edge Function `evolution-webhook` | ✅ Completo |
 | Realtime habilitado para chats/messages | ✅ Completo |
 
+### Fase 3: Painel Super Admin ✅ COMPLETA
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Role `SuperAdmin` no banco de dados | ✅ Completo |
+| Tabela `admin_access_logs` para auditoria | ✅ Completo |
+| Campos de gestão em `clinics` (status, plan, max_users, expires_at) | ✅ Completo |
+| RLS atualizado para SuperAdmin ter acesso global | ✅ Completo |
+| Login separado para admin (`/admin/login`) | ✅ Completo |
+| Dashboard administrativo (`/admin`) | ✅ Completo |
+| Lista de clínicas (`/admin/clinics`) | ✅ Completo |
+| Detalhes da clínica (`/admin/clinics/:id`) | ✅ Completo |
+| Configurações do admin (`/admin/settings`) | ✅ Completo |
+| Funcionalidade "Logar como cliente" (impersonate) | ✅ Completo |
+| Banner de impersonate com botão "Voltar ao Admin" | ✅ Completo |
+| Aprovar/Suspender clínicas | ✅ Completo |
+| Criar nova clínica manualmente | ✅ Completo |
+
 ---
 
 ## Stack Tecnológica
@@ -61,8 +79,8 @@ CRM de WhatsApp completo para clínicas com gestão de leads, caixa de entrada m
 
 | Tabela | Descrição |
 |--------|-----------|
-| `clinics` | Clínicas (multi-tenancy) |
-| `users` | Usuários vinculados ao Supabase Auth |
+| `clinics` | Clínicas (multi-tenancy) - campos: status, plan, max_users, expires_at |
+| `users` | Usuários vinculados ao Supabase Auth - roles: SuperAdmin, Admin, Atendente |
 | `tags` | Tags para categorização |
 | `leads` | Leads/contatos |
 | `lead_tags` | Relacionamento leads-tags (N:N) |
@@ -71,6 +89,7 @@ CRM de WhatsApp completo para clínicas com gestão de leads, caixa de entrada m
 | `messages` | Mensagens das conversas |
 | `whatsapp_instances` | Instâncias WhatsApp por clínica |
 | `settings` | Configurações globais (Evolution API) |
+| `admin_access_logs` | Logs de acesso do SuperAdmin (auditoria) |
 
 ### Triggers
 
@@ -78,8 +97,9 @@ CRM de WhatsApp completo para clínicas com gestão de leads, caixa de entrada m
 
 ### Row Level Security (RLS)
 
-Todas as tabelas possuem RLS habilitado com política simples:
-- Usuários autenticados têm acesso total (`auth.uid() IS NOT NULL`)
+Todas as tabelas possuem RLS habilitado:
+- **SuperAdmin**: Acesso total a todas as tabelas (via função `is_super_admin()`)
+- **Usuários normais**: Acesso aos dados da própria clínica
 
 ---
 
@@ -88,11 +108,13 @@ Todas as tabelas possuem RLS habilitado com política simples:
 ```
 LeadCare/
 ├── components/
-│   └── Layout.tsx            # Layout principal (sidebar + header)
+│   ├── Layout.tsx            # Layout principal (sidebar + header)
+│   ├── AdminLayout.tsx       # Layout do painel admin
+│   └── ImpersonateBanner.tsx # Banner de "visualizando como cliente"
 ├── config/
 │   └── assets.ts             # URLs de assets e imagens
 ├── hooks/
-│   ├── useAuth.ts            # Hook de autenticação Supabase
+│   ├── useAuth.tsx           # Hook de autenticação (+ impersonate)
 │   ├── useChats.ts           # Hook para chats e mensagens (+ Realtime)
 │   ├── useLeads.ts           # Hook para leads
 │   ├── useUsers.ts           # Hook para usuários
@@ -107,7 +129,13 @@ LeadCare/
 │   ├── Kanban.tsx            # Funil de leads (drag & drop)
 │   ├── Users.tsx             # Gestão de usuários
 │   ├── Settings.tsx          # Configurações
-│   └── Connect.tsx           # Conexão WhatsApp (QR Code)
+│   ├── Connect.tsx           # Conexão WhatsApp (QR Code)
+│   └── admin/
+│       ├── AdminLogin.tsx    # Login do Super Admin
+│       ├── AdminDashboard.tsx # Dashboard administrativo
+│       ├── AdminClinics.tsx  # Lista de clínicas
+│       ├── AdminClinicDetail.tsx # Detalhes da clínica + impersonate
+│       └── AdminSettings.tsx # Configurações do admin
 ├── store/
 │   └── mockData.ts           # Dados mockados (legado)
 ├── types.ts                  # Tipos TypeScript
@@ -149,6 +177,12 @@ VITE_SUPABASE_ANON_KEY=sua_anon_key_aqui
 
 ## Credenciais de Acesso
 
+### Super Admin
+| Email | Senha | Perfil |
+|-------|-------|--------|
+| contato@alphabetadesign.com.br | 933755RaEv** | SuperAdmin |
+
+### Usuários de Clínica
 | Email | Senha | Perfil | Clínica |
 |-------|-------|--------|---------|
 | evandromromero@gmail.com | 933755RaEv** | Admin | LeadCare2 |
@@ -184,6 +218,27 @@ VITE_SUPABASE_ANON_KEY=sua_anon_key_aqui
 - Lista usuários da clínica
 - Ativar/desativar usuários
 - Exibe perfil e status
+
+### Painel Super Admin
+- **Login separado** em `/admin/login`
+- **Dashboard** com métricas globais (total de clínicas, usuários, conversas, mensagens)
+- **Lista de clínicas** com filtros por status e busca
+- **Detalhes da clínica** com usuários, estatísticas e instância WhatsApp
+- **Aprovar/Suspender** clínicas
+- **Criar nova clínica** manualmente
+- **Logar como cliente** (impersonate) para visualizar o painel do cliente
+- **Banner de impersonate** com botão "Voltar ao Admin"
+- **Configurações** da Evolution API
+
+### Rotas do Admin
+
+| Rota | Descrição |
+|------|-----------|
+| `/admin/login` | Login do Super Admin |
+| `/admin` | Dashboard administrativo |
+| `/admin/clinics` | Lista de clínicas |
+| `/admin/clinics/:id` | Detalhes da clínica |
+| `/admin/settings` | Configurações globais |
 
 ---
 
@@ -235,14 +290,45 @@ Processa eventos da Evolution API:
 
 ---
 
-## Próximos Passos (Fase 3)
+### Fase 4: Inbox Avançada ✅ COMPLETA
 
 | Funcionalidade | Status |
 |----------------|--------|
-| Envio de mensagens via WhatsApp | 🔄 Pendente |
-| Notificações de novas mensagens | 🔄 Pendente |
-| Respostas rápidas | 🔄 Pendente |
+| Respostas rápidas (modal) | ✅ Completo |
+| Mensagens rápidas configuráveis (CRUD) | ✅ Completo |
+| Auto-scroll para novas mensagens | ✅ Completo |
+| Observações internas por chat | ✅ Completo |
+| Seletor de emojis | ✅ Completo |
+| Envio de mídia (imagens, vídeos, áudios, documentos) | ✅ Completo |
+| Visualização de mídia recebida | ✅ Completo |
+| Etiquetas configuráveis (CRUD) | ✅ Completo |
+| Marcar como lido ao abrir conversa | ✅ Completo |
+| Filtros de conversas (todos, não lidos, aguardando, grupos) | ✅ Completo |
+
+### Novas Tabelas Criadas
+
+| Tabela | Descrição |
+|--------|-----------|
+| `chat_notes` | Observações internas por conversa |
+| `quick_replies` | Mensagens rápidas por clínica |
+
+### Storage
+
+| Bucket | Descrição |
+|--------|-----------|
+| `chat-media` | Armazenamento de mídias (imagens, vídeos, áudios, documentos) |
+
+---
+
+## Próximos Passos (Fase 5)
+
+| Funcionalidade | Status |
+|----------------|--------|
 | Relatórios e métricas | 🔄 Pendente |
+| Gestão de planos e assinaturas | 🔄 Pendente |
+| Auto-registro de clínicas | 🔄 Pendente |
+| Notificações push | 🔄 Pendente |
+| Agendamentos integrados | 🔄 Pendente |
 
 ---
 

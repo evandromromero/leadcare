@@ -19,6 +19,7 @@ interface UseChatsReturn {
   refetch: () => Promise<void>;
   updateChatStatus: (chatId: string, status: string) => Promise<void>;
   sendMessage: (chatId: string, content: string, userId: string) => Promise<void>;
+  markAsRead: (chatId: string) => Promise<void>;
 }
 
 export function useChats(clinicId?: string): UseChatsReturn {
@@ -93,6 +94,25 @@ export function useChats(clinicId?: string): UseChatsReturn {
 
     setChats(prev => prev.map(chat => 
       chat.id === chatId ? { ...chat, status } : chat
+    ));
+  };
+
+  const markAsRead = async (chatId: string) => {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat || (chat.unread_count || 0) === 0) return;
+
+    const { error } = await supabase
+      .from('chats')
+      .update({ unread_count: 0, updated_at: new Date().toISOString() })
+      .eq('id', chatId);
+
+    if (error) {
+      console.error('Error marking chat as read:', error);
+      return;
+    }
+
+    setChats(prev => prev.map(c => 
+      c.id === chatId ? { ...c, unread_count: 0 } : c
     ));
   };
 
@@ -228,9 +248,18 @@ export function useChats(clinicId?: string): UseChatsReturn {
         console.log('[useChats] Message change detected');
         fetchChats();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_instances', filter: `clinic_id=eq.${clinicId}` }, () => {
-        console.log('[useChats] WhatsApp instance change detected');
-        fetchWhatsAppInstance();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_instances', filter: `clinic_id=eq.${clinicId}` }, (payload) => {
+        console.log('[useChats] WhatsApp instance change detected:', payload);
+        // Atualizar imediatamente com os dados do payload se disponível
+        if (payload.new && typeof payload.new === 'object' && 'status' in payload.new) {
+          const newData = payload.new as { instance_name: string; status: string };
+          setWhatsappInstance({
+            instanceName: newData.instance_name,
+            status: newData.status,
+          });
+        } else {
+          fetchWhatsAppInstance();
+        }
       })
       .subscribe();
 
@@ -248,5 +277,6 @@ export function useChats(clinicId?: string): UseChatsReturn {
     refetch: fetchChats,
     updateChatStatus,
     sendMessage,
+    markAsRead,
   };
 }

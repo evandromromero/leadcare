@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GlobalState, WhatsAppStatus } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useChats } from '../hooks/useChats';
+import ImpersonateBanner from './ImpersonateBanner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,9 +15,14 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, isImpersonating, impersonatedClinic, stopImpersonate } = useAuth();
   const clinicId = state.selectedClinic?.id;
   const { whatsappConnected } = useChats(clinicId);
+
+  const handleExitImpersonate = () => {
+    stopImpersonate();
+    navigate('/admin/clinics');
+  };
 
   // Sincronizar status do WhatsApp com o estado global
   useEffect(() => {
@@ -53,7 +59,16 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
+      {/* Banner de Impersonate */}
+      {isImpersonating && impersonatedClinic && (
+        <ImpersonateBanner 
+          clinicName={impersonatedClinic.name} 
+          onExit={handleExitImpersonate} 
+        />
+      )}
+      
+      <div className="flex flex-1 overflow-hidden">
       {/* Sidebar */}
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200">
         <div className="p-6 border-b border-slate-100">
@@ -146,6 +161,7 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
         <main className="flex-1 overflow-auto relative">
           {children}
         </main>
+      </div>
       </div>
     </div>
   );

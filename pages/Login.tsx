@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { assets } from '../config/assets';
@@ -11,11 +11,22 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ setState }) => {
   const navigate = useNavigate();
-  const { signIn, loading: authLoading, error: authError } = useAuth();
+  const { signIn, user, loading: authLoading, error: authError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Redirecionar quando o user carregar após login
+  useEffect(() => {
+    if (user && !authLoading) {
+      if (user.role === 'SuperAdmin') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
+    }
+  }, [user, authLoading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,8 +40,7 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
       setIsSubmitting(false);
       return;
     }
-
-    navigate('/dashboard');
+    // Redirecionamento será feito pelo useEffect quando o user carregar
   };
 
   return (
