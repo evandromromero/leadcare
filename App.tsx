@@ -11,7 +11,7 @@ import Inbox from './pages/Inbox';
 import Kanban from './pages/Kanban';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
-import { useAuth } from './hooks/useAuth';
+import { useAuth, AuthProvider } from './hooks/useAuth';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
@@ -123,7 +123,9 @@ const AppRoutes: React.FC = () => {
 const App: React.FC = () => {
   return (
     <Router>
-      <AppRoutes />
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </Router>
   );
 };
