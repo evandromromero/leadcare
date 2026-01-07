@@ -24,14 +24,19 @@ CRM de WhatsApp completo para clínicas com gestão de leads, caixa de entrada m
 | Hooks de dados (useChats, useLeads, useUsers) | ✅ Completo |
 | Realtime subscriptions | ✅ Completo |
 
-### Fase 2: Integração WhatsApp 🔄 PENDENTE
+### Fase 2: Integração WhatsApp ✅ COMPLETA
 
 | Funcionalidade | Status |
 |----------------|--------|
-| Integrar Evolution API | 🔄 Pendente |
-| Webhook para receber mensagens | 🔄 Pendente |
-| Conexão via QR Code | 🔄 Pendente |
-| Envio/recebimento em tempo real | 🔄 Pendente |
+| Integrar Evolution API | ✅ Completo |
+| Webhook para receber mensagens | ✅ Completo |
+| Conexão via QR Code | ✅ Completo |
+| Envio/recebimento em tempo real | ✅ Completo |
+| Criação automática de instância | ✅ Completo |
+| Tabela `settings` com API Key global | ✅ Completo |
+| Tabela `whatsapp_instances` | ✅ Completo |
+| Edge Function `evolution-webhook` | ✅ Completo |
+| Realtime habilitado para chats/messages | ✅ Completo |
 
 ---
 
@@ -64,6 +69,8 @@ CRM de WhatsApp completo para clínicas com gestão de leads, caixa de entrada m
 | `chats` | Conversas WhatsApp |
 | `chat_tags` | Relacionamento chats-tags (N:N) |
 | `messages` | Mensagens das conversas |
+| `whatsapp_instances` | Instâncias WhatsApp por clínica |
+| `settings` | Configurações globais (Evolution API) |
 
 ### Triggers
 
@@ -88,7 +95,8 @@ LeadCare/
 │   ├── useAuth.ts            # Hook de autenticação Supabase
 │   ├── useChats.ts           # Hook para chats e mensagens (+ Realtime)
 │   ├── useLeads.ts           # Hook para leads
-│   └── useUsers.ts           # Hook para usuários
+│   ├── useUsers.ts           # Hook para usuários
+│   └── useWhatsApp.ts        # Hook para conexão WhatsApp
 ├── lib/
 │   ├── supabase.ts           # Cliente Supabase configurado
 │   └── database.types.ts     # Tipos TypeScript do banco
@@ -99,7 +107,7 @@ LeadCare/
 │   ├── Kanban.tsx            # Funil de leads (drag & drop)
 │   ├── Users.tsx             # Gestão de usuários
 │   ├── Settings.tsx          # Configurações
-│   └── Connect.tsx           # Conexão WhatsApp (pendente)
+│   └── Connect.tsx           # Conexão WhatsApp (QR Code)
 ├── store/
 │   └── mockData.ts           # Dados mockados (legado)
 ├── types.ts                  # Tipos TypeScript
@@ -179,26 +187,62 @@ VITE_SUPABASE_ANON_KEY=sua_anon_key_aqui
 
 ---
 
-## Próximos Passos (Fase 2)
+## Integração WhatsApp - Evolution API
 
-### Integração WhatsApp com Evolution API
-
-1. **Criar tabela `whatsapp_instances`** - armazenar instâncias por clínica
-2. **Criar Edge Function `whatsapp-webhook`** - receber mensagens
-3. **Atualizar tela Connect** - QR Code real
-4. **Criar hook `useWhatsApp`** - gerenciar conexão
-5. **Integrar envio de mensagens** - conectar Inbox com WhatsApp
-
-### Arquitetura Planejada
+### Arquitetura Implementada
 
 ```
-Frontend ──► Evolution API ──► WhatsApp
-    │              │
-    │              │ Webhook
-    ▼              ▼
-         Supabase
-    (Database + Edge Functions)
+Frontend (React) ──► Evolution API ──► WhatsApp
+       │                    │
+       │                    │ Webhook (POST)
+       ▼                    ▼
+              Supabase
+    (Database + Edge Functions + Realtime)
 ```
+
+### Fluxo de Conexão
+
+1. Cliente acessa página "Conectar WhatsApp"
+2. Sistema cria instância automaticamente na Evolution API
+3. Webhook é configurado para receber eventos
+4. QR Code é exibido para escanear
+5. Após escanear, status muda para "Conectado"
+6. Mensagens recebidas são salvas automaticamente via webhook
+
+### Configurações
+
+| Configuração | Valor |
+|--------------|-------|
+| Evolution API URL | `https://evolutionaoi-evolution-api.v6hnnf.easypanel.host` |
+| API Key Global | Armazenada na tabela `settings` |
+| Webhook URL | `https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/evolution-webhook` |
+| Nome da Instância | `leadcare_{clinic_id}` (automático) |
+
+### Edge Function: evolution-webhook
+
+Processa eventos da Evolution API:
+- `qrcode.updated` - Atualiza QR Code no banco
+- `connection.update` - Atualiza status de conexão
+- `messages.upsert` - Salva mensagens recebidas
+
+### Hooks Criados
+
+| Hook | Descrição |
+|------|-----------|
+| `useWhatsApp` | Gerencia conexão, QR Code, status |
+| `useChats` | Lista chats com filtro por clínica + Realtime |
+| `useAuth` | Autenticação com Supabase |
+
+---
+
+## Próximos Passos (Fase 3)
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Envio de mensagens via WhatsApp | 🔄 Pendente |
+| Notificações de novas mensagens | 🔄 Pendente |
+| Respostas rápidas | 🔄 Pendente |
+| Relatórios e métricas | 🔄 Pendente |
 
 ---
 

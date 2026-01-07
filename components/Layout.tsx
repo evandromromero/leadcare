@@ -1,8 +1,9 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GlobalState, WhatsAppStatus } from '../types';
 import { useAuth } from '../hooks/useAuth';
+import { useChats } from '../hooks/useChats';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,10 +15,20 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  const clinicId = state.selectedClinic?.id;
+  const { whatsappConnected } = useChats(clinicId);
+
+  // Sincronizar status do WhatsApp com o estado global
+  useEffect(() => {
+    const newStatus: WhatsAppStatus = whatsappConnected ? 'connected' : 'disconnected';
+    if (state.whatsappStatus !== newStatus) {
+      setState(prev => ({ ...prev, whatsappStatus: newStatus }));
+    }
+  }, [whatsappConnected, state.whatsappStatus, setState]);
 
   const handleLogout = async () => {
     await signOut();
-    setState(prev => ({ ...prev, currentUser: null, selectedClinic: null }));
+    setState(prev => ({ ...prev, currentUser: null, selectedClinic: null, whatsappStatus: 'disconnected' }));
     navigate('/login');
   };
 

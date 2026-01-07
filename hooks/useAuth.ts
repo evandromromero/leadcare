@@ -83,11 +83,24 @@ export function useAuth(): UseAuthReturn {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('Error getting session:', error);
+        setSession(null);
+        setUser(null);
+        setClinic(null);
+        setLoading(false);
+        return;
+      }
+      
       setSession(session);
       if (session?.user) {
-        fetchUserProfile(session.user);
+        fetchUserProfile(session.user).finally(() => setLoading(false));
+      } else {
+        setLoading(false);
       }
+    }).catch((err) => {
+      console.error('Exception getting session:', err);
       setLoading(false);
     });
 

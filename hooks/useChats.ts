@@ -162,10 +162,16 @@ export function useChats(clinicId?: string): UseChatsReturn {
   };
 
   const fetchWhatsAppInstance = async () => {
+    if (!clinicId) {
+      setWhatsappInstance(null);
+      return;
+    }
+    
     try {
       const { data } = await supabase
         .from('whatsapp_instances')
         .select('instance_name, status')
+        .eq('clinic_id', clinicId)
         .maybeSingle();
 
       if (data) {
@@ -173,6 +179,8 @@ export function useChats(clinicId?: string): UseChatsReturn {
           instanceName: data.instance_name,
           status: data.status,
         });
+      } else {
+        setWhatsappInstance(null);
       }
     } catch (err) {
       console.error('Error fetching WhatsApp instance:', err);
