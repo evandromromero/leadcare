@@ -2,36 +2,77 @@
 
 CRM de WhatsApp completo para clínicas com gestão de leads, caixa de entrada multicanal, funil kanban e gestão de usuários.
 
-![LeadCare Logo](public/logo.png)
-
 ---
 
 ## Sobre o Projeto
 
 **LeadCare** é uma plataforma de CRM desenvolvida para clínicas e consultórios que precisam gerenciar atendimentos via WhatsApp de forma profissional. O sistema permite acompanhar leads desde o primeiro contato até o fechamento, com visualização em kanban, métricas em tempo real e gestão de equipe.
 
-### Funcionalidades Atuais
+---
 
-| Módulo | Descrição | Status |
-|--------|-----------|--------|
-| **Login** | Autenticação de usuários (Admin/Atendente) | ✅ Frontend |
-| **Dashboard** | Métricas em tempo real (leads, atendimentos, vendas, tempo de resposta) | ✅ Frontend |
-| **Inbox** | Caixa de entrada multicanal para conversas WhatsApp | ✅ Frontend |
-| **Kanban** | Funil de leads com drag & drop (Novo Lead → Em Atendimento → Agendado → Fechado → Perdido) | ✅ Frontend |
-| **Usuários** | Gestão de usuários e permissões (Admin) | ✅ Frontend |
-| **Configurações** | Configurações do sistema e perfil da clínica | ✅ Frontend |
-| **Conexão WhatsApp** | Tela de conexão via QR Code | ✅ Frontend |
+## Status do Projeto
+
+### Fase 1: Backend e Autenticação ✅ COMPLETA
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Configurar Supabase (banco + auth) | ✅ Completo |
+| Criar tabelas no banco | ✅ Completo |
+| Implementar autenticação real | ✅ Completo |
+| Row Level Security (RLS) | ✅ Completo |
+| Migrar para dados reais | ✅ Completo |
+| Hooks de dados (useChats, useLeads, useUsers) | ✅ Completo |
+| Realtime subscriptions | ✅ Completo |
+
+### Fase 2: Integração WhatsApp 🔄 PENDENTE
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Integrar Evolution API | 🔄 Pendente |
+| Webhook para receber mensagens | 🔄 Pendente |
+| Conexão via QR Code | 🔄 Pendente |
+| Envio/recebimento em tempo real | 🔄 Pendente |
 
 ---
 
 ## Stack Tecnológica
 
-- **Frontend**: React 19 + TypeScript
-- **Build Tool**: Vite 6
+- **Frontend**: React 19 + TypeScript + Vite 6
 - **Estilização**: TailwindCSS (via CDN)
 - **Roteamento**: React Router DOM 7
 - **Ícones**: Material Symbols (Google Fonts)
-- **Estado**: React useState (local state)
+- **Backend**: Supabase (PostgreSQL + Auth + Realtime)
+- **Cliente DB**: @supabase/supabase-js
+
+---
+
+## Banco de Dados (Supabase)
+
+### Projeto Supabase
+- **URL**: `https://opuepzfqizmamdegdhbs.supabase.co`
+- **Projeto**: LeadCare
+
+### Tabelas
+
+| Tabela | Descrição |
+|--------|-----------|
+| `clinics` | Clínicas (multi-tenancy) |
+| `users` | Usuários vinculados ao Supabase Auth |
+| `tags` | Tags para categorização |
+| `leads` | Leads/contatos |
+| `lead_tags` | Relacionamento leads-tags (N:N) |
+| `chats` | Conversas WhatsApp |
+| `chat_tags` | Relacionamento chats-tags (N:N) |
+| `messages` | Mensagens das conversas |
+
+### Triggers
+
+- `on_auth_user_created`: Cria perfil automaticamente na tabela `users` quando um novo usuário se registra no Supabase Auth
+
+### Row Level Security (RLS)
+
+Todas as tabelas possuem RLS habilitado com política simples:
+- Usuários autenticados têm acesso total (`auth.uid() IS NOT NULL`)
 
 ---
 
@@ -39,29 +80,32 @@ CRM de WhatsApp completo para clínicas com gestão de leads, caixa de entrada m
 
 ```
 LeadCare/
-├── public/
-│   └── logo.png              # Logo do LeadCare
 ├── components/
 │   └── Layout.tsx            # Layout principal (sidebar + header)
 ├── config/
 │   └── assets.ts             # URLs de assets e imagens
+├── hooks/
+│   ├── useAuth.ts            # Hook de autenticação Supabase
+│   ├── useChats.ts           # Hook para chats e mensagens (+ Realtime)
+│   ├── useLeads.ts           # Hook para leads
+│   └── useUsers.ts           # Hook para usuários
+├── lib/
+│   ├── supabase.ts           # Cliente Supabase configurado
+│   └── database.types.ts     # Tipos TypeScript do banco
 ├── pages/
-│   ├── Login.tsx             # Tela de login
-│   ├── Dashboard.tsx         # Dashboard com métricas
-│   ├── Inbox.tsx             # Caixa de entrada de mensagens
-│   ├── Kanban.tsx            # Funil de leads
+│   ├── Login.tsx             # Login com Supabase Auth
+│   ├── Dashboard.tsx         # Métricas reais do banco
+│   ├── Inbox.tsx             # Caixa de entrada (dados reais)
+│   ├── Kanban.tsx            # Funil de leads (drag & drop)
 │   ├── Users.tsx             # Gestão de usuários
 │   ├── Settings.tsx          # Configurações
-│   └── Connect.tsx           # Conexão WhatsApp
+│   └── Connect.tsx           # Conexão WhatsApp (pendente)
 ├── store/
-│   └── mockData.ts           # Dados mockados para desenvolvimento
+│   └── mockData.ts           # Dados mockados (legado)
 ├── types.ts                  # Tipos TypeScript
-├── App.tsx                   # Componente principal com rotas
-├── index.tsx                 # Entry point
-├── index.html                # HTML principal
-├── vite.config.ts            # Configuração do Vite
-├── tsconfig.json             # Configuração TypeScript
-└── package.json              # Dependências
+├── App.tsx                   # Rotas e autenticação
+├── .env.local                # Variáveis de ambiente
+└── .env.example              # Exemplo de variáveis
 ```
 
 ---
@@ -76,129 +120,85 @@ LeadCare/
 ### Instalação
 
 ```bash
-# Clone o repositório
-git clone https://github.com/seu-usuario/leadcare.git
-cd leadcare
-
 # Instale as dependências
 npm install
+
+# Configure as variáveis de ambiente
+# Copie .env.example para .env.local e preencha
 
 # Execute em modo desenvolvimento
 npm run dev
 ```
 
-A aplicação estará disponível em `http://localhost:5173`
+### Variáveis de Ambiente
 
-### Build para Produção
-
-```bash
-npm run build
-npm run preview
+```env
+VITE_SUPABASE_URL=https://opuepzfqizmamdegdhbs.supabase.co
+VITE_SUPABASE_ANON_KEY=sua_anon_key_aqui
 ```
 
 ---
 
-## Credenciais de Teste
+## Credenciais de Acesso
 
-| Email | Senha | Perfil |
-|-------|-------|--------|
-| admin@clinica.com | 123456 | Admin |
-
----
-
-## Roadmap - O que falta fazer
-
-### Fase 1: Backend e Autenticação
-- [ ] Configurar Supabase (banco de dados + auth)
-- [ ] Criar tabelas: users, clinics, chats, messages, leads, tags
-- [ ] Implementar autenticação real com Supabase Auth
-- [ ] Criar Row Level Security (RLS) para multi-tenancy
-- [ ] Migrar dados mockados para banco real
-
-### Fase 2: Integração WhatsApp
-- [ ] Integrar com API do WhatsApp Business (ou Evolution API)
-- [ ] Implementar webhook para receber mensagens
-- [ ] Conexão real via QR Code
-- [ ] Envio e recebimento de mensagens em tempo real
-- [ ] Suporte a mídia (imagens, áudios, documentos)
-
-### Fase 3: Funcionalidades Avançadas
-- [ ] Notificações push/desktop
-- [ ] Respostas rápidas configuráveis
-- [ ] Chatbot com respostas automáticas
-- [ ] Agendamento de mensagens
-- [ ] Templates de mensagens (HSM)
-- [ ] Transferência de atendimento entre atendentes
-
-### Fase 4: Relatórios e Analytics
-- [ ] Dashboard com dados reais
-- [ ] Relatórios de performance por atendente
-- [ ] Métricas de conversão do funil
-- [ ] Exportação de relatórios (PDF/Excel)
-- [ ] Histórico de atendimentos
-
-### Fase 5: Multi-clínica e SaaS
-- [ ] Suporte a múltiplas clínicas/unidades
-- [ ] Planos e assinaturas
-- [ ] Painel administrativo master
-- [ ] Onboarding de novas clínicas
+| Email | Senha | Perfil | Clínica |
+|-------|-------|--------|---------|
+| evandromromero@gmail.com | 933755RaEv** | Admin | LeadCare2 |
 
 ---
 
-## Tipos de Dados
+## Funcionalidades Implementadas
 
-### User
-```typescript
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'Admin' | 'Atendente';
-  clinicId: string;
-  avatarUrl: string;
-  status: 'Ativo' | 'Inativo';
-}
-```
+### Login
+- Autenticação real com Supabase Auth
+- Redirecionamento automático se já logado
+- Mensagens de erro amigáveis
 
-### Chat
-```typescript
-interface Chat {
-  id: string;
-  clientName: string;
-  phoneNumber: string;
-  avatarUrl: string;
-  lastMessage: string;
-  lastMessageTime: string;
-  unreadCount: number;
-  tags: Tag[];
-  messages: Message[];
-  status: 'Novo Lead' | 'Em Atendimento' | 'Agendado' | 'Fechado' | 'Perdido';
-}
-```
+### Dashboard
+- Métricas em tempo real do banco
+- Contagem de leads por status
+- Lista de conversas recentes
 
-### Lead
-```typescript
-interface Lead {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  stage: Chat['status'];
-  tags: Tag[];
-  notes: string;
-  lastUpdate: string;
-}
-```
+### Inbox
+- Lista de conversas do banco
+- Visualização de mensagens
+- Envio de mensagens (salva no banco)
+- Tags coloridas
+- Realtime updates
+
+### Kanban
+- Pipeline de leads com 5 colunas
+- Drag & drop funcional
+- Atualiza status no banco
+- Tags e timestamps
+
+### Usuários
+- Lista usuários da clínica
+- Ativar/desativar usuários
+- Exibe perfil e status
 
 ---
 
-## Contribuição
+## Próximos Passos (Fase 2)
 
-1. Faça um fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/nova-feature`)
-3. Commit suas mudanças (`git commit -m 'Adiciona nova feature'`)
-4. Push para a branch (`git push origin feature/nova-feature`)
-5. Abra um Pull Request
+### Integração WhatsApp com Evolution API
+
+1. **Criar tabela `whatsapp_instances`** - armazenar instâncias por clínica
+2. **Criar Edge Function `whatsapp-webhook`** - receber mensagens
+3. **Atualizar tela Connect** - QR Code real
+4. **Criar hook `useWhatsApp`** - gerenciar conexão
+5. **Integrar envio de mensagens** - conectar Inbox com WhatsApp
+
+### Arquitetura Planejada
+
+```
+Frontend ──► Evolution API ──► WhatsApp
+    │              │
+    │              │ Webhook
+    ▼              ▼
+         Supabase
+    (Database + Edge Functions)
+```
 
 ---
 
@@ -208,7 +208,7 @@ Este projeto é privado e de uso exclusivo.
 
 ---
 
-## Contato
+## Desenvolvido por
 
 **LeadCare** - CRM para Clínicas
-Desenvolvido com React + TypeScript
+React + TypeScript + Supabase

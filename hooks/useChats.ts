@@ -1,0 +1,244 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import type { Tables } from '../lib/database.types';
+
+export type DbChat = Tables<'chats'>;
+export type DbMessage = Tables<'messages'>;
+export type DbTag = Tables<'tags'>;
+
+export interface ChatWithMessages extends DbChat {
+  messages: DbMessage[];
+  tags: DbTag[];
+}
+
+interface UseChatsReturn {
+  chats: ChatWithMessages[];
+  loading: boolean;
+  error: string | null;
+  whatsappConnected: boolean;
+  refetch: () => Promise<void>;
+  updateChatStatus: (chatId: string, status: string) => Promise<void>;
+  sendMessage: (chatId: string, content: string, userId: string) => Promise<void>;
+}
+
+export function useChats(clinicId?: string): UseChatsReturn {
+  const [chats, setChats] = useState<ChatWithMessages[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [whatsappInstance, setWhatsappInstance] = useState<{ instanceName: string; status: string } | null>(null);
+  const [evolutionSettings, setEvolutionSettings] = useState<{ apiUrl: string; apiKey: string } | null>(null);
+
+  const fetchChats = async () => {
+    console.log('[useChats] fetchChats called, clinicId:', clinicId);
+    
+    if (!clinicId) {
+      console.log('[useChats] No clinicId, setting loading false');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('[useChats] Fetching chats from Supabase...');
+      const { data: chatsData, error: chatsError } = await supabase
+        .from('chats')
+        .select(`
+          *,
+          messages (
+            *
+          ),
+          chat_tags (
+            tags (*)
+          )
+        `)
+        .eq('clinic_id', clinicId)
+        .order('last_message_time', { ascending: false });
+
+      if (chatsError) {
+        console.error('[useChats] Error fetching chats:', chatsError);
+        setError('Erro ao carregar conversas');
+        setLoading(false);
+        return;
+      }
+
+      console.log('[useChats] Chats fetched:', chatsData?.length || 0);
+
+      const formattedChats: ChatWithMessages[] = (chatsData || []).map(chat => ({
+        ...chat,
+        messages: chat.messages || [],
+        tags: chat.chat_tags?.map((ct: { tags: DbTag }) => ct.tags).filter(Boolean) || [],
+      }));
+
+      setChats(formattedChats);
+    } catch (err) {
+      console.error('[useChats] Exception fetching chats:', err);
+      setError('Erro ao carregar conversas');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateChatStatus = async (chatId: string, status: string) => {
+    const { error } = await supabase
+      .from('chats')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', chatId);
+
+    if (error) {
+      console.error('Error updating chat status:', error);
+      return;
+    }
+
+    setChats(prev => prev.map(chat => 
+      chat.id === chatId ? { ...chat, status } : chat
+    ));
+  };
+
+  const sendMessage = async (chatId: string, content: string, userId: string) => {
+    const chat = chats.find(c => c.id === chatId);
+    
+    // Enviar via WhatsApp se conectado
+    if (whatsappInstance && whatsappInstance.status === 'connected' && evolutionSettings && chat?.phone_number) {
+      try {
+        let formattedPhone = chat.phone_number.replace(/\D/g, '');
+        if (!formattedPhone.startsWith('55')) {
+          formattedPhone = '55' + formattedPhone;
+        }
+
+        await fetch(`${evolutionSettings.apiUrl}/message/sendText/${whatsappInstance.instanceName}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': evolutionSettings.apiKey,
+          },
+          body: JSON.stringify({
+            number: formattedPhone,
+            text: content,
+          }),
+        });
+      } catch (err) {
+        console.error('Error sending WhatsApp message:', err);
+      }
+    }
+
+    const { data: newMessage, error } = await supabase
+      .from('messages')
+      .insert({
+        chat_id: chatId,
+        content,
+        is_from_client: false,
+        sent_by: userId,
+        type: 'text',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error sending message:', error);
+      return;
+    }
+
+    await supabase
+      .from('chats')
+      .update({ 
+        last_message: content, 
+        last_message_time: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', chatId);
+
+    setChats(prev => prev.map(c => 
+      c.id === chatId 
+        ? { 
+            ...c, 
+            messages: [...c.messages, newMessage],
+            last_message: content,
+            last_message_time: new Date().toISOString()
+          } 
+        : c
+    ));
+  };
+
+  const fetchWhatsAppInstance = async () => {
+    try {
+      const { data } = await supabase
+        .from('whatsapp_instances')
+        .select('instance_name, status')
+        .maybeSingle();
+
+      if (data) {
+        setWhatsappInstance({
+          instanceName: data.instance_name,
+          status: data.status,
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching WhatsApp instance:', err);
+    }
+  };
+
+  const fetchEvolutionSettings = async () => {
+    try {
+      const { data } = await supabase
+        .from('settings')
+        .select('evolution_api_url, evolution_api_key')
+        .maybeSingle();
+
+      if (data && data.evolution_api_url && data.evolution_api_key) {
+        setEvolutionSettings({
+          apiUrl: data.evolution_api_url,
+          apiKey: data.evolution_api_key,
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching Evolution settings:', err);
+    }
+  };
+
+  useEffect(() => {
+    console.log('[useChats] useEffect triggered, clinicId:', clinicId);
+    
+    fetchChats();
+    fetchWhatsAppInstance();
+    fetchEvolutionSettings();
+
+    if (!clinicId) {
+      console.log('[useChats] No clinicId, skipping subscriptions');
+      return;
+    }
+
+    console.log('[useChats] Setting up realtime subscriptions...');
+    const chatsSubscription = supabase
+      .channel(`chats-changes-${clinicId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `clinic_id=eq.${clinicId}` }, () => {
+        console.log('[useChats] Chat change detected');
+        fetchChats();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+        console.log('[useChats] Message change detected');
+        fetchChats();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_instances', filter: `clinic_id=eq.${clinicId}` }, () => {
+        console.log('[useChats] WhatsApp instance change detected');
+        fetchWhatsAppInstance();
+      })
+      .subscribe();
+
+    return () => {
+      console.log('[useChats] Cleaning up subscriptions');
+      supabase.removeChannel(chatsSubscription);
+    };
+  }, [clinicId]);
+
+  return {
+    chats,
+    loading,
+    error,
+    whatsappConnected: whatsappInstance?.status === 'connected',
+    refetch: fetchChats,
+    updateChatStatus,
+    sendMessage,
+  };
+}

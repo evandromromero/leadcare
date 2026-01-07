@@ -23,7 +23,7 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
         <div className="md:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 space-y-6">
           <div className="flex items-center gap-6 mb-4">
             <div className="relative group">
-              <img src={state.selectedClinic?.logoUrl} className="size-20 rounded-2xl object-cover border border-slate-100" />
+              <img src={state.selectedClinic?.logoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(state.selectedClinic?.name || 'C')}&background=0891b2&color=fff&size=80`} className="size-20 rounded-2xl object-cover border border-slate-100" />
               <div className="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
                 <span className="material-symbols-outlined text-white">edit</span>
               </div>

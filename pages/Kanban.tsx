@@ -1,14 +1,19 @@
 
 import React, { useState } from 'react';
-import { GlobalState, Chat } from '../types';
+import { GlobalState } from '../types';
+import { useChats } from '../hooks/useChats';
 
 interface KanbanProps {
   state: GlobalState;
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
 }
 
+type ChatStatus = 'Novo Lead' | 'Em Atendimento' | 'Agendado' | 'Fechado' | 'Perdido';
+
 const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
-  const columns: Chat['status'][] = ['Novo Lead', 'Em Atendimento', 'Agendado', 'Fechado', 'Perdido'];
+  const clinicId = state.selectedClinic?.id;
+  const { chats, loading, updateChatStatus } = useChats(clinicId);
+  const columns: ChatStatus[] = ['Novo Lead', 'Em Atendimento', 'Agendado', 'Fechado', 'Perdido'];
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
   const columnConfig = {
@@ -19,11 +24,17 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     'Perdido': { color: 'red', label: 'Perdidos' },
   };
 
-  const moveLead = (id: string, newStage: Chat['status']) => {
-    setState(prev => ({
-      ...prev,
-      chats: prev.chats.map(chat => chat.id === id ? { ...chat, status: newStage } : chat)
-    }));
+  const moveLead = async (id: string, newStage: ChatStatus) => {
+    await updateChatStatus(id, newStage);
+  };
+
+  const formatTimeAgo = (dateStr: string | null) => {
+    if (!dateStr) return 'Agora';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    if (hours < 1) return 'Agora';
+    if (hours < 24) return `${hours}h atrás`;
+    return `${Math.floor(hours / 24)}d atrás`;
   };
 
   const onDragStart = (e: React.DragEvent, id: string) => {
@@ -37,7 +48,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const onDrop = (e: React.DragEvent, newStage: Chat['status']) => {
+  const onDrop = (e: React.DragEvent, newStage: ChatStatus) => {
     e.preventDefault();
     const id = e.dataTransfer.getData('text/plain');
     if (id) {
@@ -65,8 +76,15 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
       </div>
 
       <div className="flex-1 overflow-x-auto overflow-y-hidden flex gap-6 pb-6 no-scrollbar">
-        {columns.map(column => {
-          const leadsInCol = state.chats.filter(c => c.status === column);
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-600 mx-auto mb-4"></div>
+              <p className="text-slate-500">Carregando pipeline...</p>
+            </div>
+          </div>
+        ) : columns.map(column => {
+          const leadsInCol = chats.filter(c => c.status === column);
           const config = columnConfig[column];
 
           return (
@@ -96,7 +114,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                     className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-cyan-400 transition-all cursor-grab active:cursor-grabbing group relative ${draggedId === lead.id ? 'opacity-50' : ''}`}
                   >
                     <div className="flex justify-between items-start mb-3">
-                      <h4 className="font-bold text-slate-900 text-sm truncate pr-4">{lead.clientName}</h4>
+                      <h4 className="font-bold text-slate-900 text-sm truncate pr-4">{lead.client_name}</h4>
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                          <span className="material-symbols-outlined text-slate-300 text-[18px]">drag_indicator</span>
                       </div>
@@ -104,22 +122,22 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                     
                     <div className="flex items-center gap-1.5 text-slate-400 text-xs mb-4">
                       <span className="material-symbols-outlined text-[14px]">call</span>
-                      {lead.phoneNumber}
+                      {lead.phone_number}
                     </div>
 
                     <div className="flex flex-wrap gap-1.5 mb-4">
                       {lead.tags.map(tag => (
-                        <span key={tag.label} className={`px-1.5 py-0.5 rounded text-[9px] font-black border ${tag.color}`}>
-                          {tag.label}
+                        <span key={tag.id} className="px-1.5 py-0.5 rounded text-[9px] font-black border" style={{ backgroundColor: `${tag.color}20`, color: tag.color, borderColor: `${tag.color}40` }}>
+                          {tag.name}
                         </span>
                       ))}
                     </div>
 
                     <div className="flex items-center justify-between pt-3 border-t border-slate-50">
                       <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                        <span className="material-symbols-outlined text-[14px]">schedule</span> 2h atrás
+                        <span className="material-symbols-outlined text-[14px]">schedule</span> {formatTimeAgo(lead.updated_at)}
                       </div>
-                      <img src={lead.avatarUrl} className="size-6 rounded-full border border-white shadow-sm" />
+                      <img src={lead.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(lead.client_name)}&background=0891b2&color=fff&size=32`} className="size-6 rounded-full border border-white shadow-sm" />
                     </div>
                   </div>
                 ))}

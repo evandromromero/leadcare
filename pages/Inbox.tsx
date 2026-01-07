@@ -1,6 +1,8 @@
 
-import React, { useState } from 'react';
-import { GlobalState, Chat, Message } from '../types';
+import React, { useState, useEffect } from 'react';
+import { GlobalState } from '../types';
+import { useChats, ChatWithMessages } from '../hooks/useChats';
+import { useAuth } from '../hooks/useAuth';
 
 interface InboxProps {
   state: GlobalState;
@@ -8,32 +10,29 @@ interface InboxProps {
 }
 
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
-  const [selectedChatId, setSelectedChatId] = useState<string | null>(state.chats[0]?.id || null);
+  const clinicId = state.selectedClinic?.id;
+  const { chats, loading, sendMessage } = useChats(clinicId);
+  const { user } = useAuth();
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [msgInput, setMsgInput] = useState('');
 
-  const selectedChat = state.chats.find(c => c.id === selectedChatId);
+  useEffect(() => {
+    if (chats.length > 0 && !selectedChatId) {
+      setSelectedChatId(chats[0].id);
+    }
+  }, [chats, selectedChatId]);
 
-  const handleSendMessage = () => {
-    if (!msgInput.trim() || !selectedChatId) return;
+  const selectedChat = chats.find(c => c.id === selectedChatId);
 
-    const newMessage: Message = {
-      id: `m-${Date.now()}`,
-      text: msgInput,
-      sender: 'me',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      status: 'sent'
-    };
-
-    setState(prev => ({
-      ...prev,
-      chats: prev.chats.map(chat => 
-        chat.id === selectedChatId 
-          ? { ...chat, messages: [...chat.messages, newMessage], lastMessage: msgInput, lastMessageTime: newMessage.timestamp } 
-          : chat
-      )
-    }));
-
+  const handleSendMessage = async () => {
+    if (!msgInput.trim() || !selectedChatId || !user) return;
+    await sendMessage(selectedChatId, msgInput, user.id);
     setMsgInput('');
+  };
+
+  const formatTime = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -64,39 +63,51 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
-          {state.chats.map(chat => (
-            <div 
-              key={chat.id} 
-              onClick={() => setSelectedChatId(chat.id)}
-              className={`flex items-start gap-3 p-4 cursor-pointer transition-colors relative border-l-4 ${
-                selectedChatId === chat.id ? 'bg-cyan-50/50 border-cyan-600' : 'hover:bg-slate-50 border-transparent'
-              }`}
-            >
-              <div className="relative shrink-0">
-                <img src={chat.avatarUrl} className="size-12 rounded-full border border-slate-100" />
-                <div className="absolute bottom-0 right-0 size-3 bg-green-500 border-2 border-white rounded-full"></div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-baseline mb-1">
-                  <h3 className="text-sm font-bold text-slate-900 truncate">{chat.clientName}</h3>
-                  <span className="text-[10px] font-bold text-slate-400">{chat.lastMessageTime}</span>
-                </div>
-                <p className="text-xs text-slate-500 truncate leading-relaxed">{chat.lastMessage}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  {chat.tags.map(tag => (
-                    <span key={tag.label} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${tag.color}`}>
-                      {tag.label}
-                    </span>
-                  ))}
-                  {chat.unreadCount > 0 && (
-                    <span className="ml-auto bg-cyan-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                      {chat.unreadCount}
-                    </span>
-                  )}
-                </div>
-              </div>
+          {loading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600 mx-auto"></div>
+              <p className="text-sm text-slate-500 mt-2">Carregando conversas...</p>
             </div>
-          ))}
+          ) : chats.length === 0 ? (
+            <div className="p-8 text-center">
+              <span className="material-symbols-outlined text-4xl text-slate-200 mb-2">chat</span>
+              <p className="text-sm text-slate-500">Nenhuma conversa ainda</p>
+            </div>
+          ) : (
+            chats.map(chat => (
+              <div 
+                key={chat.id} 
+                onClick={() => setSelectedChatId(chat.id)}
+                className={`flex items-start gap-3 p-4 cursor-pointer transition-colors relative border-l-4 ${
+                  selectedChatId === chat.id ? 'bg-cyan-50/50 border-cyan-600' : 'hover:bg-slate-50 border-transparent'
+                }`}
+              >
+                <div className="relative shrink-0">
+                  <img src={chat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.client_name)}&background=0891b2&color=fff`} className="size-12 rounded-full border border-slate-100" />
+                  <div className="absolute bottom-0 right-0 size-3 bg-green-500 border-2 border-white rounded-full"></div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline mb-1">
+                    <h3 className="text-sm font-bold text-slate-900 truncate">{chat.client_name}</h3>
+                    <span className="text-[10px] font-bold text-slate-400">{formatTime(chat.last_message_time)}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate leading-relaxed">{chat.last_message || 'Sem mensagens'}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    {chat.tags.map(tag => (
+                      <span key={tag.id} className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ backgroundColor: `${tag.color}20`, color: tag.color }}>
+                        {tag.name}
+                      </span>
+                    ))}
+                    {(chat.unread_count || 0) > 0 && (
+                      <span className="ml-auto bg-cyan-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                        {chat.unread_count}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </aside>
 
@@ -106,9 +117,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           <>
             <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10">
               <div className="flex items-center gap-3">
-                <img src={selectedChat.avatarUrl} className="size-10 rounded-full" />
+                <img src={selectedChat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`} className="size-10 rounded-full" />
                 <div>
-                  <h2 className="text-sm font-bold text-slate-900 leading-tight">{selectedChat.clientName}</h2>
+                  <h2 className="text-sm font-bold text-slate-900 leading-tight">{selectedChat.client_name}</h2>
                   <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
                     <span className="size-1.5 rounded-full bg-green-500"></span> Online agora
                   </p>
@@ -133,16 +144,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </div>
               
               {selectedChat.messages.map((m) => (
-                <div key={m.id} className={`flex ${m.sender === 'me' ? 'justify-end' : 'justify-start'} w-full`}>
+                <div key={m.id} className={`flex ${!m.is_from_client ? 'justify-end' : 'justify-start'} w-full`}>
                   <div className={`max-w-[75%] p-3 rounded-2xl shadow-sm relative ${
-                    m.sender === 'me' 
+                    !m.is_from_client 
                       ? 'bg-cyan-600 text-white rounded-tr-none' 
                       : 'bg-white text-slate-800 rounded-tl-none'
                   }`}>
-                    <p className="text-sm leading-relaxed">{m.text}</p>
-                    <div className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${m.sender === 'me' ? 'text-cyan-100' : 'text-slate-400'}`}>
-                      {m.timestamp}
-                      {m.sender === 'me' && <span className="material-symbols-outlined text-[12px]">done_all</span>}
+                    <p className="text-sm leading-relaxed">{m.content}</p>
+                    <div className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${!m.is_from_client ? 'text-cyan-100' : 'text-slate-400'}`}>
+                      {formatTime(m.created_at)}
+                      {!m.is_from_client && <span className="material-symbols-outlined text-[12px]">done_all</span>}
                     </div>
                   </div>
                 </div>
@@ -195,9 +206,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         {selectedChat ? (
           <div className="flex flex-col h-full">
             <div className="p-8 text-center border-b border-slate-100">
-              <img src={selectedChat.avatarUrl} className="size-24 rounded-full mx-auto mb-4 border-4 border-slate-50 shadow-md" />
-              <h2 className="text-xl font-black text-slate-900 mb-1">{selectedChat.clientName}</h2>
-              <p className="text-sm font-bold text-slate-400">{selectedChat.phoneNumber}</p>
+              <img src={selectedChat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`} className="size-24 rounded-full mx-auto mb-4 border-4 border-slate-50 shadow-md" />
+              <h2 className="text-xl font-black text-slate-900 mb-1">{selectedChat.client_name}</h2>
+              <p className="text-sm font-bold text-slate-400">{selectedChat.phone_number}</p>
               
               <div className="flex justify-center gap-4 mt-6">
                 {[
@@ -234,8 +245,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {selectedChat.tags.map(tag => (
-                    <span key={tag.label} className={`px-2 py-1 rounded-lg text-xs font-bold border ${tag.color}`}>
-                      {tag.label}
+                    <span key={tag.id} className="px-2 py-1 rounded-lg text-xs font-bold border" style={{ backgroundColor: `${tag.color}20`, color: tag.color, borderColor: `${tag.color}40` }}>
+                      {tag.name}
                     </span>
                   ))}
                 </div>

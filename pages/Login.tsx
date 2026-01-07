@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { assets } from '../config/assets';
+import { useAuth } from '../hooks/useAuth';
 
 interface LoginProps {
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
@@ -10,16 +11,25 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ setState }) => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('admin@clinica.com');
-  const [password, setPassword] = useState('123456');
+  const { signIn, loading: authLoading, error: authError } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate login
-    setState(prev => ({
-      ...prev,
-      currentUser: prev.users[0], // Mock login as first user (Admin)
-    }));
+    setIsSubmitting(true);
+    setLoginError(null);
+
+    const { error } = await signIn(email, password);
+    
+    if (error) {
+      setLoginError(error);
+      setIsSubmitting(false);
+      return;
+    }
+
     navigate('/dashboard');
   };
 
@@ -90,8 +100,18 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
               </div>
             </div>
 
-            <button type="submit" className="w-full h-14 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/30">
-              Entrar
+            {loginError && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+                {loginError}
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="w-full h-14 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
 

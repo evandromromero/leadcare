@@ -1,6 +1,8 @@
 
 import React, { useState } from 'react';
-import { GlobalState, User } from '../types';
+import { GlobalState } from '../types';
+import { useUsers } from '../hooks/useUsers';
+import { useAuth } from '../hooks/useAuth';
 
 interface UsersProps {
   state: GlobalState;
@@ -8,25 +10,16 @@ interface UsersProps {
 }
 
 const Users: React.FC<UsersProps> = ({ state, setState }) => {
+  const { users, loading, updateUserStatus, updateUserRole } = useUsers();
+  const { clinic } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newUser, setNewUser] = useState<Partial<User>>({ name: '', email: '', role: 'Atendente', status: 'Ativo' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Atendente' });
 
   const handleCreateUser = () => {
     if (!newUser.name || !newUser.email) return;
-    
-    const user: User = {
-      id: `u-${Date.now()}`,
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role as User['role'],
-      clinicId: state.selectedClinic?.id || 'c1',
-      avatarUrl: `https://i.pravatar.cc/150?u=${Date.now()}`,
-      status: 'Ativo'
-    };
-
-    setState(prev => ({ ...prev, users: [...prev.users, user] }));
+    alert('Para criar usuários, use o painel do Supabase Auth ou implemente o convite por email.');
     setIsModalOpen(false);
-    setNewUser({ name: '', email: '', role: 'Atendente', status: 'Ativo' });
+    setNewUser({ name: '', email: '', role: 'Atendente' });
   };
 
   return (
@@ -69,11 +62,24 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {state.users.map(user => (
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600 mx-auto mb-2"></div>
+                      <p className="text-sm text-slate-500">Carregando usuários...</p>
+                    </td>
+                  </tr>
+                ) : users.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                      Nenhum usuário encontrado
+                    </td>
+                  </tr>
+                ) : users.map(user => (
                   <tr key={user.id} className="group hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <img src={user.avatarUrl} className="size-10 rounded-full" />
+                        <img src={user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=0891b2&color=fff`} className="size-10 rounded-full" />
                         <div>
                           <p className="text-sm font-bold text-slate-900 leading-tight">{user.name}</p>
                           <p className="text-xs text-slate-500">{user.email}</p>
@@ -81,7 +87,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                       <span className="text-xs font-bold text-slate-600">{state.clinics.find(c => c.id === user.clinicId)?.name}</span>
+                       <span className="text-xs font-bold text-slate-600">{clinic?.name || '-'}</span>
                     </td>
                     <td className="px-6 py-4">
                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-tighter ${
@@ -98,8 +104,14 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                     </td>
                     <td className="px-6 py-4 text-right">
                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => updateUserStatus(user.id, user.status === 'Ativo' ? 'Inativo' : 'Ativo')}
+                            className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+                            title={user.status === 'Ativo' ? 'Desativar' : 'Ativar'}
+                          >
+                            <span className="material-symbols-outlined text-[20px]">{user.status === 'Ativo' ? 'person_off' : 'person'}</span>
+                          </button>
                           <button className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"><span className="material-symbols-outlined text-[20px]">edit</span></button>
-                          <button className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors"><span className="material-symbols-outlined text-[20px]">delete</span></button>
                        </div>
                     </td>
                   </tr>
@@ -109,7 +121,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
           </div>
 
           <div className="p-6 border-t border-slate-50 flex items-center justify-between text-xs text-slate-500">
-             <span>Mostrando {state.users.length} de {state.users.length} usuários</span>
+             <span>Mostrando {users.length} de {users.length} usuários</span>
              <div className="flex gap-1">
                 <button className="px-3 py-1 bg-cyan-600 text-white font-bold rounded">1</button>
              </div>

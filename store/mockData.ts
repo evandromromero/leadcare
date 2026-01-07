@@ -51,10 +51,10 @@ const leads: Lead[] = chats.map(chat => ({
 
 export const initialState: GlobalState = {
   currentUser: null,
-  selectedClinic: clinics[0],
+  selectedClinic: null,
   whatsappStatus: 'disconnected',
-  chats,
-  leads,
-  clinics,
-  users,
+  chats: [],
+  leads: [],
+  clinics: [],
+  users: [],
 };

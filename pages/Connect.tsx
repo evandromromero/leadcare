@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
-import { assets } from '../config/assets';
+import { useWhatsApp } from '../hooks/useWhatsApp';
 
 interface ConnectProps {
   state: GlobalState;
@@ -11,26 +11,59 @@ interface ConnectProps {
 
 const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
   const navigate = useNavigate();
-  const [step, setStep] = useState<'idle' | 'generating' | 'waiting' | 'connecting'>('idle');
+  const clinicId = state.selectedClinic?.id;
+  const { instance, loading, error, connect, disconnect, refreshStatus } = useWhatsApp(clinicId);
+  
+  const [step, setStep] = useState<'idle' | 'generating' | 'waiting' | 'connected'>('idle');
+  const [connectError, setConnectError] = useState<string | null>(null);
 
-  const handleGenerate = () => {
+  // Se não tem clínica selecionada, redirecionar para login
+  useEffect(() => {
+    if (!clinicId && !state.currentUser) {
+      navigate('/login');
+    }
+  }, [clinicId, state.currentUser, navigate]);
+
+  // Atualizar step baseado no status da instância
+  useEffect(() => {
+    if (loading) return;
+    
+    if (instance?.status === 'connected') {
+      setStep('connected');
+      setState(prev => ({ ...prev, whatsappStatus: 'connected' }));
+    } else if (instance?.status === 'connecting' && instance.qrCode) {
+      setStep('waiting');
+    } else {
+      setStep('idle');
+    }
+  }, [instance, loading]);
+
+  // Polling para atualizar status
+  useEffect(() => {
+    if (step === 'waiting' || step === 'connected') {
+      const interval = setInterval(() => {
+        refreshStatus();
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [step, refreshStatus]);
+
+  // Conectar automaticamente ao clicar
+  const handleConnect = async () => {
     setStep('generating');
-    setTimeout(() => setStep('waiting'), 1500);
+    setConnectError(null);
+    const result = await connect();
+    
+    if (result.error) {
+      setConnectError(result.error);
+      setStep('idle');
+    }
   };
 
-  // Simulate successful connection after a few seconds of "waiting"
-  useEffect(() => {
-    if (step === 'waiting') {
-      const timer = setTimeout(() => {
-        setStep('connecting');
-        setTimeout(() => {
-          setState(prev => ({ ...prev, whatsappStatus: 'connected' }));
-          navigate('/dashboard');
-        }, 2000);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [step]);
+  const handleDisconnect = async () => {
+    await disconnect();
+    setState(prev => ({ ...prev, whatsappStatus: 'disconnected' }));
+  };
 
   return (
     <div className="p-8 min-h-full flex items-center justify-center bg-slate-50">
@@ -79,27 +112,37 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
 
             <div className="relative group mx-auto w-fit mb-8">
               <div className={`size-64 p-4 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center transition-all ${step === 'waiting' ? 'border-cyan-500' : ''}`}>
-                {step === 'idle' ? (
-                  <button onClick={handleGenerate} className="flex flex-col items-center gap-3 text-cyan-600 group-hover:scale-105 transition-transform">
+                {loading ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="size-12 border-4 border-cyan-200 border-t-cyan-600 rounded-full animate-spin"></div>
+                    <span className="text-sm font-medium text-slate-400">Carregando...</span>
+                  </div>
+                ) : step === 'idle' ? (
+                  <button onClick={handleConnect} className="flex flex-col items-center gap-3 text-cyan-600 group-hover:scale-105 transition-transform">
                     <span className="material-symbols-outlined text-5xl">qr_code_2</span>
-                    <span className="text-sm font-bold">Gerar QR Code</span>
+                    <span className="text-sm font-bold">Conectar WhatsApp</span>
+                    {connectError && (
+                      <span className="text-xs text-red-500 mt-2">{connectError}</span>
+                    )}
                   </button>
                 ) : step === 'generating' ? (
                   <div className="flex flex-col items-center gap-3">
                     <div className="size-12 border-4 border-cyan-200 border-t-cyan-600 rounded-full animate-spin"></div>
-                    <span className="text-sm font-medium text-slate-400">Gerando...</span>
+                    <span className="text-sm font-medium text-slate-400">Gerando QR Code...</span>
                   </div>
-                ) : (
+                ) : step === 'waiting' && instance?.qrCode ? (
                   <div className="relative">
-                    <img src={assets.qrPlaceholderUrl} className="size-56 object-contain" alt="QR" />
-                    {step === 'connecting' && (
-                      <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg">
-                        <div className="size-12 border-4 border-cyan-200 border-t-cyan-600 rounded-full animate-spin mb-4"></div>
-                        <span className="text-sm font-bold text-cyan-600">Sincronizando...</span>
-                      </div>
+                    <img src={instance.qrCode} className="size-56 object-contain" alt="QR Code" />
+                  </div>
+                ) : step === 'connected' ? (
+                  <div className="flex flex-col items-center gap-3 text-green-600">
+                    <span className="material-symbols-outlined text-5xl">check_circle</span>
+                    <span className="text-sm font-bold">Conectado!</span>
+                    {instance?.phoneNumber && (
+                      <span className="text-xs text-slate-500">{instance.phoneNumber}</span>
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
               
               {step === 'waiting' && (
@@ -110,14 +153,24 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
               )}
             </div>
 
-            <button 
-              disabled={step === 'generating' || step === 'connecting'}
-              className="text-cyan-600 hover:text-cyan-800 text-sm font-bold flex items-center gap-1 mx-auto disabled:opacity-50"
-              onClick={handleGenerate}
-            >
-              <span className="material-symbols-outlined text-[20px]">refresh</span>
-              Atualizar QR Code
-            </button>
+            {step === 'connected' ? (
+              <button 
+                onClick={handleDisconnect}
+                className="text-red-600 hover:text-red-800 text-sm font-bold flex items-center gap-1 mx-auto"
+              >
+                <span className="material-symbols-outlined text-[20px]">logout</span>
+                Desconectar
+              </button>
+            ) : step === 'waiting' && (
+              <button 
+                disabled={step === 'generating'}
+                className="text-cyan-600 hover:text-cyan-800 text-sm font-bold flex items-center gap-1 mx-auto disabled:opacity-50"
+                onClick={handleConnect}
+              >
+                <span className="material-symbols-outlined text-[20px]">refresh</span>
+                Atualizar QR Code
+              </button>
+            )}
 
             <div className="mt-12 pt-6 border-t border-slate-50 flex justify-between items-center text-[10px] font-bold text-slate-300 uppercase tracking-widest">
               <span>Versão 2.4.0</span>

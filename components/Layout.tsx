@@ -2,6 +2,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GlobalState, WhatsAppStatus } from '../types';
+import { useAuth } from '../hooks/useAuth';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -12,9 +13,11 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { signOut } = useAuth();
 
-  const handleLogout = () => {
-    setState(prev => ({ ...prev, currentUser: null }));
+  const handleLogout = async () => {
+    await signOut();
+    setState(prev => ({ ...prev, currentUser: null, selectedClinic: null }));
     navigate('/login');
   };
 
@@ -73,13 +76,19 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
         </nav>
 
         <div className="p-4 border-t border-slate-100">
-          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors group">
-            <img src={state.currentUser?.avatarUrl} className="size-9 rounded-full border border-slate-200" alt="User" />
+          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+            <img src={state.currentUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(state.currentUser?.name || 'U')}&background=0891b2&color=fff`} className="size-9 rounded-full border border-slate-200" alt="User" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-slate-900 truncate">{state.currentUser?.name}</p>
               <p className="text-xs text-slate-500 truncate">{state.currentUser?.role}</p>
             </div>
-            <button onClick={handleLogout} className="text-slate-400 hover:text-red-600 transition-colors">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                handleLogout();
+              }} 
+              className="text-slate-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+            >
               <span className="material-symbols-outlined text-[20px]">logout</span>
             </button>
           </div>
