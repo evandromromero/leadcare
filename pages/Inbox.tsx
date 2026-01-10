@@ -27,9 +27,9 @@ const PIPELINE_STAGES = [
 ];
 
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
-  const clinicId = state.selectedClinic?.id;
-  const { chats, loading, sendMessage, markAsRead, updateChatStatus, refetch } = useChats(clinicId);
   const { user } = useAuth();
+  const clinicId = state.selectedClinic?.id;
+  const { chats, loading, sendMessage, markAsRead, updateChatStatus, refetch } = useChats(clinicId, user?.id);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [msgInput, setMsgInput] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('todos');
@@ -109,6 +109,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [sendingMedia, setSendingMedia] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Estados para bloqueio de conversa
+  const [chatLock, setChatLock] = useState<{ locked_by: string | null; locked_by_name: string | null } | null>(null);
+  const [isLocking, setIsLocking] = useState(false);
+  
   // Estados para mensagens rápidas do banco
   const [quickReplies, setQuickReplies] = useState<Array<{ id: string; text: string }>>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -175,6 +179,108 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     await updateChatStatus(selectedChatId, newStatus);
     setShowStageDropdown(false);
   };
+
+  // Bloquear conversa quando usuário seleciona
+  const lockChat = async (chatId: string) => {
+    if (!user?.id) return;
+    setIsLocking(true);
+    
+    try {
+      // Verificar se já está bloqueada por outro usuário
+      const { data: chatData } = await supabase
+        .from('chats')
+        .select('locked_by, locked_at')
+        .eq('id', chatId)
+        .single();
+      
+      const lockTimeout = 5 * 60 * 1000; // 5 minutos
+      const now = new Date();
+      
+      if (chatData?.locked_by && chatData.locked_by !== user.id) {
+        const lockedAt = new Date(chatData.locked_at);
+        if (now.getTime() - lockedAt.getTime() < lockTimeout) {
+          // Buscar nome do usuário que bloqueou
+          const { data: lockerData } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', chatData.locked_by)
+            .single();
+          
+          setChatLock({ 
+            locked_by: chatData.locked_by, 
+            locked_by_name: (lockerData as any)?.name || 'Outro usuário' 
+          });
+          return;
+        }
+      }
+      
+      // Bloquear para este usuário
+      await supabase
+        .from('chats')
+        .update({ locked_by: user.id, locked_at: now.toISOString() })
+        .eq('id', chatId);
+      
+      setChatLock(null);
+    } catch (err) {
+      console.error('Error locking chat:', err);
+    } finally {
+      setIsLocking(false);
+    }
+  };
+
+  // Desbloquear conversa
+  const unlockChat = async (chatId: string) => {
+    if (!user?.id) return;
+    
+    try {
+      await supabase
+        .from('chats')
+        .update({ locked_by: null, locked_at: null })
+        .eq('id', chatId)
+        .eq('locked_by', user.id); // Só desbloqueia se foi ele que bloqueou
+    } catch (err) {
+      console.error('Error unlocking chat:', err);
+    }
+  };
+
+  // Verificar bloqueio periodicamente
+  useEffect(() => {
+    if (!selectedChatId) return;
+    
+    const checkLock = async () => {
+      const { data: chatData } = await supabase
+        .from('chats')
+        .select('locked_by, locked_at')
+        .eq('id', selectedChatId)
+        .single();
+      
+      if (chatData?.locked_by && chatData.locked_by !== user?.id) {
+        const lockTimeout = 5 * 60 * 1000;
+        const now = new Date();
+        const lockedAt = new Date(chatData.locked_at);
+        
+        if (now.getTime() - lockedAt.getTime() < lockTimeout) {
+          const { data: lockerData } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', chatData.locked_by)
+            .single();
+          
+          setChatLock({ 
+            locked_by: chatData.locked_by, 
+            locked_by_name: (lockerData as any)?.name || 'Outro usuário' 
+          });
+        } else {
+          setChatLock(null);
+        }
+      } else {
+        setChatLock(null);
+      }
+    };
+    
+    const interval = setInterval(checkLock, 10000); // Verificar a cada 10 segundos
+    return () => clearInterval(interval);
+  }, [selectedChatId, user?.id]);
 
   // Adicionar tag ao chat
   const handleAddTag = async (tagId: string) => {
@@ -642,6 +748,20 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   }, [chats, selectedChatId]);
 
+  // Bloquear chat quando selecionado, desbloquear quando sair
+  useEffect(() => {
+    if (selectedChatId) {
+      lockChat(selectedChatId);
+    }
+    
+    // Cleanup: desbloquear ao sair da conversa
+    return () => {
+      if (selectedChatId) {
+        unlockChat(selectedChatId);
+      }
+    };
+  }, [selectedChatId]);
+
   const selectedChat = chats.find(c => c.id === selectedChatId);
 
   // Scroll quando mudar de chat ou receber novas mensagens
@@ -1029,21 +1149,30 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     </>
                   )}
                 </div>
-                <textarea 
-                  value={msgInput}
-                  onChange={(e) => setMsgInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                  placeholder="Digite sua mensagem..." 
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 px-0 resize-none max-h-32 min-h-[40px]"
-                  rows={1}
-                />
-                <button 
-                  onClick={handleSendMessage}
-                  disabled={sendingMedia}
-                  className="bg-cyan-600 hover:bg-cyan-700 text-white size-10 flex items-center justify-center rounded-xl shadow-lg shadow-cyan-500/30 transition-all shrink-0 active:scale-95 disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined">send</span>
-                </button>
+                {chatLock ? (
+                  <div className="flex-1 flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                    <span className="material-symbols-outlined text-lg">lock</span>
+                    <span className="text-sm font-medium">{chatLock.locked_by_name} está respondendo esta conversa</span>
+                  </div>
+                ) : (
+                  <>
+                    <textarea 
+                      value={msgInput}
+                      onChange={(e) => setMsgInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                      placeholder="Digite sua mensagem..." 
+                      className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 px-0 resize-none max-h-32 min-h-[40px]"
+                      rows={1}
+                    />
+                    <button 
+                      onClick={handleSendMessage}
+                      disabled={sendingMedia}
+                      className="bg-cyan-600 hover:bg-cyan-700 text-white size-10 flex items-center justify-center rounded-xl shadow-lg shadow-cyan-500/30 transition-all shrink-0 active:scale-95 disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined">send</span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </>

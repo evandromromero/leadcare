@@ -4,10 +4,17 @@ import { useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useWhatsApp, WhatsAppInstance } from '../hooks/useWhatsApp';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 
 interface ConnectProps {
   state: GlobalState;
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
+}
+
+interface UserWhatsAppSettings {
+  defaultInstanceId: string | null;
+  canCreateInstance: boolean;
+  hasPersonalInstance: boolean;
 }
 
 const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
@@ -32,8 +39,41 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
   const [newInstanceName, setNewInstanceName] = useState('');
   const [newInstanceShared, setNewInstanceShared] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [userSettings, setUserSettings] = useState<UserWhatsAppSettings>({
+    defaultInstanceId: null,
+    canCreateInstance: false,
+    hasPersonalInstance: false,
+  });
 
   const isAdmin = user?.role === 'Admin' || user?.role === 'SuperAdmin';
+
+  useEffect(() => {
+    const fetchUserSettings = async () => {
+      if (!user?.id) return;
+      
+      const { data } = await supabase
+        .from('users')
+        .select('default_instance_id, can_create_instance')
+        .eq('id', user.id)
+        .single();
+      
+      const hasPersonal = instances.some(i => i.userId === user.id && !i.isShared);
+      
+      setUserSettings({
+        defaultInstanceId: data?.default_instance_id || null,
+        canCreateInstance: data?.can_create_instance || false,
+        hasPersonalInstance: hasPersonal,
+      });
+
+      if (data?.default_instance_id && !selectedInstance) {
+        selectInstance(data.default_instance_id);
+      }
+    };
+    
+    fetchUserSettings();
+  }, [user?.id, instances, selectedInstance, selectInstance]);
+
+  const canShowNewConnectionButton = isAdmin || (userSettings.canCreateInstance && !userSettings.hasPersonalInstance);
 
   useEffect(() => {
     if (!clinicId && !state.currentUser) {
@@ -121,13 +161,15 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Conexões WhatsApp</h1>
             <p className="text-slate-500">Gerencie as instâncias de WhatsApp da sua clínica</p>
           </div>
-          <button 
-            onClick={() => setShowNewInstanceModal(true)}
-            className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold h-11 px-6 rounded-xl shadow-lg shadow-cyan-500/30 flex items-center gap-2 transition-all"
-          >
-            <span className="material-symbols-outlined text-[20px]">add</span>
-            Nova Conexão
-          </button>
+          {canShowNewConnectionButton && (
+            <button 
+              onClick={() => setShowNewInstanceModal(true)}
+              className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold h-11 px-6 rounded-xl shadow-lg shadow-cyan-500/30 flex items-center gap-2 transition-all"
+            >
+              <span className="material-symbols-outlined text-[20px]">add</span>
+              Nova Conexão
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -143,13 +185,19 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
             ) : instances.length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
                 <span className="material-symbols-outlined text-4xl text-slate-300 mb-3">phone_iphone</span>
-                <p className="text-sm text-slate-500 mb-4">Nenhuma instância configurada</p>
-                <button 
-                  onClick={() => setShowNewInstanceModal(true)}
-                  className="text-cyan-600 hover:text-cyan-700 text-sm font-bold"
-                >
-                  + Criar primeira conexão
-                </button>
+                <p className="text-sm text-slate-500 mb-4">
+                  {canShowNewConnectionButton 
+                    ? 'Nenhuma instância configurada' 
+                    : 'Nenhuma instância disponível para você'}
+                </p>
+                {canShowNewConnectionButton && (
+                  <button 
+                    onClick={() => setShowNewInstanceModal(true)}
+                    className="text-cyan-600 hover:text-cyan-700 text-sm font-bold"
+                  >
+                    + Criar primeira conexão
+                  </button>
+                )}
               </div>
             ) : (
               <div className="space-y-3">
@@ -382,7 +430,7 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
 
             <div className="p-6 bg-slate-50 flex gap-3">
               <button 
-                onClick={() => handleConnect({ isShared: newInstanceShared, displayName: newInstanceName || undefined })}
+                onClick={() => handleConnect({ isShared: isAdmin ? newInstanceShared : false, displayName: newInstanceName || undefined })}
                 disabled={loading}
                 className="flex-1 h-12 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
               >

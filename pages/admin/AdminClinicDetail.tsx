@@ -74,9 +74,27 @@ const AdminClinicDetail: React.FC = () => {
   const [impersonating, setImpersonating] = useState(false);
   
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Atendente' });
+  const [newUser, setNewUser] = useState({ 
+    name: '', 
+    email: '', 
+    password: '', 
+    role: 'Atendente',
+    whatsappOption: 'shared' as 'shared' | 'create' | 'none',
+    defaultInstanceId: '',
+    viewMode: 'personal' as 'shared' | 'personal'
+  });
   const [creatingUser, setCreatingUser] = useState(false);
   const [createUserError, setCreateUserError] = useState<string | null>(null);
+  
+  // Estados para edição/exclusão de usuário
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<ClinicUser | null>(null);
+  const [editUserForm, setEditUserForm] = useState({ name: '', role: '', status: '' });
+  const [savingUser, setSavingUser] = useState(false);
+  const [editUserError, setEditUserError] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<ClinicUser | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -246,18 +264,29 @@ const AdminClinicDetail: React.FC = () => {
       return;
     }
 
+    if (newUser.whatsappOption === 'shared' && !newUser.defaultInstanceId) {
+      setCreateUserError('Selecione uma instância compartilhada');
+      return;
+    }
+
     setCreatingUser(true);
     setCreateUserError(null);
 
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
       
       const response = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': supabaseAnonKey,
         },
         body: JSON.stringify({
           name: newUser.name,
@@ -265,6 +294,9 @@ const AdminClinicDetail: React.FC = () => {
           password: newUser.password,
           role: newUser.role,
           clinic_id: clinic.id,
+          default_instance_id: newUser.whatsappOption === 'shared' ? newUser.defaultInstanceId : null,
+          can_create_instance: newUser.whatsappOption === 'create',
+          view_mode: newUser.whatsappOption === 'shared' ? newUser.viewMode : 'personal',
         }),
       });
 
@@ -275,12 +307,87 @@ const AdminClinicDetail: React.FC = () => {
       }
 
       setShowCreateUserModal(false);
-      setNewUser({ name: '', email: '', password: '', role: 'Atendente' });
+      setNewUser({ name: '', email: '', password: '', role: 'Atendente', whatsappOption: 'shared', defaultInstanceId: '', viewMode: 'personal' });
       fetchClinicDetails();
     } catch (error) {
       setCreateUserError(error instanceof Error ? error.message : 'Erro ao criar usuário');
     } finally {
       setCreatingUser(false);
+    }
+  };
+
+  const handleEditUser = (u: ClinicUser) => {
+    setEditingUser(u);
+    setEditUserForm({ name: u.name, role: u.role, status: u.status });
+    setEditUserError(null);
+    setShowEditUserModal(true);
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser) return;
+    
+    setSavingUser(true);
+    setEditUserError(null);
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          name: editUserForm.name,
+          role: editUserForm.role,
+          status: editUserForm.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingUser.id);
+
+      if (error) throw error;
+
+      setShowEditUserModal(false);
+      setEditingUser(null);
+      fetchClinicDetails();
+    } catch (error) {
+      setEditUserError(error instanceof Error ? error.message : 'Erro ao salvar usuário');
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    
+    setDeletingUserId(userToDelete.id);
+
+    try {
+      // Primeiro deletar o perfil na tabela users
+      const { error: profileError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userToDelete.id);
+
+      if (profileError) throw profileError;
+
+      // Deletar do Auth via Edge Function (precisa de service role)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const { data: { session } } = await supabase.auth.getSession();
+
+      await fetch(`${supabaseUrl}/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({ user_id: userToDelete.id }),
+      });
+
+      setShowDeleteConfirm(false);
+      setUserToDelete(null);
+      fetchClinicDetails();
+    } catch (error) {
+      console.error('Erro ao excluir usuário:', error);
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -501,7 +608,7 @@ const AdminClinicDetail: React.FC = () => {
                         <p className="text-sm text-slate-500">{u.email}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
                         u.role === 'Admin' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-800'
                       }`}>
@@ -512,6 +619,20 @@ const AdminClinicDetail: React.FC = () => {
                       }`}>
                         {u.status}
                       </span>
+                      <button
+                        onClick={() => handleEditUser(u)}
+                        className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded transition-colors"
+                        title="Editar"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                      </button>
+                      <button
+                        onClick={() => { setUserToDelete(u); setShowDeleteConfirm(true); }}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Excluir"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
                     </div>
                   </div>
                 ))
@@ -689,6 +810,100 @@ const AdminClinicDetail: React.FC = () => {
                   <option value="Admin">Administrador</option>
                 </select>
               </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Instância WhatsApp</label>
+                <div className="mt-2 space-y-2">
+                  <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                    newUser.whatsappOption === 'shared' ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 hover:bg-slate-50'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="whatsappOption" 
+                      checked={newUser.whatsappOption === 'shared'}
+                      onChange={() => setNewUser({...newUser, whatsappOption: 'shared', defaultInstanceId: ''})}
+                      className="text-cyan-600 focus:ring-cyan-500"
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-800 text-sm">Usar instância compartilhada</p>
+                      <p className="text-xs text-slate-500">Selecione uma instância existente</p>
+                    </div>
+                  </label>
+                  
+                  {newUser.whatsappOption === 'shared' && whatsappInstances.filter(i => i.is_shared).length > 0 && (
+                    <select 
+                      value={newUser.defaultInstanceId}
+                      onChange={(e) => setNewUser({...newUser, defaultInstanceId: e.target.value})}
+                      className="w-full h-10 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-3 text-sm ml-6"
+                      style={{ width: 'calc(100% - 1.5rem)' }}
+                    >
+                      <option value="">Selecione uma instância...</option>
+                      {whatsappInstances.filter(i => i.is_shared).map(inst => (
+                        <option key={inst.id} value={inst.id}>
+                          {inst.display_name || inst.phone_number || inst.instance_name} 
+                          {inst.status === 'connected' ? ' ✓' : ' (desconectada)'}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  
+                  {newUser.whatsappOption === 'shared' && whatsappInstances.filter(i => i.is_shared).length === 0 && (
+                    <p className="text-xs text-amber-600 ml-6 p-2 bg-amber-50 rounded">
+                      Nenhuma instância compartilhada disponível. Crie uma primeiro ou escolha outra opção.
+                    </p>
+                  )}
+
+                  {newUser.whatsappOption === 'shared' && newUser.defaultInstanceId && (
+                    <div className="ml-6 p-3 bg-slate-50 rounded-lg border border-slate-200" style={{ width: 'calc(100% - 1.5rem)' }}>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Modo do Painel</p>
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={newUser.viewMode === 'shared'}
+                          onChange={(e) => setNewUser({...newUser, viewMode: e.target.checked ? 'shared' : 'personal'})}
+                          className="w-4 h-4 text-cyan-600 rounded focus:ring-cyan-500"
+                        />
+                        <div>
+                          <p className="font-medium text-slate-800 text-sm">Painel compartilhado</p>
+                          <p className="text-xs text-slate-500">Ver todos os leads da instância (desmarcado = painel zerado, só leads dele)</p>
+                        </div>
+                      </label>
+                    </div>
+                  )}
+
+                  <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                    newUser.whatsappOption === 'create' ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 hover:bg-slate-50'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="whatsappOption" 
+                      checked={newUser.whatsappOption === 'create'}
+                      onChange={() => setNewUser({...newUser, whatsappOption: 'create', defaultInstanceId: ''})}
+                      className="text-cyan-600 focus:ring-cyan-500"
+                    />
+                    <div>
+                      <p className="font-medium text-slate-800 text-sm">Criar nova instância ao logar</p>
+                      <p className="text-xs text-slate-500">Usuário conectará seu próprio WhatsApp</p>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                    newUser.whatsappOption === 'none' ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 hover:bg-slate-50'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="whatsappOption" 
+                      checked={newUser.whatsappOption === 'none'}
+                      onChange={() => setNewUser({...newUser, whatsappOption: 'none', defaultInstanceId: ''})}
+                      className="text-cyan-600 focus:ring-cyan-500"
+                    />
+                    <div>
+                      <p className="font-medium text-slate-800 text-sm">Sem acesso ao WhatsApp</p>
+                      <p className="text-xs text-slate-500">Apenas visualização de conversas</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div className="p-6 bg-slate-50 flex gap-3">
@@ -709,9 +924,133 @@ const AdminClinicDetail: React.FC = () => {
               <button 
                 onClick={() => {
                   setShowCreateUserModal(false);
-                  setNewUser({ name: '', email: '', password: '', role: 'Atendente' });
+                  setNewUser({ name: '', email: '', password: '', role: 'Atendente', whatsappOption: 'shared', defaultInstanceId: '', viewMode: 'personal' });
                   setCreateUserError(null);
                 }}
+                className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Usuário */}
+      {showEditUserModal && editingUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-xl font-bold text-slate-800 mb-6">Editar Usuário</h3>
+            
+            {editUserError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {editUserError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nome</label>
+                <input 
+                  type="text"
+                  value={editUserForm.name}
+                  onChange={(e) => setEditUserForm({...editUserForm, name: e.target.value})}
+                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Email</label>
+                <input 
+                  type="email"
+                  value={editingUser.email}
+                  disabled
+                  className="w-full mt-2 h-11 rounded-lg border-slate-200 bg-slate-50 px-4 text-sm text-slate-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Perfil</label>
+                <select 
+                  value={editUserForm.role}
+                  onChange={(e) => setEditUserForm({...editUserForm, role: e.target.value})}
+                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                >
+                  <option value="Atendente">Atendente</option>
+                  <option value="Admin">Administrador</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status</label>
+                <select 
+                  value={editUserForm.status}
+                  onChange={(e) => setEditUserForm({...editUserForm, status: e.target.value})}
+                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                >
+                  <option value="Ativo">Ativo</option>
+                  <option value="Inativo">Inativo</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button 
+                onClick={handleSaveUser}
+                disabled={savingUser}
+                className="flex-1 h-11 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingUser ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar'
+                )}
+              </button>
+              <button 
+                onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}
+                className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão */}
+      {showDeleteConfirm && userToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="material-symbols-outlined text-red-600 text-2xl">warning</span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-2">Excluir Usuário</h3>
+              <p className="text-slate-500 text-sm mb-6">
+                Tem certeza que deseja excluir <strong>{userToDelete.name}</strong>? Esta ação não pode ser desfeita.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={handleDeleteUser}
+                disabled={deletingUserId === userToDelete.id}
+                className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deletingUserId === userToDelete.id ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Excluindo...
+                  </>
+                ) : (
+                  'Excluir'
+                )}
+              </button>
+              <button 
+                onClick={() => { setShowDeleteConfirm(false); setUserToDelete(null); }}
                 className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
               >
                 Cancelar

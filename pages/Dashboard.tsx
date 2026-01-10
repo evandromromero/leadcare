@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
 interface DashboardProps {
@@ -19,8 +20,9 @@ interface LeadSourceStats {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ state }) => {
+  const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading } = useChats(clinicId);
+  const { chats, loading } = useChats(clinicId, user?.id);
   
   // Estados para métricas avançadas
   const [totalRevenue, setTotalRevenue] = useState(0);
@@ -33,18 +35,54 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const fechados = chats.filter(c => c.status === 'Convertido').length;
   const totalChats = chats.length;
 
-  // Buscar métricas de faturamento e origem
+  // Calcular métricas baseado no view_mode do usuário
+  // view_mode 'shared' = vê faturamento de todos
+  // view_mode 'personal' = só vê faturamento dos atendimentos dele
   useEffect(() => {
     const fetchStats = async () => {
-      if (!clinicId) return;
+      if (!clinicId || loading) return;
       setLoadingStats(true);
       
       try {
-        // Buscar faturamento total
+        // Buscar view_mode do usuário para filtrar faturamento
+        let userViewModeForStats = 'shared';
+        if (user?.id) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('view_mode, role')
+            .eq('id', user.id)
+            .single();
+          
+          // Admin/SuperAdmin sempre veem tudo
+          if (userData && (userData as any).role !== 'Admin' && (userData as any).role !== 'SuperAdmin') {
+            userViewModeForStats = (userData as any).view_mode || 'personal';
+          }
+        }
+        
+        // Determinar quais chats usar para faturamento
+        let chatIdsForStats: string[] = [];
+        if (userViewModeForStats === 'personal' && user?.id) {
+          // Só chats onde o usuário respondeu (assigned_to = user.id)
+          const chatsAtendidos = chats.filter(c => c.assigned_to === user.id);
+          chatIdsForStats = chatsAtendidos.map(c => c.id);
+        } else {
+          // Todos os chats
+          chatIdsForStats = chats.map(c => c.id);
+        }
+        
+        if (chatIdsForStats.length === 0) {
+          setTotalRevenue(0);
+          setMonthlyRevenue(0);
+          setLeadSourceStats([]);
+          setLoadingStats(false);
+          return;
+        }
+        
+        // Buscar faturamento
         const { data: paymentsData } = await supabase
           .from('payments' as any)
-          .select('value, payment_date')
-          .eq('clinic_id', clinicId);
+          .select('value, payment_date, chat_id')
+          .in('chat_id', chatIdsForStats);
         
         if (paymentsData) {
           const total = (paymentsData as any[]).reduce((sum, p) => sum + Number(p.value), 0);
@@ -57,50 +95,47 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             .filter(p => new Date(p.payment_date) >= firstDayOfMonth)
             .reduce((sum, p) => sum + Number(p.value), 0);
           setMonthlyRevenue(monthly);
+        } else {
+          setTotalRevenue(0);
+          setMonthlyRevenue(0);
         }
         
-        // Buscar origens de leads
-        const { data: sourcesData } = await supabase
-          .from('lead_sources' as any)
-          .select('id, name, code, color')
-          .eq('clinic_id', clinicId);
-        
-        if (sourcesData && sourcesData.length > 0) {
-          // Buscar chats com suas origens
-          const { data: chatsWithSource } = await supabase
-            .from('chats')
-            .select('id, source_id, status')
+        // Buscar origens de leads apenas se houver chats visíveis
+        if (chatIdsForStats.length > 0) {
+          const { data: sourcesData } = await supabase
+            .from('lead_sources' as any)
+            .select('id, name, code, color')
             .eq('clinic_id', clinicId);
           
-          // Buscar pagamentos por chat
-          const { data: paymentsPerChat } = await supabase
-            .from('payments' as any)
-            .select('chat_id, value')
-            .eq('clinic_id', clinicId);
-          
-          // Calcular estatísticas por origem
-          const stats: LeadSourceStats[] = (sourcesData as any[]).map(source => {
-            const sourceChats = (chatsWithSource as any[] || []).filter(c => c.source_id === source.id);
-            const convertedChats = sourceChats.filter(c => c.status === 'Convertido');
-            const sourceChatIds = sourceChats.map(c => c.id);
-            const revenue = (paymentsPerChat as any[] || [])
-              .filter(p => sourceChatIds.includes(p.chat_id))
-              .reduce((sum, p) => sum + Number(p.value), 0);
+          if (sourcesData && sourcesData.length > 0) {
+            // Calcular estatísticas por origem usando apenas os chats visíveis
+            const stats: LeadSourceStats[] = (sourcesData as any[]).map(source => {
+              const sourceChats = chats.filter(c => (c as any).source_id === source.id);
+              const convertedChats = sourceChats.filter(c => c.status === 'Convertido');
+              const sourceChatIds = sourceChats.map(c => c.id);
+              const revenue = (paymentsData as any[] || [])
+                .filter(p => sourceChatIds.includes(p.chat_id))
+                .reduce((sum, p) => sum + Number(p.value), 0);
+              
+              return {
+                id: source.id,
+                name: source.name,
+                code: source.code,
+                color: source.color,
+                total_leads: sourceChats.length,
+                converted_leads: convertedChats.length,
+                revenue,
+              };
+            });
             
-            return {
-              id: source.id,
-              name: source.name,
-              code: source.code,
-              color: source.color,
-              total_leads: sourceChats.length,
-              converted_leads: convertedChats.length,
-              revenue,
-            };
-          });
-          
-          // Ordenar por total de leads
-          stats.sort((a, b) => b.total_leads - a.total_leads);
-          setLeadSourceStats(stats);
+            // Ordenar por total de leads e filtrar apenas os que têm leads
+            stats.sort((a, b) => b.total_leads - a.total_leads);
+            setLeadSourceStats(stats.filter(s => s.total_leads > 0));
+          } else {
+            setLeadSourceStats([]);
+          }
+        } else {
+          setLeadSourceStats([]);
         }
       } catch (err) {
         console.error('Error fetching stats:', err);
@@ -110,7 +145,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     };
     
     fetchStats();
-  }, [clinicId, chats]);
+  }, [clinicId, chats, loading]);
 
   const stats = [
     { label: 'Novos Leads', value: String(novosLeads), change: '+12%', color: 'blue', icon: 'person_add' },

@@ -15,9 +15,9 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, isImpersonating, impersonatedClinic, stopImpersonate } = useAuth();
+  const { signOut, isImpersonating, impersonatedClinic, stopImpersonate, user } = useAuth();
   const clinicId = state.selectedClinic?.id;
-  const { whatsappConnected } = useChats(clinicId);
+  const { whatsappConnected } = useChats(clinicId, user?.id);
 
   const handleExitImpersonate = () => {
     stopImpersonate();

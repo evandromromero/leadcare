@@ -22,19 +22,47 @@ interface UseChatsReturn {
   markAsRead: (chatId: string) => Promise<void>;
 }
 
-export function useChats(clinicId?: string): UseChatsReturn {
+export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
   const [chats, setChats] = useState<ChatWithMessages[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [whatsappInstance, setWhatsappInstance] = useState<{ instanceName: string; status: string } | null>(null);
   const [evolutionSettings, setEvolutionSettings] = useState<{ apiUrl: string; apiKey: string } | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userViewMode, setUserViewMode] = useState<string | null>(null);
+
+  // Buscar role e view_mode do usuário
+  const fetchUserSettings = async () => {
+    if (!userId) {
+      setUserRole(null);
+      setUserViewMode(null);
+      return;
+    }
+    
+    const { data } = await supabase
+      .from('users')
+      .select('view_mode, role')
+      .eq('id', userId)
+      .single();
+    
+    if (data) {
+      setUserRole((data as any).role || null);
+      setUserViewMode((data as any).view_mode || 'personal');
+    }
+  };
 
   const fetchChats = async () => {
-    console.log('[useChats] fetchChats called, clinicId:', clinicId);
+    console.log('[useChats] fetchChats called, clinicId:', clinicId, 'userId:', userId, 'viewMode:', userViewMode, 'role:', userRole);
     
     if (!clinicId) {
       console.log('[useChats] No clinicId, setting loading false');
       setLoading(false);
+      return;
+    }
+    
+    // Esperar userRole e userViewMode serem carregados se tiver userId
+    if (userId && (userRole === null || userViewMode === null)) {
+      console.log('[useChats] Waiting for user settings to load...');
       return;
     }
 
@@ -43,7 +71,7 @@ export function useChats(clinicId?: string): UseChatsReturn {
 
     try {
       console.log('[useChats] Fetching chats from Supabase...');
-      const { data: chatsData, error: chatsError } = await supabase
+      let query = supabase
         .from('chats')
         .select(`
           *,
@@ -54,8 +82,13 @@ export function useChats(clinicId?: string): UseChatsReturn {
             tags (*)
           )
         `)
-        .eq('clinic_id', clinicId)
-        .order('last_message_time', { ascending: false });
+        .eq('clinic_id', clinicId);
+      
+      // Todos os usuários da mesma clínica/instância veem TODAS as conversas
+      // view_mode só afeta faturamento/relatórios, não a visualização de chats
+      console.log('[useChats] Showing all chats for clinic');
+      
+      const { data: chatsData, error: chatsError } = await query.order('last_message_time', { ascending: false });
 
       if (chatsError) {
         console.error('[useChats] Error fetching chats:', chatsError);
@@ -225,10 +258,22 @@ export function useChats(clinicId?: string): UseChatsReturn {
     }
   };
 
+  // Buscar settings do usuário quando userId mudar
+  useEffect(() => {
+    fetchUserSettings();
+  }, [userId]);
+
+  // Refetch chats quando userRole/viewMode ou clinicId mudar
+  useEffect(() => {
+    if (clinicId) {
+      console.log('[useChats] Fetching chats - role:', userRole, 'viewMode:', userViewMode);
+      fetchChats();
+    }
+  }, [userRole, userViewMode, clinicId]);
+
   useEffect(() => {
     console.log('[useChats] useEffect triggered, clinicId:', clinicId);
     
-    fetchChats();
     fetchWhatsAppInstance();
     fetchEvolutionSettings();
 

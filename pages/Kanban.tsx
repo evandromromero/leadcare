@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
 interface KanbanProps {
@@ -21,8 +22,9 @@ const DEFAULT_LABELS: Record<ChatStatus, string> = {
 };
 
 const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
+  const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading, updateChatStatus, refetch } = useChats(clinicId);
+  const { chats, loading, updateChatStatus, refetch } = useChats(clinicId, user?.id);
   const columns: ChatStatus[] = ['Novo Lead', 'Em Atendimento', 'Agendado', 'Convertido', 'Perdido'];
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [quotesMap, setQuotesMap] = useState<Record<string, Array<{ service_type: string; value: number; status: string }>>>({});
