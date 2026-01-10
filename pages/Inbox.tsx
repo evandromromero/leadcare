@@ -16,7 +16,7 @@ interface InboxProps {
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
 }
 
-type FilterType = 'todos' | 'nao_lidos' | 'aguardando' | 'grupos';
+type FilterType = 'todos' | 'nao_lidos' | 'aguardando' | 'grupos' | 'followup';
 
 const PIPELINE_STAGES = [
   { value: 'Novo Lead', label: 'Novo Lead', color: '#0891b2' },
@@ -113,6 +113,12 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [chatLock, setChatLock] = useState<{ locked_by: string | null; locked_by_name: string | null } | null>(null);
   const [isLocking, setIsLocking] = useState(false);
   
+  // Cache de nomes de usuários para exibir nas mensagens
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
+  
+  // Chats com follow-up pendente (mensagens agendadas) - inclui data/hora
+  const [followupData, setFollowupData] = useState<Record<string, { scheduled_for: string; message: string }>>({});
+  
   // Estados para mensagens rápidas do banco
   const [quickReplies, setQuickReplies] = useState<Array<{ id: string; text: string }>>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -137,6 +143,34 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     };
     fetchQuickReplies();
   }, [clinicId]);
+
+  // Buscar chats com follow-up pendente (mensagens agendadas)
+  useEffect(() => {
+    const fetchFollowupChats = async () => {
+      if (!clinicId || !user?.id) return;
+      
+      const { data } = await supabase
+        .from('scheduled_messages' as any)
+        .select('chat_id, scheduled_for, message')
+        .eq('clinic_id', clinicId)
+        .eq('status', 'pending')
+        .eq('created_by', user.id)
+        .order('scheduled_for', { ascending: true });
+      
+      if (data) {
+        const followups: Record<string, { scheduled_for: string; message: string }> = {};
+        (data as any[]).forEach(d => {
+          // Pegar apenas o primeiro (mais próximo) se houver múltiplos
+          if (!followups[d.chat_id]) {
+            followups[d.chat_id] = { scheduled_for: d.scheduled_for, message: d.message };
+          }
+        });
+        setFollowupData(followups);
+      }
+    };
+    
+    fetchFollowupChats();
+  }, [clinicId, user?.id]);
   
   // Ref para auto-scroll das mensagens
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -733,6 +767,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         return (chat.unread_count || 0) > 0;
       case 'aguardando':
         return chat.status === 'Aguardando' || chat.status === 'Novo Lead';
+      case 'followup':
+        return chat.id in followupData;
       case 'grupos':
         // Grupos geralmente têm telefone com hífen ou mais de 15 dígitos
         return chat.phone_number?.includes('-') || (chat.phone_number?.length || 0) > 15;
@@ -763,6 +799,39 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   }, [selectedChatId]);
 
   const selectedChat = chats.find(c => c.id === selectedChatId);
+
+  // Buscar nomes dos usuários que enviaram mensagens
+  useEffect(() => {
+    const fetchUserNames = async () => {
+      if (!selectedChat?.messages) return;
+      
+      const userIds = [...new Set(
+        selectedChat.messages
+          .filter(m => !m.is_from_client && m.sent_by)
+          .map(m => m.sent_by)
+      )].filter(Boolean) as string[];
+      
+      if (userIds.length === 0) return;
+      
+      const missingIds = userIds.filter(id => !userNames[id]);
+      if (missingIds.length === 0) return;
+      
+      const { data } = await supabase
+        .from('users')
+        .select('id, name')
+        .in('id', missingIds);
+      
+      if (data) {
+        const newNames: Record<string, string> = {};
+        (data as any[]).forEach(u => {
+          newNames[u.id] = u.name;
+        });
+        setUserNames(prev => ({ ...prev, ...newNames }));
+      }
+    };
+    
+    fetchUserNames();
+  }, [selectedChat?.messages]);
 
   // Scroll quando mudar de chat ou receber novas mensagens
   useEffect(() => {
@@ -906,6 +975,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               { key: 'todos' as FilterType, label: 'Todos', count: chats.length },
               { key: 'nao_lidos' as FilterType, label: 'Não lidos', count: chats.filter(c => (c.unread_count || 0) > 0).length },
               { key: 'aguardando' as FilterType, label: 'Aguardando', count: chats.filter(c => c.status === 'Aguardando' || c.status === 'Novo Lead').length },
+              { key: 'followup' as FilterType, label: 'Follow-up', count: Object.keys(followupData).length },
               { key: 'grupos' as FilterType, label: 'Grupos', count: chats.filter(c => c.phone_number?.includes('-') || (c.phone_number?.length || 0) > 15).length },
             ].map((f) => (
               <button 
@@ -964,7 +1034,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     <h3 className="text-sm font-bold text-slate-900 truncate">{chat.client_name}</h3>
                     <span className="text-[10px] font-bold text-slate-400">{formatTime(chat.last_message_time)}</span>
                   </div>
-                  <p className="text-xs text-slate-500 truncate leading-relaxed">{chat.last_message || 'Sem mensagens'}</p>
+                  {activeFilter === 'followup' && followupData[chat.id] ? (
+                    <div className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
+                      <span className="material-symbols-outlined text-sm">schedule</span>
+                      <span className="font-medium">
+                        {new Date(followupData[chat.id].scheduled_for).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} às {new Date(followupData[chat.id].scheduled_for).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 truncate leading-relaxed">{chat.last_message || 'Sem mensagens'}</p>
+                  )}
                   <div className="flex items-center gap-2 mt-2">
                     {chat.tags.map(tag => (
                       <span key={tag.id} className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ backgroundColor: `${tag.color}20`, color: tag.color }}>
@@ -1023,6 +1102,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                       ? 'bg-cyan-600 text-white rounded-tr-none' 
                       : 'bg-white text-slate-800 rounded-tl-none'
                   }`}>
+                    {/* Nome do atendente */}
+                    {!m.is_from_client && m.sent_by && userNames[m.sent_by] && (
+                      <p className="text-[10px] font-bold text-cyan-200 mb-1">{userNames[m.sent_by]}</p>
+                    )}
                     {/* Renderizar mídia se existir */}
                     {m.type === 'image' && m.media_url && (
                       <img 

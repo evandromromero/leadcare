@@ -320,11 +320,84 @@ Processa eventos da Evolution API:
 
 ---
 
-## Próximos Passos (Fase 5)
+### Fase 5: Gestão Multi-Usuário e Faturamento ✅ COMPLETA
 
 | Funcionalidade | Status |
 |----------------|--------|
-| Relatórios e métricas | 🔄 Pendente |
+| Criação de usuários pelo SuperAdmin | ✅ Completo |
+| Edge Function `create-user` (Supabase Admin API) | ✅ Completo |
+| Edge Function `delete-user` (exclusão segura) | ✅ Completo |
+| Modal de edição de usuário | ✅ Completo |
+| Modal de confirmação de exclusão | ✅ Completo |
+| Campo `view_mode` (shared/personal) | ✅ Completo |
+| Painel compartilhado vs painel zerado | ✅ Completo |
+| Bloqueio de conversa (quando alguém está respondendo) | ✅ Completo |
+| Nome do atendente nas mensagens enviadas | ✅ Completo |
+| Faturamento da clínica no Admin | ✅ Completo |
+| Faturamento por atendente | ✅ Completo |
+
+### Novas Tabelas/Campos
+
+| Tabela | Campo | Descrição |
+|--------|-------|-----------|
+| `users` | `view_mode` | 'shared' (vê faturamento de todos) ou 'personal' (só vê o próprio) |
+| `users` | `default_instance_id` | Instância WhatsApp padrão do usuário |
+| `users` | `can_create_instance` | Se pode criar própria instância |
+| `chats` | `locked_by` | ID do usuário que está respondendo |
+| `chats` | `locked_at` | Timestamp do bloqueio |
+
+### Edge Functions
+
+| Função | Descrição |
+|--------|-----------|
+| `create-user` | Cria usuário via Supabase Admin API (apenas SuperAdmin) |
+| `delete-user` | Exclui usuário do Auth (apenas SuperAdmin) |
+
+### Funcionalidades de Multi-Usuário
+
+#### View Mode (Painel Compartilhado/Zerado)
+- **shared**: Usuário vê faturamento de TODOS os atendimentos da clínica
+- **personal**: Usuário só vê faturamento dos atendimentos DELE (assigned_to = user.id)
+- Todos veem TODAS as conversas da instância WhatsApp
+
+#### Bloqueio de Conversa
+- Quando um atendente abre uma conversa, ela fica bloqueada para ele
+- Outro atendente vê: "🔒 [Nome] está respondendo esta conversa"
+- Timeout de 5 minutos de inatividade
+- Desbloqueio automático ao sair da conversa
+
+#### Nome do Atendente nas Mensagens
+- Mensagem enviada ao cliente: `*Evandro Morais:* Posso ajudar?`
+- No painel interno: nome do atendente aparece acima de cada mensagem
+
+#### Faturamento no Admin
+- Cards: Faturamento Total, Faturamento do Mês, Total Conversões
+- Tabela por atendente com breakdown individual
+- Categoria "(Não atribuído)" para chats sem assigned_to
+
+#### Atribuição Automática de Chats
+- Quando um atendente responde um chat, ele é automaticamente atribuído a ele
+- O faturamento vai para quem está atribuído ao chat
+- Funciona junto com o bloqueio de conversa
+
+#### Sincronização de Mensagens do Celular
+- Mensagens enviadas diretamente do celular WhatsApp agora aparecem no painel
+- Webhook atualizado para processar mensagens `fromMe = true`
+- Mensagens enviadas aparecem do lado direito (como enviadas)
+
+#### Filtro Follow-up
+- Novo filtro na Caixa de Entrada para mensagens agendadas
+- Mostra apenas chats onde o usuário tem follow-ups pendentes
+- Exibe data e hora do agendamento: "📅 10/01 às 14:30"
+- Cada usuário vê apenas seus próprios follow-ups
+
+---
+
+## Próximos Passos (Fase 6)
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Relatórios avançados | 🔄 Pendente |
 | Gestão de planos e assinaturas | 🔄 Pendente |
 | Auto-registro de clínicas | 🔄 Pendente |
 | Notificações push | 🔄 Pendente |

@@ -152,6 +152,21 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
   const sendMessage = async (chatId: string, content: string, userId: string) => {
     const chat = chats.find(c => c.id === chatId);
     
+    // Buscar nome do usuário para prefixar a mensagem
+    let userName = '';
+    const { data: userData } = await supabase
+      .from('users')
+      .select('name')
+      .eq('id', userId)
+      .single();
+    
+    if (userData) {
+      userName = (userData as any).name || '';
+    }
+    
+    // Mensagem com nome do atendente para o WhatsApp
+    const whatsappMessage = userName ? `*${userName}:* ${content}` : content;
+    
     // Enviar via WhatsApp se conectado
     if (whatsappInstance && whatsappInstance.status === 'connected' && evolutionSettings && chat?.phone_number) {
       try {
@@ -168,7 +183,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
           },
           body: JSON.stringify({
             number: formattedPhone,
-            text: content,
+            text: whatsappMessage,
           }),
         });
       } catch (err) {
@@ -193,12 +208,14 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
       return;
     }
 
+    // Atribuir chat ao usuário que está respondendo (se ainda não estiver atribuído)
     await supabase
       .from('chats')
       .update({ 
         last_message: content, 
         last_message_time: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        assigned_to: userId
       })
       .eq('id', chatId);
 
@@ -208,7 +225,8 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
             ...c, 
             messages: [...c.messages, newMessage],
             last_message: content,
-            last_message_time: new Date().toISOString()
+            last_message_time: new Date().toISOString(),
+            assigned_to: userId
           } 
         : c
     ));

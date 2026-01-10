@@ -61,10 +61,11 @@ serve(async (req) => {
 
     const data = webhookData.data
     const key = data?.key
-    if (!key || key.fromMe === true) {
+    if (!key) {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    const isFromMe = key.fromMe === true
     let phone = (key.remoteJid || '').replace('@s.whatsapp.net', '').replace('@g.us', '')
     if (phone.includes('-') || phone.length > 15) {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -111,6 +112,10 @@ serve(async (req) => {
       .single()
 
     if (!chat) {
+      // Só cria novo chat se for mensagem do cliente
+      if (isFromMe) {
+        return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
       const { data: newChat } = await supabase
         .from('chats')
         .insert({
@@ -126,10 +131,11 @@ serve(async (req) => {
         .single()
       chat = newChat
     } else {
+      // Atualiza chat - só incrementa unread se for do cliente
       await supabase
         .from('chats')
         .update({
-          unread_count: (chat.unread_count || 0) + 1,
+          unread_count: isFromMe ? (chat.unread_count || 0) : (chat.unread_count || 0) + 1,
           last_message: message,
           last_message_time: new Date().toISOString()
         })
@@ -167,7 +173,7 @@ serve(async (req) => {
       content: message || '[Sem texto]',
       type: mediaType || 'text',
       media_url: finalMediaUrl,
-      is_from_client: true
+      is_from_client: !isFromMe
     })
 
     return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

@@ -61,6 +61,19 @@ interface WhatsAppInstance {
   user_id: string | null;
 }
 
+interface BillingStats {
+  totalRevenue: number;
+  monthlyRevenue: number;
+  totalConversions: number;
+  byAttendant: Array<{
+    id: string;
+    name: string;
+    totalRevenue: number;
+    monthlyRevenue: number;
+    conversions: number;
+  }>;
+}
+
 const AdminClinicDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -70,6 +83,7 @@ const AdminClinicDetail: React.FC = () => {
   const [users, setUsers] = useState<ClinicUser[]>([]);
   const [stats, setStats] = useState<ClinicStats>({ users_count: 0, chats_count: 0, messages_count: 0, leads_count: 0 });
   const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([]);
+  const [billingStats, setBillingStats] = useState<BillingStats>({ totalRevenue: 0, monthlyRevenue: 0, totalConversions: 0, byAttendant: [] });
   const [loading, setLoading] = useState(true);
   const [impersonating, setImpersonating] = useState(false);
   
@@ -148,10 +162,91 @@ const AdminClinicDetail: React.FC = () => {
 
       setWhatsappInstances(instancesData || []);
 
+      // Buscar faturamento
+      await fetchBillingStats(usersData || []);
+
     } catch (error) {
       console.error('Error fetching clinic details:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBillingStats = async (clinicUsers: ClinicUser[]) => {
+    try {
+      // Buscar todos os chats da clínica com assigned_to
+      const { data: chatsData } = await supabase
+        .from('chats')
+        .select('id, assigned_to, status')
+        .eq('clinic_id', id);
+
+      if (!chatsData) return;
+
+      const chatIds = chatsData.map(c => c.id);
+      
+      if (chatIds.length === 0) return;
+      
+      // Buscar todos os pagamentos dos chats
+      const { data: paymentsData } = await supabase
+        .from('payments' as any)
+        .select('value, payment_date, chat_id')
+        .in('chat_id', chatIds);
+
+      const payments = (paymentsData || []) as Array<{ value: number; payment_date: string; chat_id: string }>;
+      
+      // Calcular totais gerais
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      const totalRevenue = payments.reduce((sum, p) => sum + Number(p.value), 0);
+      const monthlyRevenue = payments
+        .filter(p => new Date(p.payment_date) >= firstDayOfMonth)
+        .reduce((sum, p) => sum + Number(p.value), 0);
+      const totalConversions = chatsData.filter(c => c.status === 'Convertido').length;
+
+      // Calcular por atendente
+      const byAttendant: BillingStats['byAttendant'] = [];
+      
+      // Adicionar cada usuário
+      clinicUsers.forEach(u => {
+        const userChats = chatsData.filter(c => c.assigned_to === u.id);
+        const userChatIds = userChats.map(c => c.id);
+        const userPayments = payments.filter(p => userChatIds.includes(p.chat_id));
+        
+        byAttendant.push({
+          id: u.id,
+          name: u.name,
+          totalRevenue: userPayments.reduce((sum, p) => sum + Number(p.value), 0),
+          monthlyRevenue: userPayments
+            .filter(p => new Date(p.payment_date) >= firstDayOfMonth)
+            .reduce((sum, p) => sum + Number(p.value), 0),
+          conversions: userChats.filter(c => c.status === 'Convertido').length,
+        });
+      });
+
+      // Adicionar "Não atribuído" para chats sem assigned_to
+      const unassignedChats = chatsData.filter(c => !c.assigned_to);
+      const unassignedChatIds = unassignedChats.map(c => c.id);
+      const unassignedPayments = payments.filter(p => unassignedChatIds.includes(p.chat_id));
+      
+      if (unassignedPayments.length > 0 || unassignedChats.filter(c => c.status === 'Convertido').length > 0) {
+        byAttendant.push({
+          id: 'unassigned',
+          name: '(Não atribuído)',
+          totalRevenue: unassignedPayments.reduce((sum, p) => sum + Number(p.value), 0),
+          monthlyRevenue: unassignedPayments
+            .filter(p => new Date(p.payment_date) >= firstDayOfMonth)
+            .reduce((sum, p) => sum + Number(p.value), 0),
+          conversions: unassignedChats.filter(c => c.status === 'Convertido').length,
+        });
+      }
+
+      // Ordenar por faturamento total
+      byAttendant.sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+      setBillingStats({ totalRevenue, monthlyRevenue, totalConversions, byAttendant });
+    } catch (error) {
+      console.error('Error fetching billing stats:', error);
     }
   };
 
@@ -573,6 +668,111 @@ const AdminClinicDetail: React.FC = () => {
                   <p className="text-sm text-slate-500 mb-1">Última atualização</p>
                   <span className="text-slate-800">{formatDate(clinic.updated_at)}</span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Billing Stats */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                <span className="material-symbols-outlined text-emerald-600">payments</span>
+                Faturamento da Clínica
+              </h2>
+            </div>
+            
+            {/* Totais Gerais */}
+            <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4 border-b border-slate-200">
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 text-white">
+                <p className="text-emerald-100 text-sm mb-1">Faturamento Total</p>
+                <p className="text-2xl font-bold">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.totalRevenue)}
+                </p>
+                <p className="text-emerald-200 text-xs mt-1">Acumulado geral</p>
+              </div>
+              <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-4 text-white">
+                <p className="text-cyan-100 text-sm mb-1">Faturamento do Mês</p>
+                <p className="text-2xl font-bold">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.monthlyRevenue)}
+                </p>
+                <p className="text-cyan-200 text-xs mt-1">{new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+              </div>
+              <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-4 text-white">
+                <p className="text-violet-100 text-sm mb-1">Total Conversões</p>
+                <p className="text-2xl font-bold">{billingStats.totalConversions}</p>
+                <p className="text-violet-200 text-xs mt-1">Leads convertidos</p>
+              </div>
+            </div>
+
+            {/* Por Atendente */}
+            <div className="p-6">
+              <h3 className="text-sm font-semibold text-slate-600 mb-4 flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Faturamento por Atendente
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      <th className="pb-3">Atendente</th>
+                      <th className="pb-3 text-right">Total</th>
+                      <th className="pb-3 text-right">Mês Atual</th>
+                      <th className="pb-3 text-right">Conversões</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {billingStats.byAttendant.map((att) => (
+                      <tr key={att.id} className="hover:bg-slate-50">
+                        <td className="py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
+                              <span className="text-slate-600 text-sm font-medium">
+                                {att.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="font-medium text-slate-800">{att.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 text-right font-medium text-slate-800">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.totalRevenue)}
+                        </td>
+                        <td className="py-3 text-right text-slate-600">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.monthlyRevenue)}
+                        </td>
+                        <td className="py-3 text-right">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                            {att.conversions}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {billingStats.byAttendant.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="py-6 text-center text-slate-500">
+                          Nenhum dado de faturamento disponível
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  {billingStats.byAttendant.length > 0 && (
+                    <tfoot className="border-t-2 border-slate-200">
+                      <tr className="font-semibold">
+                        <td className="pt-3 text-slate-800">TOTAL</td>
+                        <td className="pt-3 text-right text-emerald-600">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.totalRevenue)}
+                        </td>
+                        <td className="pt-3 text-right text-cyan-600">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.monthlyRevenue)}
+                        </td>
+                        <td className="pt-3 text-right">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-600 text-white">
+                            {billingStats.totalConversions}
+                          </span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
               </div>
             </div>
           </div>
