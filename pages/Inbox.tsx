@@ -47,6 +47,64 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [notes, setNotes] = useState<Array<{ id: string; content: string; created_at: string; user_name: string }>>([]);
   const [savingNote, setSavingNote] = useState(false);
   
+  // Estados para orçamentos
+  const [quotes, setQuotes] = useState<Array<{
+    id: string;
+    service_type: string;
+    value: number;
+    status: 'pending' | 'approved' | 'rejected';
+    notes: string | null;
+    created_at: string;
+  }>>([]);
+  const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [quoteForm, setQuoteForm] = useState({ service_type: '', value: '', notes: '' });
+  const [savingQuote, setSavingQuote] = useState(false);
+  
+  // Estados para origem do lead
+  const [leadSources, setLeadSources] = useState<Array<{ id: string; name: string; code: string | null; color: string }>>([]);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [showSourceDropdown, setShowSourceDropdown] = useState(false);
+  const [showAddSourceModal, setShowAddSourceModal] = useState(false);
+  const [newSourceForm, setNewSourceForm] = useState({ name: '', code: '' });
+  const [savingSource, setSavingSource] = useState(false);
+  
+  // Estados para pagamentos/negociações
+  const [payments, setPayments] = useState<Array<{
+    id: string;
+    value: number;
+    description: string | null;
+    payment_date: string;
+    created_at: string;
+  }>>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0] });
+  const [savingPayment, setSavingPayment] = useState(false);
+  
+  // Estados para tarefas
+  const [tasks, setTasks] = useState<Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    due_date: string | null;
+    completed: boolean;
+    created_at: string;
+  }>>([]);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', due_date: '' });
+  const [savingTask, setSavingTask] = useState(false);
+  
+  // Estados para mensagens agendadas
+  const [scheduledMessages, setScheduledMessages] = useState<Array<{
+    id: string;
+    message: string;
+    scheduled_for: string;
+    status: 'pending' | 'sent' | 'cancelled';
+    created_at: string;
+  }>>([]);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({ message: '', scheduled_date: '', scheduled_time: '' });
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  
   // Estados para envio de mídia
   const [sendingMedia, setSendingMedia] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -209,12 +267,346 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   };
 
-  // Buscar notas quando mudar de chat
+  // Buscar orçamentos do chat selecionado
+  const fetchQuotes = async (chatId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('quotes' as any)
+        .select('id, service_type, value, status, notes, created_at')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        setQuotes(data as any);
+      }
+    } catch (err) {
+      console.error('Error fetching quotes:', err);
+    }
+  };
+
+  // Salvar novo orçamento
+  const handleSaveQuote = async () => {
+    if (!quoteForm.service_type.trim() || !quoteForm.value || !selectedChatId || !user || !clinicId) return;
+    
+    setSavingQuote(true);
+    try {
+      const { error } = await supabase
+        .from('quotes' as any)
+        .insert({
+          chat_id: selectedChatId,
+          clinic_id: clinicId,
+          service_type: quoteForm.service_type.trim(),
+          value: parseFloat(quoteForm.value.replace(',', '.')),
+          notes: quoteForm.notes.trim() || null,
+          created_by: user.id,
+          status: 'pending',
+        });
+      
+      if (!error) {
+        setQuoteForm({ service_type: '', value: '', notes: '' });
+        setShowQuoteModal(false);
+        await fetchQuotes(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error saving quote:', err);
+    } finally {
+      setSavingQuote(false);
+    }
+  };
+
+  // Atualizar status do orçamento
+  const handleUpdateQuoteStatus = async (quoteId: string, newStatus: 'pending' | 'approved' | 'rejected') => {
+    try {
+      const { error } = await supabase
+        .from('quotes' as any)
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', quoteId);
+      
+      if (!error && selectedChatId) {
+        await fetchQuotes(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error updating quote status:', err);
+    }
+  };
+
+  // Buscar origens de leads da clínica
+  const fetchLeadSources = async () => {
+    if (!clinicId) return;
+    try {
+      const { data, error } = await supabase
+        .from('lead_sources' as any)
+        .select('id, name, code, color')
+        .eq('clinic_id', clinicId)
+        .order('name');
+      
+      if (!error && data) {
+        setLeadSources(data as any);
+      }
+    } catch (err) {
+      console.error('Error fetching lead sources:', err);
+    }
+  };
+
+  // Buscar origem do chat selecionado
+  const fetchChatSource = async (chatId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('chats')
+        .select('source_id')
+        .eq('id', chatId)
+        .single();
+      
+      if (!error && data) {
+        setSelectedSourceId((data as any).source_id);
+      }
+    } catch (err) {
+      console.error('Error fetching chat source:', err);
+    }
+  };
+
+  // Atualizar origem do lead
+  const handleUpdateSource = async (sourceId: string | null) => {
+    if (!selectedChatId) return;
+    try {
+      const { error } = await supabase
+        .from('chats')
+        .update({ source_id: sourceId })
+        .eq('id', selectedChatId);
+      
+      if (!error) {
+        setSelectedSourceId(sourceId);
+        setShowSourceDropdown(false);
+      }
+    } catch (err) {
+      console.error('Error updating source:', err);
+    }
+  };
+
+  // Criar nova origem
+  const handleCreateSource = async () => {
+    if (!newSourceForm.name.trim() || !clinicId) return;
+    setSavingSource(true);
+    try {
+      const { data, error } = await supabase
+        .from('lead_sources' as any)
+        .insert({
+          clinic_id: clinicId,
+          name: newSourceForm.name.trim(),
+          code: newSourceForm.code.trim() || null,
+        })
+        .select()
+        .single();
+      
+      if (!error && data) {
+        await fetchLeadSources();
+        setNewSourceForm({ name: '', code: '' });
+        setShowAddSourceModal(false);
+      }
+    } catch (err) {
+      console.error('Error creating source:', err);
+    } finally {
+      setSavingSource(false);
+    }
+  };
+
+  // Buscar pagamentos do chat selecionado
+  const fetchPayments = async (chatId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('payments' as any)
+        .select('id, value, description, payment_date, created_at')
+        .eq('chat_id', chatId)
+        .order('payment_date', { ascending: false });
+      
+      if (!error && data) {
+        setPayments(data as any);
+      }
+    } catch (err) {
+      console.error('Error fetching payments:', err);
+    }
+  };
+
+  // Salvar novo pagamento
+  const handleSavePayment = async () => {
+    if (!paymentForm.value || !selectedChatId || !user || !clinicId) return;
+    
+    setSavingPayment(true);
+    try {
+      const { error } = await supabase
+        .from('payments' as any)
+        .insert({
+          chat_id: selectedChatId,
+          clinic_id: clinicId,
+          value: parseFloat(paymentForm.value.replace(',', '.')),
+          description: paymentForm.description.trim() || null,
+          payment_date: paymentForm.payment_date,
+          created_by: user.id,
+        });
+      
+      if (!error) {
+        setPaymentForm({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0] });
+        setShowPaymentModal(false);
+        await fetchPayments(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error saving payment:', err);
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  // Buscar tarefas do chat selecionado
+  const fetchTasks = async (chatId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks' as any)
+        .select('id, title, description, due_date, completed, created_at')
+        .eq('chat_id', chatId)
+        .order('completed', { ascending: true })
+        .order('due_date', { ascending: true, nullsFirst: false });
+      
+      if (!error && data) {
+        setTasks(data as any);
+      }
+    } catch (err) {
+      console.error('Error fetching tasks:', err);
+    }
+  };
+
+  // Salvar nova tarefa
+  const handleSaveTask = async () => {
+    if (!taskForm.title.trim() || !selectedChatId || !user || !clinicId) return;
+    
+    setSavingTask(true);
+    try {
+      const { error } = await supabase
+        .from('tasks' as any)
+        .insert({
+          chat_id: selectedChatId,
+          clinic_id: clinicId,
+          title: taskForm.title.trim(),
+          description: taskForm.description.trim() || null,
+          due_date: taskForm.due_date || null,
+          created_by: user.id,
+        });
+      
+      if (!error) {
+        setTaskForm({ title: '', description: '', due_date: '' });
+        setShowTaskModal(false);
+        await fetchTasks(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error saving task:', err);
+    } finally {
+      setSavingTask(false);
+    }
+  };
+
+  // Marcar tarefa como concluída/pendente
+  const handleToggleTask = async (taskId: string, completed: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('tasks' as any)
+        .update({ 
+          completed: !completed, 
+          completed_at: !completed ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', taskId);
+      
+      if (!error && selectedChatId) {
+        await fetchTasks(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error toggling task:', err);
+    }
+  };
+
+  // Buscar mensagens agendadas do chat selecionado
+  const fetchScheduledMessages = async (chatId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('scheduled_messages' as any)
+        .select('id, message, scheduled_for, status, created_at')
+        .eq('chat_id', chatId)
+        .order('scheduled_for', { ascending: true });
+      
+      if (!error && data) {
+        setScheduledMessages(data as any);
+      }
+    } catch (err) {
+      console.error('Error fetching scheduled messages:', err);
+    }
+  };
+
+  // Salvar nova mensagem agendada
+  const handleSaveSchedule = async () => {
+    if (!scheduleForm.message.trim() || !scheduleForm.scheduled_date || !scheduleForm.scheduled_time || !selectedChatId || !user || !clinicId) return;
+    
+    setSavingSchedule(true);
+    try {
+      const scheduledFor = new Date(`${scheduleForm.scheduled_date}T${scheduleForm.scheduled_time}`).toISOString();
+      
+      const { error } = await supabase
+        .from('scheduled_messages' as any)
+        .insert({
+          chat_id: selectedChatId,
+          clinic_id: clinicId,
+          message: scheduleForm.message.trim(),
+          scheduled_for: scheduledFor,
+          created_by: user.id,
+        });
+      
+      if (!error) {
+        setScheduleForm({ message: '', scheduled_date: '', scheduled_time: '' });
+        setShowScheduleModal(false);
+        await fetchScheduledMessages(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error saving scheduled message:', err);
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  // Cancelar mensagem agendada
+  const handleCancelSchedule = async (scheduleId: string) => {
+    try {
+      const { error } = await supabase
+        .from('scheduled_messages' as any)
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', scheduleId);
+      
+      if (!error && selectedChatId) {
+        await fetchScheduledMessages(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error cancelling scheduled message:', err);
+    }
+  };
+
+  // Buscar origens ao carregar
+  useEffect(() => {
+    fetchLeadSources();
+  }, [clinicId]);
+
+  // Buscar notas, orçamentos, origem, pagamentos, tarefas e mensagens agendadas quando mudar de chat
   useEffect(() => {
     if (selectedChatId) {
       fetchNotes(selectedChatId);
+      fetchQuotes(selectedChatId);
+      fetchChatSource(selectedChatId);
+      fetchPayments(selectedChatId);
+      fetchTasks(selectedChatId);
+      fetchScheduledMessages(selectedChatId);
     } else {
       setNotes([]);
+      setQuotes([]);
+      setSelectedSourceId(null);
+      setPayments([]);
+      setTasks([]);
+      setScheduledMessages([]);
     }
   }, [selectedChatId]);
 
@@ -733,6 +1125,137 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 )}
               </section>
 
+              {/* Seção Origem do Lead */}
+              <section className="relative">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Origem do Lead</h3>
+                  <button 
+                    onClick={() => setShowAddSourceModal(true)}
+                    className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">add</span> Nova
+                  </button>
+                </div>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowSourceDropdown(!showSourceDropdown)}
+                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between hover:border-cyan-300 transition-colors"
+                  >
+                    {selectedSourceId ? (
+                      <div className="flex items-center gap-2">
+                        <span 
+                          className="size-3 rounded-full" 
+                          style={{ backgroundColor: leadSources.find(s => s.id === selectedSourceId)?.color || '#6B7280' }}
+                        ></span>
+                        <span className="text-sm font-bold text-slate-700">
+                          {leadSources.find(s => s.id === selectedSourceId)?.name}
+                        </span>
+                        {leadSources.find(s => s.id === selectedSourceId)?.code && (
+                          <span className="text-[10px] text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded">
+                            {leadSources.find(s => s.id === selectedSourceId)?.code}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-400">Selecionar origem...</span>
+                    )}
+                    <span className="material-symbols-outlined text-slate-400 text-[18px]">expand_more</span>
+                  </button>
+                  
+                  {/* Dropdown de origens */}
+                  {showSourceDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-20 max-h-48 overflow-y-auto">
+                      <button
+                        onClick={() => handleUpdateSource(null)}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 ${
+                          !selectedSourceId ? 'bg-slate-50 font-bold' : ''
+                        }`}
+                      >
+                        <span className="size-3 rounded-full bg-slate-300"></span>
+                        Sem origem
+                      </button>
+                      {leadSources.map(source => (
+                        <button
+                          key={source.id}
+                          onClick={() => handleUpdateSource(source.id)}
+                          className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 ${
+                            selectedSourceId === source.id ? 'bg-slate-50 font-bold' : ''
+                          }`}
+                        >
+                          <span className="size-3 rounded-full" style={{ backgroundColor: source.color }}></span>
+                          {source.name}
+                          {source.code && (
+                            <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1">
+                              {source.code}
+                            </span>
+                          )}
+                          {selectedSourceId === source.id && (
+                            <span className="material-symbols-outlined text-cyan-600 text-[16px] ml-auto">check</span>
+                          )}
+                        </button>
+                      ))}
+                      {leadSources.length === 0 && (
+                        <p className="px-4 py-2 text-xs text-slate-400">Nenhuma origem cadastrada</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Modal Nova Origem */}
+              {showAddSourceModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddSourceModal(false)}>
+                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-800">Nova Origem</h3>
+                      <button onClick={() => setShowAddSourceModal(false)} className="text-slate-400 hover:text-slate-600">
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Nome da Origem</label>
+                        <input
+                          type="text"
+                          value={newSourceForm.name}
+                          onChange={(e) => setNewSourceForm(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="Ex: Instagram, Indicação, AV1..."
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Código (opcional)</label>
+                        <input
+                          type="text"
+                          value={newSourceForm.code}
+                          onChange={(e) => setNewSourceForm(prev => ({ ...prev, code: e.target.value }))}
+                          placeholder="Ex: AV1, AV2, IG01..."
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Use para identificar criativos de anúncios</p>
+                      </div>
+                      <button
+                        onClick={handleCreateSource}
+                        disabled={!newSourceForm.name.trim() || savingSource}
+                        className="w-full py-2 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {savingSource ? (
+                          <>
+                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            Salvando...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">save</span>
+                            Criar Origem
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <section>
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Etiquetas</h3>
@@ -835,6 +1358,517 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           <p className="text-slate-700">{reply.text}</p>
                         </button>
                       ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Seção de Orçamentos */}
+              <section>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Orçamento</h3>
+                  <button 
+                    onClick={() => setShowQuoteModal(true)}
+                    className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
+                  </button>
+                </div>
+                
+                {quotes.length === 0 ? (
+                  <p className="text-xs text-slate-400">Nenhum orçamento</p>
+                ) : (
+                  <div className="space-y-2">
+                    {quotes.map(quote => (
+                      <div 
+                        key={quote.id} 
+                        className={`p-3 rounded-xl border ${
+                          quote.status === 'approved' ? 'bg-green-50 border-green-200' :
+                          quote.status === 'rejected' ? 'bg-red-50 border-red-200' :
+                          'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-xs font-bold text-slate-700">{quote.service_type}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            quote.status === 'approved' ? 'bg-green-100 text-green-700' :
+                            quote.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>
+                            {quote.status === 'approved' ? 'Aprovado' : 
+                             quote.status === 'rejected' ? 'Recusado' : 'Pendente'}
+                          </span>
+                        </div>
+                        <p className="text-sm font-black text-slate-900 mb-2">
+                          R$ {quote.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                        {quote.notes && (
+                          <p className="text-[10px] text-slate-500 mb-2 italic">"{quote.notes}"</p>
+                        )}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(quote.created_at).toLocaleDateString('pt-BR')}
+                          </span>
+                          {quote.status === 'pending' && (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleUpdateQuoteStatus(quote.id, 'approved')}
+                                className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
+                                title="Aprovar"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">check</span>
+                              </button>
+                              <button
+                                onClick={() => handleUpdateQuoteStatus(quote.id, 'rejected')}
+                                className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                                title="Recusar"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">close</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Total */}
+                    <div className="pt-2 border-t border-slate-200 mt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-500">Total Aprovado:</span>
+                        <span className="text-sm font-black text-green-600">
+                          R$ {quotes
+                            .filter(q => q.status === 'approved')
+                            .reduce((sum, q) => sum + q.value, 0)
+                            .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {/* Modal de Novo Orçamento */}
+              {showQuoteModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowQuoteModal(false)}>
+                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-800">Novo Orçamento</h3>
+                      <button onClick={() => setShowQuoteModal(false)} className="text-slate-400 hover:text-slate-600">
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Tipo de Serviço</label>
+                        <input
+                          type="text"
+                          value={quoteForm.service_type}
+                          onChange={(e) => setQuoteForm(prev => ({ ...prev, service_type: e.target.value }))}
+                          placeholder="Ex: Consulta, Procedimento..."
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
+                        <input
+                          type="text"
+                          value={quoteForm.value}
+                          onChange={(e) => setQuoteForm(prev => ({ ...prev, value: e.target.value }))}
+                          placeholder="0,00"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Observações (opcional)</label>
+                        <textarea
+                          value={quoteForm.notes}
+                          onChange={(e) => setQuoteForm(prev => ({ ...prev, notes: e.target.value }))}
+                          placeholder="Detalhes do orçamento..."
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent h-20 resize-none"
+                        />
+                      </div>
+                      <button
+                        onClick={handleSaveQuote}
+                        disabled={!quoteForm.service_type.trim() || !quoteForm.value || savingQuote}
+                        className="w-full py-2 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {savingQuote ? (
+                          <>
+                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            Salvando...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">save</span>
+                            Salvar Orçamento
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Seção de Negociações/Pagamentos */}
+              <section>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Negociações</h3>
+                  <button 
+                    onClick={() => setShowPaymentModal(true)}
+                    className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
+                  </button>
+                </div>
+                
+                {payments.length === 0 ? (
+                  <p className="text-xs text-slate-400">Nenhum pagamento registrado</p>
+                ) : (
+                  <div className="space-y-2">
+                    {payments.map(payment => (
+                      <div 
+                        key={payment.id} 
+                        className="p-3 rounded-xl border bg-emerald-50 border-emerald-200"
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-sm font-black text-emerald-700">
+                            R$ {payment.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(payment.payment_date).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+                        {payment.description && (
+                          <p className="text-[11px] text-slate-600">{payment.description}</p>
+                        )}
+                      </div>
+                    ))}
+                    
+                    {/* Total */}
+                    <div className="pt-2 border-t border-slate-200 mt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-500">Total Faturado:</span>
+                        <span className="text-sm font-black text-emerald-600">
+                          R$ {payments
+                            .reduce((sum, p) => sum + p.value, 0)
+                            .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {/* Modal de Novo Pagamento */}
+              {showPaymentModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowPaymentModal(false)}>
+                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-800">Registrar Pagamento</h3>
+                      <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600">
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
+                        <input
+                          type="text"
+                          value={paymentForm.value}
+                          onChange={(e) => setPaymentForm(prev => ({ ...prev, value: e.target.value }))}
+                          placeholder="0,00"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Data do Pagamento</label>
+                        <input
+                          type="date"
+                          value={paymentForm.payment_date}
+                          onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_date: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Descrição (opcional)</label>
+                        <input
+                          type="text"
+                          value={paymentForm.description}
+                          onChange={(e) => setPaymentForm(prev => ({ ...prev, description: e.target.value }))}
+                          placeholder="Ex: Consulta, Preenchimento labial..."
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                        />
+                      </div>
+                      <button
+                        onClick={handleSavePayment}
+                        disabled={!paymentForm.value || savingPayment}
+                        className="w-full py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {savingPayment ? (
+                          <>
+                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            Salvando...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">payments</span>
+                            Registrar Pagamento
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Seção de Tarefas */}
+              <section>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tarefas</h3>
+                  <button 
+                    onClick={() => setShowTaskModal(true)}
+                    className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
+                  </button>
+                </div>
+                
+                {tasks.length === 0 ? (
+                  <p className="text-xs text-slate-400">Nenhuma tarefa</p>
+                ) : (
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {tasks.map(task => (
+                      <div 
+                        key={task.id} 
+                        className={`p-2.5 rounded-xl border flex items-start gap-2 ${
+                          task.completed ? 'bg-slate-50 border-slate-200' : 'bg-purple-50 border-purple-200'
+                        }`}
+                      >
+                        <button
+                          onClick={() => handleToggleTask(task.id, task.completed)}
+                          className={`mt-0.5 size-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                            task.completed 
+                              ? 'bg-slate-400 border-slate-400 text-white' 
+                              : 'border-purple-400 hover:bg-purple-100'
+                          }`}
+                        >
+                          {task.completed && (
+                            <span className="material-symbols-outlined text-[12px]">check</span>
+                          )}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-medium ${task.completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                            {task.title}
+                          </p>
+                          {task.due_date && (
+                            <p className={`text-[10px] mt-0.5 ${
+                              task.completed ? 'text-slate-400' :
+                              new Date(task.due_date) < new Date() ? 'text-red-500 font-bold' : 'text-slate-400'
+                            }`}>
+                              <span className="material-symbols-outlined text-[10px] align-middle mr-0.5">event</span>
+                              {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                              {!task.completed && new Date(task.due_date) < new Date() && ' (atrasada)'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Modal de Nova Tarefa */}
+              {showTaskModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTaskModal(false)}>
+                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-800">Nova Tarefa</h3>
+                      <button onClick={() => setShowTaskModal(false)} className="text-slate-400 hover:text-slate-600">
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Título</label>
+                        <input
+                          type="text"
+                          value={taskForm.title}
+                          onChange={(e) => setTaskForm(prev => ({ ...prev, title: e.target.value }))}
+                          placeholder="Ex: Ligar para confirmar consulta"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Data de Vencimento (opcional)</label>
+                        <input
+                          type="date"
+                          value={taskForm.due_date}
+                          onChange={(e) => setTaskForm(prev => ({ ...prev, due_date: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Descrição (opcional)</label>
+                        <textarea
+                          value={taskForm.description}
+                          onChange={(e) => setTaskForm(prev => ({ ...prev, description: e.target.value }))}
+                          placeholder="Detalhes da tarefa..."
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent h-16 resize-none"
+                        />
+                      </div>
+                      <button
+                        onClick={handleSaveTask}
+                        disabled={!taskForm.title.trim() || savingTask}
+                        className="w-full py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {savingTask ? (
+                          <>
+                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            Salvando...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">task_alt</span>
+                            Criar Tarefa
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Seção de Mensagens Agendadas */}
+              <section>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Follow-up</h3>
+                  <button 
+                    onClick={() => setShowScheduleModal(true)}
+                    className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">add</span> Agendar
+                  </button>
+                </div>
+                
+                {scheduledMessages.filter(m => m.status === 'pending').length === 0 ? (
+                  <p className="text-xs text-slate-400">Nenhum follow-up agendado</p>
+                ) : (
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {scheduledMessages.filter(m => m.status === 'pending').map(msg => (
+                      <div 
+                        key={msg.id} 
+                        className="p-2.5 rounded-xl border bg-blue-50 border-blue-200"
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <p className="text-[11px] text-slate-700 flex-1 line-clamp-2">{msg.message}</p>
+                          <button
+                            onClick={() => handleCancelSchedule(msg.id)}
+                            className="text-slate-400 hover:text-red-500 transition-colors flex-shrink-0"
+                            title="Cancelar"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">close</span>
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-blue-600 mt-1 font-medium">
+                          <span className="material-symbols-outlined text-[10px] align-middle mr-0.5">schedule_send</span>
+                          {new Date(msg.scheduled_for).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Modal de Agendar Mensagem */}
+              {showScheduleModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowScheduleModal(false)}>
+                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-800">Agendar Follow-up</h3>
+                      <button onClick={() => setShowScheduleModal(false)} className="text-slate-400 hover:text-slate-600">
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Mensagem</label>
+                        <textarea
+                          value={scheduleForm.message}
+                          onChange={(e) => setScheduleForm(prev => ({ ...prev, message: e.target.value }))}
+                          placeholder="Mensagem para enviar..."
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent h-20 resize-none"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">Data</label>
+                          <input
+                            type="date"
+                            value={scheduleForm.scheduled_date}
+                            onChange={(e) => setScheduleForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
+                            min={new Date().toISOString().split('T')[0]}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">Hora</label>
+                          <input
+                            type="time"
+                            value={scheduleForm.scheduled_time}
+                            onChange={(e) => setScheduleForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            const date = new Date();
+                            date.setDate(date.getDate() + 30);
+                            setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
+                          }}
+                          className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                        >
+                          30 dias
+                        </button>
+                        <button
+                          onClick={() => {
+                            const date = new Date();
+                            date.setDate(date.getDate() + 60);
+                            setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
+                          }}
+                          className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                        >
+                          60 dias
+                        </button>
+                        <button
+                          onClick={() => {
+                            const date = new Date();
+                            date.setDate(date.getDate() + 90);
+                            setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
+                          }}
+                          className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                        >
+                          90 dias
+                        </button>
+                      </div>
+                      <button
+                        onClick={handleSaveSchedule}
+                        disabled={!scheduleForm.message.trim() || !scheduleForm.scheduled_date || !scheduleForm.scheduled_time || savingSchedule}
+                        className="w-full py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {savingSchedule ? (
+                          <>
+                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            Agendando...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">schedule_send</span>
+                            Agendar Mensagem
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>

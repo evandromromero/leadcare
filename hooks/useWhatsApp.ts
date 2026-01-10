@@ -4,30 +4,52 @@ import { supabase } from '../lib/supabase';
 export interface WhatsAppInstance {
   id: string;
   clinicId: string;
+  userId: string | null;
   instanceName: string;
+  displayName: string | null;
   phoneNumber: string | null;
   status: 'disconnected' | 'connecting' | 'connected';
   qrCode: string | null;
   qrCodeExpiresAt: string | null;
   connectedAt: string | null;
+  isShared: boolean;
 }
 
 interface UseWhatsAppReturn {
-  instance: WhatsAppInstance | null;
+  instances: WhatsAppInstance[];
+  selectedInstance: WhatsAppInstance | null;
   loading: boolean;
   error: string | null;
-  connect: () => Promise<{ error: string | null }>;
-  disconnect: () => Promise<{ error: string | null }>;
-  refreshStatus: () => Promise<void>;
+  selectInstance: (instanceId: string) => void;
+  connect: (options?: { isShared?: boolean; displayName?: string }) => Promise<{ error: string | null }>;
+  disconnect: (instanceId?: string) => Promise<{ error: string | null }>;
+  refreshStatus: (instanceId?: string) => Promise<void>;
+  deleteInstance: (instanceId: string) => Promise<{ error: string | null }>;
 }
 
-export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
-  const [instance, setInstance] = useState<WhatsAppInstance | null>(null);
+export function useWhatsApp(clinicId: string | undefined, userId?: string): UseWhatsAppReturn {
+  const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<{ apiUrl: string; apiKey: string } | null>(null);
 
-  // Buscar configurações globais da Evolution API
+  const selectedInstance = instances.find(i => i.id === selectedInstanceId) || null;
+
+  const mapInstanceData = (data: Record<string, unknown>): WhatsAppInstance => ({
+    id: data.id as string,
+    clinicId: data.clinic_id as string,
+    userId: data.user_id as string | null,
+    instanceName: data.instance_name as string,
+    displayName: data.display_name as string | null,
+    phoneNumber: data.phone_number as string | null,
+    status: data.status as 'disconnected' | 'connecting' | 'connected',
+    qrCode: data.qr_code as string | null,
+    qrCodeExpiresAt: data.qr_code_expires_at as string | null,
+    connectedAt: data.connected_at as string | null,
+    isShared: data.is_shared as boolean ?? true,
+  });
+
   const fetchSettings = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -51,8 +73,7 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
     }
   }, []);
 
-  // Buscar instância existente
-  const fetchInstance = useCallback(async () => {
+  const fetchInstances = useCallback(async () => {
     if (!clinicId) {
       setLoading(false);
       return;
@@ -63,36 +84,33 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
         .from('whatsapp_instances')
         .select('*')
         .eq('clinic_id', clinicId)
-        .maybeSingle();
+        .order('created_at', { ascending: true });
 
       if (fetchError) {
-        console.error('Error fetching instance:', fetchError);
+        console.error('Error fetching instances:', fetchError);
         setLoading(false);
         return;
       }
 
-      if (data) {
-        setInstance({
-          id: data.id,
-          clinicId: data.clinic_id,
-          instanceName: data.instance_name,
-          phoneNumber: data.phone_number,
-          status: data.status as 'disconnected' | 'connecting' | 'connected',
-          qrCode: data.qr_code,
-          qrCodeExpiresAt: data.qr_code_expires_at,
-          connectedAt: data.connected_at,
-        });
+      if (data && data.length > 0) {
+        const mappedInstances = data.map(d => mapInstanceData(d as Record<string, unknown>));
+        setInstances(mappedInstances);
+        if (!selectedInstanceId) {
+          setSelectedInstanceId(mappedInstances[0].id);
+        }
+      } else {
+        setInstances([]);
       }
     } catch (err) {
-      console.error('Error fetching instance:', err);
+      console.error('Error fetching instances:', err);
     } finally {
       setLoading(false);
     }
-  }, [clinicId]);
+  }, [clinicId, selectedInstanceId]);
 
   useEffect(() => {
     fetchSettings();
-    fetchInstance();
+    fetchInstances();
 
     if (!clinicId) return;
 
@@ -108,19 +126,20 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
         },
         (payload) => {
           if (payload.eventType === 'DELETE') {
-            setInstance(null);
-          } else {
-            const data = payload.new as Record<string, unknown>;
-            setInstance({
-              id: data.id as string,
-              clinicId: data.clinic_id as string,
-              instanceName: data.instance_name as string,
-              phoneNumber: data.phone_number as string | null,
-              status: data.status as 'disconnected' | 'connecting' | 'connected',
-              qrCode: data.qr_code as string | null,
-              qrCodeExpiresAt: data.qr_code_expires_at as string | null,
-              connectedAt: data.connected_at as string | null,
-            });
+            const deletedId = (payload.old as Record<string, unknown>).id as string;
+            setInstances(prev => prev.filter(i => i.id !== deletedId));
+            if (selectedInstanceId === deletedId) {
+              setSelectedInstanceId(null);
+            }
+          } else if (payload.eventType === 'INSERT') {
+            const newInstance = mapInstanceData(payload.new as Record<string, unknown>);
+            setInstances(prev => [...prev, newInstance]);
+            if (!selectedInstanceId) {
+              setSelectedInstanceId(newInstance.id);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedInstance = mapInstanceData(payload.new as Record<string, unknown>);
+            setInstances(prev => prev.map(i => i.id === updatedInstance.id ? updatedInstance : i));
           }
         }
       )
@@ -129,104 +148,90 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [clinicId, fetchInstance, fetchSettings]);
+  }, [clinicId, fetchInstances, fetchSettings, selectedInstanceId]);
 
-  // Criar instância automaticamente e conectar
-  const connect = async () => {
+  const selectInstance = (instanceId: string) => {
+    setSelectedInstanceId(instanceId);
+  };
+
+  const connect = async (options?: { isShared?: boolean; displayName?: string }) => {
     if (!clinicId) return { error: 'Clínica não encontrada' };
     if (!settings) return { error: 'Configurações não encontradas' };
+
+    const isShared = options?.isShared ?? true;
+    const displayName = options?.displayName || null;
 
     setLoading(true);
     setError(null);
 
     try {
-      const instanceName = `leadcare_${clinicId.replace(/-/g, '').substring(0, 12)}`;
+      const timestamp = Date.now().toString(36);
+      const instanceName = `leadcare_${clinicId.replace(/-/g, '').substring(0, 8)}_${timestamp}`;
       
-      // Verificar se já existe instância no banco
-      let currentInstance = instance;
-      
-      if (!currentInstance) {
-        // Criar instância na Evolution API
-        const createResponse = await fetch(`${settings.apiUrl}/instance/create`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': settings.apiKey,
-          },
-          body: JSON.stringify({
-            instanceName: instanceName,
-            qrcode: true,
-            integration: 'WHATSAPP-BAILEYS',
-          }),
-        });
+      const createResponse = await fetch(`${settings.apiUrl}/instance/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': settings.apiKey,
+        },
+        body: JSON.stringify({
+          instanceName: instanceName,
+          qrcode: true,
+          integration: 'WHATSAPP-BAILEYS',
+        }),
+      });
 
-        if (!createResponse.ok) {
-          const errorData = await createResponse.json();
-          // Se já existe, continua
-          if (!errorData.message?.includes('already exists')) {
-            throw new Error(errorData.message || 'Erro ao criar instância');
-          }
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json();
+        if (!errorData.message?.includes('already exists')) {
+          throw new Error(errorData.message || 'Erro ao criar instância');
         }
-
-        // Salvar no banco
-        const { data: newInstance, error: insertError } = await supabase
-          .from('whatsapp_instances')
-          .insert({
-            clinic_id: clinicId,
-            instance_name: instanceName,
-            status: 'connecting',
-          })
-          .select()
-          .single();
-
-        if (insertError && !insertError.message?.includes('duplicate')) {
-          throw new Error(insertError.message);
-        }
-
-        if (newInstance) {
-          currentInstance = {
-            id: newInstance.id,
-            clinicId: newInstance.clinic_id,
-            instanceName: newInstance.instance_name,
-            phoneNumber: newInstance.phone_number,
-            status: 'connecting',
-            qrCode: null,
-            qrCodeExpiresAt: null,
-            connectedAt: null,
-          };
-          setInstance(currentInstance);
-        }
-
-        // Configurar webhook
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const webhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook`;
-
-        await fetch(`${settings.apiUrl}/webhook/set/${instanceName}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': settings.apiKey,
-          },
-          body: JSON.stringify({
-            webhook: {
-              enabled: true,
-              url: webhookUrl,
-              webhookByEvents: false,
-              events: [
-                'QRCODE_UPDATED',
-                'CONNECTION_UPDATE',
-                'MESSAGES_UPSERT',
-                'MESSAGES_UPDATE',
-                'SEND_MESSAGE',
-              ],
-            },
-          }),
-        });
       }
 
-      // Solicitar QR Code
+      const { data: newInstance, error: insertError } = await supabase
+        .from('whatsapp_instances')
+        .insert({
+          clinic_id: clinicId,
+          instance_name: instanceName,
+          display_name: displayName,
+          status: 'connecting',
+          is_shared: isShared,
+          user_id: isShared ? null : userId,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const webhookUrl = `${supabaseUrl}/functions/v1/evolution-webhook`;
+
+      await fetch(`${settings.apiUrl}/webhook/set/${instanceName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': settings.apiKey,
+        },
+        body: JSON.stringify({
+          webhook: {
+            enabled: true,
+            url: webhookUrl,
+            webhookByEvents: false,
+            events: [
+              'QRCODE_UPDATED',
+              'CONNECTION_UPDATE',
+              'MESSAGES_UPSERT',
+              'MESSAGES_UPDATE',
+              'SEND_MESSAGE',
+            ],
+          },
+        }),
+      });
+
       const connectResponse = await fetch(
-        `${settings.apiUrl}/instance/connect/${currentInstance?.instanceName || instanceName}`,
+        `${settings.apiUrl}/instance/connect/${instanceName}`,
         {
           method: 'GET',
           headers: {
@@ -240,11 +245,9 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
       }
 
       const data = await connectResponse.json();
-      console.log('[useWhatsApp] Connect response:', data);
       const qrCode = data.base64 || data.qrcode?.base64 || null;
 
-      if (qrCode && currentInstance) {
-        // Atualizar no banco
+      if (qrCode && newInstance) {
         await supabase
           .from('whatsapp_instances')
           .update({
@@ -252,19 +255,9 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
             qr_code_expires_at: new Date(Date.now() + 60000).toISOString(),
             status: 'connecting',
           })
-          .eq('id', currentInstance.id);
+          .eq('id', newInstance.id);
 
-        // Atualizar estado local imediatamente
-        setInstance({
-          ...currentInstance,
-          qrCode: qrCode,
-          qrCodeExpiresAt: new Date(Date.now() + 60000).toISOString(),
-          status: 'connecting',
-        });
-      } else {
-        console.log('[useWhatsApp] No QR code in response, fetching instance...');
-        // Se não veio QR code, buscar do banco (pode ter sido atualizado via webhook)
-        await fetchInstance();
+        setSelectedInstanceId(newInstance.id);
       }
 
       setLoading(false);
@@ -277,8 +270,12 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
     }
   };
 
-  const disconnect = async () => {
-    if (!instance) return { error: 'Instância não encontrada' };
+  const disconnect = async (instanceId?: string) => {
+    const targetInstance = instanceId 
+      ? instances.find(i => i.id === instanceId) 
+      : selectedInstance;
+    
+    if (!targetInstance) return { error: 'Instância não encontrada' };
     if (!settings) return { error: 'Configurações não encontradas' };
 
     setLoading(true);
@@ -286,7 +283,7 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
 
     try {
       await fetch(
-        `${settings.apiUrl}/instance/logout/${instance.instanceName}`,
+        `${settings.apiUrl}/instance/logout/${targetInstance.instanceName}`,
         {
           method: 'DELETE',
           headers: {
@@ -302,7 +299,7 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
           qr_code: null,
           connected_at: null,
         })
-        .eq('id', instance.id);
+        .eq('id', targetInstance.id);
 
       setLoading(false);
       return { error: null };
@@ -314,12 +311,50 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
     }
   };
 
-  const refreshStatus = async () => {
-    if (!instance || !settings) return;
+  const deleteInstance = async (instanceId: string) => {
+    const targetInstance = instances.find(i => i.id === instanceId);
+    if (!targetInstance) return { error: 'Instância não encontrada' };
+    if (!settings) return { error: 'Configurações não encontradas' };
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await fetch(
+        `${settings.apiUrl}/instance/delete/${targetInstance.instanceName}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'apikey': settings.apiKey,
+          },
+        }
+      );
+
+      await supabase
+        .from('whatsapp_instances')
+        .delete()
+        .eq('id', instanceId);
+
+      setLoading(false);
+      return { error: null };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      setError(errorMessage);
+      setLoading(false);
+      return { error: errorMessage };
+    }
+  };
+
+  const refreshStatus = async (instanceId?: string) => {
+    const targetInstance = instanceId 
+      ? instances.find(i => i.id === instanceId) 
+      : selectedInstance;
+
+    if (!targetInstance || !settings) return;
 
     try {
       const response = await fetch(
-        `${settings.apiUrl}/instance/connectionState/${instance.instanceName}`,
+        `${settings.apiUrl}/instance/connectionState/${targetInstance.instanceName}`,
         {
           method: 'GET',
           headers: {
@@ -331,18 +366,17 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
       if (response.ok) {
         const data = await response.json();
         const state = data.instance?.state || data.state || 'close';
-
         const newStatus = state === 'open' ? 'connected' : 'disconnected';
 
-        if (newStatus !== instance.status) {
+        if (newStatus !== targetInstance.status) {
           await supabase
             .from('whatsapp_instances')
             .update({
               status: newStatus,
               connected_at: newStatus === 'connected' ? new Date().toISOString() : null,
-              qr_code: newStatus === 'connected' ? null : instance.qrCode,
+              qr_code: newStatus === 'connected' ? null : targetInstance.qrCode,
             })
-            .eq('id', instance.id);
+            .eq('id', targetInstance.id);
         }
       }
     } catch (err) {
@@ -351,11 +385,14 @@ export function useWhatsApp(clinicId: string | undefined): UseWhatsAppReturn {
   };
 
   return {
-    instance,
+    instances,
+    selectedInstance,
     loading,
     error,
+    selectInstance,
     connect,
     disconnect,
     refreshStatus,
+    deleteInstance,
   };
 }

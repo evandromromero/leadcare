@@ -1,20 +1,116 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
+import { supabase } from '../lib/supabase';
 
 interface DashboardProps {
   state: GlobalState;
 }
 
+interface LeadSourceStats {
+  id: string;
+  name: string;
+  code: string | null;
+  color: string;
+  total_leads: number;
+  converted_leads: number;
+  revenue: number;
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const clinicId = state.selectedClinic?.id;
   const { chats, loading } = useChats(clinicId);
+  
+  // Estados para métricas avançadas
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [monthlyRevenue, setMonthlyRevenue] = useState(0);
+  const [leadSourceStats, setLeadSourceStats] = useState<LeadSourceStats[]>([]);
+  const [loadingStats, setLoadingStats] = useState(true);
 
   const novosLeads = chats.filter(c => c.status === 'Novo Lead').length;
   const emAtendimento = chats.filter(c => c.status === 'Em Atendimento').length;
-  const fechados = chats.filter(c => c.status === 'Fechado').length;
+  const fechados = chats.filter(c => c.status === 'Convertido').length;
   const totalChats = chats.length;
+
+  // Buscar métricas de faturamento e origem
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!clinicId) return;
+      setLoadingStats(true);
+      
+      try {
+        // Buscar faturamento total
+        const { data: paymentsData } = await supabase
+          .from('payments' as any)
+          .select('value, payment_date')
+          .eq('clinic_id', clinicId);
+        
+        if (paymentsData) {
+          const total = (paymentsData as any[]).reduce((sum, p) => sum + Number(p.value), 0);
+          setTotalRevenue(total);
+          
+          // Faturamento do mês atual
+          const now = new Date();
+          const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          const monthly = (paymentsData as any[])
+            .filter(p => new Date(p.payment_date) >= firstDayOfMonth)
+            .reduce((sum, p) => sum + Number(p.value), 0);
+          setMonthlyRevenue(monthly);
+        }
+        
+        // Buscar origens de leads
+        const { data: sourcesData } = await supabase
+          .from('lead_sources' as any)
+          .select('id, name, code, color')
+          .eq('clinic_id', clinicId);
+        
+        if (sourcesData && sourcesData.length > 0) {
+          // Buscar chats com suas origens
+          const { data: chatsWithSource } = await supabase
+            .from('chats')
+            .select('id, source_id, status')
+            .eq('clinic_id', clinicId);
+          
+          // Buscar pagamentos por chat
+          const { data: paymentsPerChat } = await supabase
+            .from('payments' as any)
+            .select('chat_id, value')
+            .eq('clinic_id', clinicId);
+          
+          // Calcular estatísticas por origem
+          const stats: LeadSourceStats[] = (sourcesData as any[]).map(source => {
+            const sourceChats = (chatsWithSource as any[] || []).filter(c => c.source_id === source.id);
+            const convertedChats = sourceChats.filter(c => c.status === 'Convertido');
+            const sourceChatIds = sourceChats.map(c => c.id);
+            const revenue = (paymentsPerChat as any[] || [])
+              .filter(p => sourceChatIds.includes(p.chat_id))
+              .reduce((sum, p) => sum + Number(p.value), 0);
+            
+            return {
+              id: source.id,
+              name: source.name,
+              code: source.code,
+              color: source.color,
+              total_leads: sourceChats.length,
+              converted_leads: convertedChats.length,
+              revenue,
+            };
+          });
+          
+          // Ordenar por total de leads
+          stats.sort((a, b) => b.total_leads - a.total_leads);
+          setLeadSourceStats(stats);
+        }
+      } catch (err) {
+        console.error('Error fetching stats:', err);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    
+    fetchStats();
+  }, [clinicId, chats]);
 
   const stats = [
     { label: 'Novos Leads', value: String(novosLeads), change: '+12%', color: 'blue', icon: 'person_add' },
@@ -41,12 +137,132 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-black text-slate-900">{stat.value}</span>
-                <span className="text-xs font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">{stat.change}</span>
+                {stat.change && <span className="text-xs font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">{stat.change}</span>}
               </div>
               <span className="text-xs text-slate-400">vs. ontem</span>
             </div>
           ))}
         </div>
+
+        {/* Faturamento Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <p className="text-emerald-100 text-sm font-medium uppercase tracking-wider">Faturamento do Mês</p>
+                <p className="text-4xl font-black mt-1">
+                  R$ {monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white/20 p-3 rounded-xl">
+                <span className="material-symbols-outlined text-2xl">trending_up</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-emerald-100 text-sm">
+              <span className="material-symbols-outlined text-[16px]">calendar_month</span>
+              {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 p-6 rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <p className="text-cyan-100 text-sm font-medium uppercase tracking-wider">Faturamento Total</p>
+                <p className="text-4xl font-black mt-1">
+                  R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white/20 p-3 rounded-xl">
+                <span className="material-symbols-outlined text-2xl">payments</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-cyan-100 text-sm">
+              <span className="material-symbols-outlined text-[16px]">account_balance</span>
+              Acumulado geral
+            </div>
+          </div>
+        </div>
+
+        {/* Leads por Origem */}
+        {leadSourceStats.length > 0 && (
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Leads por Origem</h3>
+                <p className="text-sm text-slate-500">Performance de cada canal de aquisição</p>
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Origem</th>
+                    <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Leads</th>
+                    <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Convertidos</th>
+                    <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Taxa</th>
+                    <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Receita</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {leadSourceStats.map(source => {
+                    const conversionRate = source.total_leads > 0 
+                      ? ((source.converted_leads / source.total_leads) * 100).toFixed(1) 
+                      : '0.0';
+                    return (
+                      <tr key={source.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <span className="size-3 rounded-full" style={{ backgroundColor: source.color }}></span>
+                            <span className="font-medium text-slate-800">{source.name}</span>
+                            {source.code && (
+                              <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{source.code}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="font-bold text-slate-800">{source.total_leads}</span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="font-bold text-green-600">{source.converted_leads}</span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`font-bold ${Number(conversionRate) >= 30 ? 'text-green-600' : Number(conversionRate) >= 15 ? 'text-amber-600' : 'text-slate-500'}`}>
+                            {conversionRate}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="font-black text-emerald-600">
+                            R$ {source.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 bg-slate-50">
+                    <td className="py-3 px-4 font-bold text-slate-700">Total</td>
+                    <td className="py-3 px-4 text-center font-bold text-slate-800">
+                      {leadSourceStats.reduce((sum, s) => sum + s.total_leads, 0)}
+                    </td>
+                    <td className="py-3 px-4 text-center font-bold text-green-600">
+                      {leadSourceStats.reduce((sum, s) => sum + s.converted_leads, 0)}
+                    </td>
+                    <td className="py-3 px-4 text-center font-bold text-slate-600">
+                      {leadSourceStats.reduce((sum, s) => sum + s.total_leads, 0) > 0 
+                        ? ((leadSourceStats.reduce((sum, s) => sum + s.converted_leads, 0) / leadSourceStats.reduce((sum, s) => sum + s.total_leads, 0)) * 100).toFixed(1)
+                        : '0.0'}%
+                    </td>
+                    <td className="py-3 px-4 text-right font-black text-emerald-600">
+                      R$ {leadSourceStats.reduce((sum, s) => sum + s.revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Chart Section Simulation */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

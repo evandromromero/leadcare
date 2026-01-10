@@ -75,10 +75,30 @@ const AdminRoute: React.FC<{ children: React.ReactNode; isAuthenticated: boolean
 
 const AppRoutes: React.FC = () => {
   const [state, setState] = useState<GlobalState>(initialState);
-  const { user, clinic, session, loading: authLoading } = useAuth();
+  const { user, clinic, session, loading: authLoading, isImpersonating, impersonatedClinic } = useAuth();
 
   useEffect(() => {
-    if (user && clinic) {
+    // Se está fazendo impersonate, usar a clínica do impersonate
+    if (user && isImpersonating && impersonatedClinic) {
+      setState(prev => ({
+        ...prev,
+        currentUser: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          clinicId: impersonatedClinic.id,
+          avatarUrl: user.avatarUrl || '',
+          status: user.status,
+        },
+        selectedClinic: {
+          id: impersonatedClinic.id,
+          name: impersonatedClinic.name,
+          idCode: impersonatedClinic.slug || '',
+          logoUrl: impersonatedClinic.logoUrl || '',
+        },
+      }));
+    } else if (user && clinic) {
       setState(prev => ({
         ...prev,
         currentUser: {
@@ -97,8 +117,8 @@ const AppRoutes: React.FC = () => {
           logoUrl: clinic.logoUrl || '',
         },
       }));
-    } else if (user && !clinic && user.role === 'SuperAdmin') {
-      // SuperAdmin sem clínica
+    } else if (user && !clinic && user.role === 'SuperAdmin' && !isImpersonating) {
+      // SuperAdmin sem clínica e sem impersonate
       setState(prev => ({
         ...prev,
         currentUser: {
@@ -119,7 +139,7 @@ const AppRoutes: React.FC = () => {
         selectedClinic: null,
       }));
     }
-  }, [user, clinic, session, authLoading]);
+  }, [user, clinic, session, authLoading, isImpersonating, impersonatedClinic]);
 
   // Redirecionar SuperAdmin para /admin
   const getDefaultRoute = () => {

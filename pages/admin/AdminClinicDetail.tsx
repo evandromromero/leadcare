@@ -29,6 +29,7 @@ interface ClinicDetail {
   status: string;
   plan: string;
   max_users: number;
+  can_create_users: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -52,9 +53,12 @@ interface ClinicStats {
 interface WhatsAppInstance {
   id: string;
   instance_name: string;
+  display_name: string | null;
   status: string;
   phone_number: string | null;
   connected_at: string | null;
+  is_shared: boolean;
+  user_id: string | null;
 }
 
 const AdminClinicDetail: React.FC = () => {
@@ -65,9 +69,14 @@ const AdminClinicDetail: React.FC = () => {
   const [clinic, setClinic] = useState<ClinicDetail | null>(null);
   const [users, setUsers] = useState<ClinicUser[]>([]);
   const [stats, setStats] = useState<ClinicStats>({ users_count: 0, chats_count: 0, messages_count: 0, leads_count: 0 });
-  const [whatsappInstance, setWhatsappInstance] = useState<WhatsAppInstance | null>(null);
+  const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [impersonating, setImpersonating] = useState(false);
+  
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Atendente' });
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [createUserError, setCreateUserError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -112,14 +121,14 @@ const AdminClinicDetail: React.FC = () => {
         leads_count: leadsCount.count || 0,
       });
 
-      // Buscar instância WhatsApp
-      const { data: instanceData } = await supabase
+      // Buscar instâncias WhatsApp
+      const { data: instancesData } = await supabase
         .from('whatsapp_instances')
-        .select('id, instance_name, status, phone_number, connected_at')
+        .select('id, instance_name, display_name, status, phone_number, connected_at, is_shared, user_id')
         .eq('clinic_id', id)
-        .single();
+        .order('created_at', { ascending: true });
 
-      setWhatsappInstance(instanceData);
+      setWhatsappInstances(instancesData || []);
 
     } catch (error) {
       console.error('Error fetching clinic details:', error);
@@ -229,6 +238,76 @@ const AdminClinicDetail: React.FC = () => {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const handleCreateUser = async () => {
+    if (!clinic || !newUser.name || !newUser.email || !newUser.password) {
+      setCreateUserError('Preencha todos os campos');
+      return;
+    }
+
+    setCreatingUser(true);
+    setCreateUserError(null);
+
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          name: newUser.name,
+          email: newUser.email,
+          password: newUser.password,
+          role: newUser.role,
+          clinic_id: clinic.id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao criar usuário');
+      }
+
+      setShowCreateUserModal(false);
+      setNewUser({ name: '', email: '', password: '', role: 'Atendente' });
+      fetchClinicDetails();
+    } catch (error) {
+      setCreateUserError(error instanceof Error ? error.message : 'Erro ao criar usuário');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  const toggleCanCreateUsers = async () => {
+    if (!clinic || !user) return;
+
+    try {
+      const newValue = !clinic.can_create_users;
+      
+      const { error } = await supabase
+        .from('clinics')
+        .update({ can_create_users: newValue, updated_at: new Date().toISOString() })
+        .eq('id', clinic.id);
+
+      if (error) throw error;
+
+      await supabase.from('admin_access_logs').insert({
+        super_admin_id: user.id,
+        clinic_id: clinic.id,
+        action: 'edit',
+        details: { field: 'can_create_users', old_value: clinic.can_create_users, new_value: newValue },
+      });
+
+      setClinic({ ...clinic, can_create_users: newValue });
+    } catch (error) {
+      console.error('Error updating can_create_users:', error);
+    }
   };
 
   if (loading) {
@@ -393,8 +472,15 @@ const AdminClinicDetail: React.FC = () => {
 
           {/* Users List */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800">Usuários ({users.length})</h2>
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-800">Usuários ({users.length}/{clinic.max_users})</h2>
+              <button
+                onClick={() => setShowCreateUserModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 transition-colors"
+              >
+                <Users className="w-4 h-4" />
+                Criar Usuário
+              </button>
             </div>
             <div className="divide-y divide-slate-200">
               {users.length === 0 ? (
@@ -438,34 +524,72 @@ const AdminClinicDetail: React.FC = () => {
         <div className="space-y-6">
           {/* WhatsApp Status */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">WhatsApp</h2>
-            {whatsappInstance ? (
+            <h2 className="text-lg font-semibold text-slate-800 mb-4">
+              WhatsApp ({whatsappInstances.length})
+            </h2>
+            {whatsappInstances.length > 0 ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  {whatsappInstance.status === 'connected' ? (
-                    <Wifi className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <WifiOff className="w-5 h-5 text-red-500" />
-                  )}
-                  <span className={`font-medium ${
-                    whatsappInstance.status === 'connected' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {whatsappInstance.status === 'connected' ? 'Conectado' : 'Desconectado'}
-                  </span>
-                </div>
-                {whatsappInstance.phone_number && (
-                  <p className="text-sm text-slate-600">
-                    <Phone className="w-4 h-4 inline mr-1" />
-                    {whatsappInstance.phone_number}
-                  </p>
-                )}
-                <p className="text-sm text-slate-500">
-                  Instância: {whatsappInstance.instance_name}
-                </p>
+                {whatsappInstances.map((instance) => (
+                  <div key={instance.id} className="p-3 bg-slate-50 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {instance.status === 'connected' ? (
+                          <Wifi className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <WifiOff className="w-4 h-4 text-red-500" />
+                        )}
+                        <span className={`text-sm font-medium ${
+                          instance.status === 'connected' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {instance.status === 'connected' ? 'Conectado' : 'Desconectado'}
+                        </span>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        instance.is_shared ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                      }`}>
+                        {instance.is_shared ? 'Compartilhada' : 'Pessoal'}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium text-slate-800">
+                      {instance.display_name || instance.phone_number || 'Sem nome'}
+                    </p>
+                    {instance.phone_number && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        <Phone className="w-3 h-3 inline mr-1" />
+                        {instance.phone_number}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="text-slate-500 text-sm">Nenhuma instância configurada</p>
             )}
+          </div>
+
+          {/* Permissões */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-semibold text-slate-800 mb-4">Permissões</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-slate-800">Criar usuários</p>
+                  <p className="text-sm text-slate-500">Permitir que a clínica crie seus próprios usuários</p>
+                </div>
+                <button
+                  onClick={toggleCanCreateUsers}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    clinic.can_create_users ? 'bg-cyan-600' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      clinic.can_create_users ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Actions */}
@@ -503,6 +627,99 @@ const AdminClinicDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal Criar Usuário */}
+      {showCreateUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowCreateUserModal(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-xl font-bold text-slate-900">Criar Usuário</h3>
+              <p className="text-sm text-slate-500 mt-1">Adicionar novo usuário à clínica {clinic.name}</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {createUserError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  {createUserError}
+                </div>
+              )}
+              
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nome Completo</label>
+                <input 
+                  type="text"
+                  value={newUser.name}
+                  onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                  placeholder="Ex: Maria Silva"
+                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Email</label>
+                <input 
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                  placeholder="maria@email.com"
+                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Senha Temporária</label>
+                <input 
+                  type="text"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                  placeholder="Mínimo 6 caracteres"
+                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Perfil</label>
+                <select 
+                  value={newUser.role}
+                  onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                >
+                  <option value="Atendente">Atendente</option>
+                  <option value="Admin">Administrador</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 flex gap-3">
+              <button 
+                onClick={handleCreateUser}
+                disabled={creatingUser}
+                className="flex-1 h-11 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {creatingUser ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Criando...
+                  </>
+                ) : (
+                  'Criar Usuário'
+                )}
+              </button>
+              <button 
+                onClick={() => {
+                  setShowCreateUserModal(false);
+                  setNewUser({ name: '', email: '', password: '', role: 'Atendente' });
+                  setCreateUserError(null);
+                }}
+                className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

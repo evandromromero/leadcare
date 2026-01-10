@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GlobalState } from '../types';
 import { useUsers } from '../hooks/useUsers';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 
 interface UsersProps {
   state: GlobalState;
@@ -10,16 +11,74 @@ interface UsersProps {
 }
 
 const Users: React.FC<UsersProps> = ({ state, setState }) => {
-  const { users, loading, updateUserStatus, updateUserRole } = useUsers();
-  const { clinic } = useAuth();
+  const { users, loading, updateUserStatus, updateUserRole, refetch } = useUsers();
+  const { clinic, user } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Atendente' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Atendente' });
+  const [canCreateUsers, setCanCreateUsers] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [createUserError, setCreateUserError] = useState<string | null>(null);
 
-  const handleCreateUser = () => {
-    if (!newUser.name || !newUser.email) return;
-    alert('Para criar usuários, use o painel do Supabase Auth ou implemente o convite por email.');
-    setIsModalOpen(false);
-    setNewUser({ name: '', email: '', role: 'Atendente' });
+  const isAdmin = user?.role === 'Admin' || user?.role === 'SuperAdmin';
+
+  useEffect(() => {
+    const checkPermission = async () => {
+      if (!clinic?.id) return;
+      
+      const { data } = await supabase
+        .from('clinics')
+        .select('can_create_users')
+        .eq('id', clinic.id)
+        .single();
+      
+      setCanCreateUsers(data?.can_create_users || false);
+    };
+    
+    checkPermission();
+  }, [clinic?.id]);
+
+  const handleCreateUser = async () => {
+    if (!newUser.name || !newUser.email || !newUser.password || !clinic?.id) {
+      setCreateUserError('Preencha todos os campos');
+      return;
+    }
+
+    setCreatingUser(true);
+    setCreateUserError(null);
+
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          name: newUser.name,
+          email: newUser.email,
+          password: newUser.password,
+          role: newUser.role,
+          clinic_id: clinic.id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao criar usuário');
+      }
+
+      setIsModalOpen(false);
+      setNewUser({ name: '', email: '', password: '', role: 'Atendente' });
+      refetch?.();
+    } catch (error) {
+      setCreateUserError(error instanceof Error ? error.message : 'Erro ao criar usuário');
+    } finally {
+      setCreatingUser(false);
+    }
   };
 
   return (
@@ -30,12 +89,14 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestão de Equipe</h1>
             <p className="text-slate-500">Gerencie o acesso e permissões dos membros da sua clínica.</p>
           </div>
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold h-11 px-6 rounded-xl shadow-lg shadow-cyan-500/30 flex items-center gap-2 transition-all transform hover:-translate-y-0.5"
-          >
-            <span className="material-symbols-outlined text-[20px]">person_add</span> Criar Usuário
-          </button>
+          {isAdmin && canCreateUsers && (
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold h-11 px-6 rounded-xl shadow-lg shadow-cyan-500/30 flex items-center gap-2 transition-all transform hover:-translate-y-0.5"
+            >
+              <span className="material-symbols-outlined text-[20px]">person_add</span> Criar Usuário
+            </button>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -141,6 +202,11 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
               </button>
             </header>
             <div className="p-8 space-y-6">
+               {createUserError && (
+                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                   {createUserError}
+                 </div>
+               )}
                <div className="space-y-1.5">
                   <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Nome Completo</label>
                   <input 
@@ -152,7 +218,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                   />
                </div>
                <div className="space-y-1.5">
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Email Corporativo</label>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Email</label>
                   <input 
                     type="email" 
                     value={newUser.email}
@@ -161,35 +227,49 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                     className="w-full h-12 rounded-xl border-slate-200 focus:ring-cyan-600 focus:border-cyan-600 px-4 text-sm"
                   />
                </div>
-               <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Perfil</label>
-                    <select 
-                      value={newUser.role}
-                      onChange={(e) => setNewUser({...newUser, role: e.target.value as any})}
-                      className="w-full h-12 rounded-xl border-slate-200 focus:ring-cyan-600 focus:border-cyan-600 px-4 text-sm font-medium"
-                    >
-                       <option value="Atendente">Atendente</option>
-                       <option value="Admin">Administrador</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Clínica</label>
-                    <select className="w-full h-12 rounded-xl border-slate-200 focus:ring-cyan-600 focus:border-cyan-600 px-4 text-sm font-medium">
-                       {state.clinics.map(c => <option key={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
+               <div className="space-y-1.5">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Senha Temporária</label>
+                  <input 
+                    type="text" 
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                    placeholder="Mínimo 6 caracteres" 
+                    className="w-full h-12 rounded-xl border-slate-200 focus:ring-cyan-600 focus:border-cyan-600 px-4 text-sm"
+                  />
+               </div>
+               <div className="space-y-1.5">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Perfil</label>
+                  <select 
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                    className="w-full h-12 rounded-xl border-slate-200 focus:ring-cyan-600 focus:border-cyan-600 px-4 text-sm font-medium"
+                  >
+                     <option value="Atendente">Atendente</option>
+                     <option value="Admin">Administrador</option>
+                  </select>
                </div>
             </div>
             <div className="px-8 py-6 bg-slate-50 flex gap-3">
                <button 
                 onClick={handleCreateUser}
-                className="flex-1 h-12 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/30 transition-all"
+                disabled={creatingUser}
+                className="flex-1 h-12 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                Salvar Usuário
+                {creatingUser ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Criando...
+                  </>
+                ) : (
+                  'Criar Usuário'
+                )}
                </button>
                <button 
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setNewUser({ name: '', email: '', password: '', role: 'Atendente' });
+                  setCreateUserError(null);
+                }}
                 className="flex-1 h-12 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-all"
               >
                 Cancelar
