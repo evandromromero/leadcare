@@ -92,7 +92,7 @@ const AdminClinicDetail: React.FC = () => {
     name: '', 
     email: '', 
     password: '', 
-    role: 'Atendente',
+    role: 'Comercial',
     whatsappOption: 'shared' as 'shared' | 'create' | 'none',
     defaultInstanceId: '',
     viewMode: 'personal' as 'shared' | 'personal'
@@ -402,7 +402,7 @@ const AdminClinicDetail: React.FC = () => {
       }
 
       setShowCreateUserModal(false);
-      setNewUser({ name: '', email: '', password: '', role: 'Atendente', whatsappOption: 'shared', defaultInstanceId: '', viewMode: 'personal' });
+      setNewUser({ name: '', email: '', password: '', role: 'Comercial', whatsappOption: 'shared', defaultInstanceId: '', viewMode: 'personal' });
       fetchClinicDetails();
     } catch (error) {
       setCreateUserError(error instanceof Error ? error.message : 'Erro ao criar usuário');
@@ -953,28 +953,40 @@ const AdminClinicDetail: React.FC = () => {
       {showCreateUserModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowCreateUserModal(false)}></div>
-          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-xl font-bold text-slate-900">Criar Usuário</h3>
-              <p className="text-sm text-slate-500 mt-1">Adicionar novo usuário à clínica {clinic.name}</p>
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="p-4 border-b border-slate-100 flex-shrink-0">
+              <h3 className="text-lg font-bold text-slate-900">Criar Usuário</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Adicionar novo usuário à clínica {clinic.name}</p>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-4 space-y-3 overflow-y-auto flex-1">
               {createUserError && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
                   {createUserError}
                 </div>
               )}
               
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nome Completo</label>
-                <input 
-                  type="text"
-                  value={newUser.name}
-                  onChange={(e) => setNewUser({...newUser, name: e.target.value})}
-                  placeholder="Ex: Maria Silva"
-                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nome</label>
+                  <input 
+                    type="text"
+                    value={newUser.name}
+                    onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                    placeholder="Maria Silva"
+                    className="w-full mt-1 h-9 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Senha</label>
+                  <input 
+                    type="text"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                    placeholder="Mín. 6 caracteres"
+                    className="w-full mt-1 h-9 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-3 text-sm"
+                  />
+                </div>
               </div>
 
               <div>
@@ -984,18 +996,7 @@ const AdminClinicDetail: React.FC = () => {
                   value={newUser.email}
                   onChange={(e) => setNewUser({...newUser, email: e.target.value})}
                   placeholder="maria@email.com"
-                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Senha Temporária</label>
-                <input 
-                  type="text"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-                  placeholder="Mínimo 6 caracteres"
-                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                  className="w-full mt-1 h-9 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-3 text-sm"
                 />
               </div>
 
@@ -1004,17 +1005,22 @@ const AdminClinicDetail: React.FC = () => {
                 <select 
                   value={newUser.role}
                   onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                  className="w-full mt-1 h-9 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-3 text-sm"
                 >
-                  <option value="Atendente">Atendente</option>
-                  <option value="Admin">Administrador</option>
+                  <option value="Admin">Administrador - Acesso total</option>
+                  <option value="Gerente">Gerente - Gerencia equipe e relatórios</option>
+                  <option value="Supervisor">Supervisor - Monitora equipe</option>
+                  <option value="Comercial">Comercial - Atende conversas</option>
+                  <option value="Recepcionista">Recepcionista - Agendamentos</option>
+                  <option value="Financeiro">Financeiro - Faturamento</option>
+                  <option value="Visualizador">Visualizador - Apenas leitura</option>
                 </select>
               </div>
 
               <div>
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Instância WhatsApp</label>
-                <div className="mt-2 space-y-2">
-                  <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                <div className="mt-1 space-y-1.5">
+                  <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
                     newUser.whatsappOption === 'shared' ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 hover:bg-slate-50'
                   }`}>
                     <input 
@@ -1024,54 +1030,45 @@ const AdminClinicDetail: React.FC = () => {
                       onChange={() => setNewUser({...newUser, whatsappOption: 'shared', defaultInstanceId: ''})}
                       className="text-cyan-600 focus:ring-cyan-500"
                     />
-                    <div className="flex-1">
-                      <p className="font-medium text-slate-800 text-sm">Usar instância compartilhada</p>
-                      <p className="text-xs text-slate-500">Selecione uma instância existente</p>
-                    </div>
+                    <span className="text-sm text-slate-700">Instância compartilhada</span>
                   </label>
                   
                   {newUser.whatsappOption === 'shared' && whatsappInstances.filter(i => i.is_shared).length > 0 && (
                     <select 
                       value={newUser.defaultInstanceId}
                       onChange={(e) => setNewUser({...newUser, defaultInstanceId: e.target.value})}
-                      className="w-full h-10 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-3 text-sm ml-6"
-                      style={{ width: 'calc(100% - 1.5rem)' }}
+                      className="w-full h-8 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-2 text-sm ml-4"
+                      style={{ width: 'calc(100% - 1rem)' }}
                     >
-                      <option value="">Selecione uma instância...</option>
+                      <option value="">Selecione...</option>
                       {whatsappInstances.filter(i => i.is_shared).map(inst => (
                         <option key={inst.id} value={inst.id}>
                           {inst.display_name || inst.phone_number || inst.instance_name} 
-                          {inst.status === 'connected' ? ' ✓' : ' (desconectada)'}
+                          {inst.status === 'connected' ? ' ✓' : ''}
                         </option>
                       ))}
                     </select>
                   )}
                   
                   {newUser.whatsappOption === 'shared' && whatsappInstances.filter(i => i.is_shared).length === 0 && (
-                    <p className="text-xs text-amber-600 ml-6 p-2 bg-amber-50 rounded">
-                      Nenhuma instância compartilhada disponível. Crie uma primeiro ou escolha outra opção.
+                    <p className="text-xs text-amber-600 ml-4 p-1.5 bg-amber-50 rounded">
+                      Nenhuma instância disponível.
                     </p>
                   )}
 
                   {newUser.whatsappOption === 'shared' && newUser.defaultInstanceId && (
-                    <div className="ml-6 p-3 bg-slate-50 rounded-lg border border-slate-200" style={{ width: 'calc(100% - 1.5rem)' }}>
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Modo do Painel</p>
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={newUser.viewMode === 'shared'}
-                          onChange={(e) => setNewUser({...newUser, viewMode: e.target.checked ? 'shared' : 'personal'})}
-                          className="w-4 h-4 text-cyan-600 rounded focus:ring-cyan-500"
-                        />
-                        <div>
-                          <p className="font-medium text-slate-800 text-sm">Painel compartilhado</p>
-                          <p className="text-xs text-slate-500">Ver todos os leads da instância (desmarcado = painel zerado, só leads dele)</p>
-                        </div>
-                      </label>
-                    </div>
+                    <label className="flex items-center gap-2 ml-4 p-1.5 bg-slate-50 rounded cursor-pointer" style={{ width: 'calc(100% - 1rem)' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={newUser.viewMode === 'shared'}
+                        onChange={(e) => setNewUser({...newUser, viewMode: e.target.checked ? 'shared' : 'personal'})}
+                        className="w-3.5 h-3.5 text-cyan-600 rounded focus:ring-cyan-500"
+                      />
+                      <span className="text-xs text-slate-600">Painel compartilhado (vê todos os leads)</span>
+                    </label>
                   )}
 
-                  <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                  <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
                     newUser.whatsappOption === 'create' ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 hover:bg-slate-50'
                   }`}>
                     <input 
@@ -1081,13 +1078,10 @@ const AdminClinicDetail: React.FC = () => {
                       onChange={() => setNewUser({...newUser, whatsappOption: 'create', defaultInstanceId: ''})}
                       className="text-cyan-600 focus:ring-cyan-500"
                     />
-                    <div>
-                      <p className="font-medium text-slate-800 text-sm">Criar nova instância ao logar</p>
-                      <p className="text-xs text-slate-500">Usuário conectará seu próprio WhatsApp</p>
-                    </div>
+                    <span className="text-sm text-slate-700">Criar nova instância</span>
                   </label>
 
-                  <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                  <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
                     newUser.whatsappOption === 'none' ? 'border-cyan-500 bg-cyan-50' : 'border-slate-200 hover:bg-slate-50'
                   }`}>
                     <input 
@@ -1097,16 +1091,13 @@ const AdminClinicDetail: React.FC = () => {
                       onChange={() => setNewUser({...newUser, whatsappOption: 'none', defaultInstanceId: ''})}
                       className="text-cyan-600 focus:ring-cyan-500"
                     />
-                    <div>
-                      <p className="font-medium text-slate-800 text-sm">Sem acesso ao WhatsApp</p>
-                      <p className="text-xs text-slate-500">Apenas visualização de conversas</p>
-                    </div>
+                    <span className="text-sm text-slate-700">Sem WhatsApp</span>
                   </label>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 bg-slate-50 flex gap-3">
+            <div className="p-4 bg-slate-50 flex gap-3 flex-shrink-0">
               <button 
                 onClick={handleCreateUser}
                 disabled={creatingUser}
@@ -1124,7 +1115,7 @@ const AdminClinicDetail: React.FC = () => {
               <button 
                 onClick={() => {
                   setShowCreateUserModal(false);
-                  setNewUser({ name: '', email: '', password: '', role: 'Atendente', whatsappOption: 'shared', defaultInstanceId: '', viewMode: 'personal' });
+                  setNewUser({ name: '', email: '', password: '', role: 'Comercial', whatsappOption: 'shared', defaultInstanceId: '', viewMode: 'personal' });
                   setCreateUserError(null);
                 }}
                 className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
@@ -1176,8 +1167,13 @@ const AdminClinicDetail: React.FC = () => {
                   onChange={(e) => setEditUserForm({...editUserForm, role: e.target.value})}
                   className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
                 >
-                  <option value="Atendente">Atendente</option>
                   <option value="Admin">Administrador</option>
+                  <option value="Gerente">Gerente</option>
+                  <option value="Supervisor">Supervisor</option>
+                  <option value="Comercial">Comercial</option>
+                  <option value="Recepcionista">Recepcionista</option>
+                  <option value="Financeiro">Financeiro</option>
+                  <option value="Visualizador">Visualizador</option>
                 </select>
               </div>
 

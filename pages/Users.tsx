@@ -14,7 +14,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
   const { users, loading, updateUserStatus, updateUserRole, refetch } = useUsers();
   const { clinic, user } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Atendente' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Comercial' });
   const [canCreateUsers, setCanCreateUsers] = useState(false);
   const [creatingUser, setCreatingUser] = useState(false);
   const [createUserError, setCreateUserError] = useState<string | null>(null);
@@ -78,7 +78,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
       }
 
       setIsModalOpen(false);
-      setNewUser({ name: '', email: '', password: '', role: 'Atendente' });
+      setNewUser({ name: '', email: '', password: '', role: 'Comercial' });
       refetch?.();
     } catch (error) {
       setCreateUserError(error instanceof Error ? error.message : 'Erro ao criar usuário');
@@ -250,8 +250,13 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                     onChange={(e) => setNewUser({...newUser, role: e.target.value})}
                     className="w-full h-12 rounded-xl border-slate-200 focus:ring-cyan-600 focus:border-cyan-600 px-4 text-sm font-medium"
                   >
-                     <option value="Atendente">Atendente</option>
                      <option value="Admin">Administrador</option>
+                     <option value="Gerente">Gerente</option>
+                     <option value="Supervisor">Supervisor</option>
+                     <option value="Comercial">Comercial</option>
+                     <option value="Recepcionista">Recepcionista</option>
+                     <option value="Financeiro">Financeiro</option>
+                     <option value="Visualizador">Visualizador</option>
                   </select>
                </div>
             </div>
@@ -273,7 +278,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                <button 
                 onClick={() => {
                   setIsModalOpen(false);
-                  setNewUser({ name: '', email: '', password: '', role: 'Atendente' });
+                  setNewUser({ name: '', email: '', password: '', role: 'Comercial' });
                   setCreateUserError(null);
                 }}
                 className="flex-1 h-12 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-all"

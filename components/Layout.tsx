@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GlobalState, WhatsAppStatus } from '../types';
 import { useAuth } from '../hooks/useAuth';
@@ -18,6 +18,7 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const { signOut, isImpersonating, impersonatedClinic, stopImpersonate, user } = useAuth();
   const clinicId = state.selectedClinic?.id;
   const { whatsappConnected } = useChats(clinicId, user?.id);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleExitImpersonate = () => {
     stopImpersonate();
@@ -70,19 +71,28 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
       
       <div className="flex flex-1 overflow-hidden">
       {/* Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200">
-        <div className="p-6 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="LeadCare" className="h-8 w-auto" />
+      <aside className={`hidden md:flex flex-col ${sidebarCollapsed ? 'w-16' : 'w-64'} bg-white border-r border-slate-200 transition-all duration-300`}>
+        <div className={`${sidebarCollapsed ? 'p-3' : 'p-6'} border-b border-slate-100`}>
+          <div className="flex items-center justify-between">
+            {!sidebarCollapsed && <img src="/logo.png" alt="LeadCare" className="h-8 w-auto" />}
+            <button 
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                {sidebarCollapsed ? 'menu' : 'menu_open'}
+              </span>
+            </button>
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className={`flex-1 ${sidebarCollapsed ? 'p-2' : 'p-4'} space-y-1 overflow-y-auto`}>
           {navItems.map(item => (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              title={sidebarCollapsed ? item.label : undefined}
+              className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 location.pathname === item.path
                   ? 'bg-cyan-50 text-cyan-700'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -91,9 +101,14 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
               <span className={`material-symbols-outlined ${location.pathname === item.path ? 'fill-1' : ''}`}>
                 {item.icon}
               </span>
-              {item.label}
-              {item.badge ? (
+              {!sidebarCollapsed && item.label}
+              {!sidebarCollapsed && item.badge ? (
                 <span className="ml-auto bg-cyan-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {item.badge}
+                </span>
+              ) : null}
+              {sidebarCollapsed && item.badge ? (
+                <span className="absolute -top-1 -right-1 bg-cyan-600 text-white text-[8px] font-bold px-1 py-0.5 rounded-full">
                   {item.badge}
                 </span>
               ) : null}
@@ -101,22 +116,31 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-100">
-          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
-            <img src={state.currentUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(state.currentUser?.name || 'U')}&background=0891b2&color=fff`} className="size-9 rounded-full border border-slate-200" alt="User" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-900 truncate">{state.currentUser?.name}</p>
-              <p className="text-xs text-slate-500 truncate">{state.currentUser?.role}</p>
-            </div>
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                handleLogout();
-              }} 
-              className="text-slate-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
-            >
-              <span className="material-symbols-outlined text-[20px]">logout</span>
-            </button>
+        <div className={`${sidebarCollapsed ? 'p-2' : 'p-4'} border-t border-slate-100`}>
+          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} p-2 rounded-lg hover:bg-slate-50 transition-colors`}>
+            <img 
+              src={state.currentUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(state.currentUser?.name || 'U')}&background=0891b2&color=fff`} 
+              className="size-9 rounded-full border border-slate-200" 
+              alt="User" 
+              title={sidebarCollapsed ? state.currentUser?.name : undefined}
+            />
+            {!sidebarCollapsed && (
+              <>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate">{state.currentUser?.name}</p>
+                  <p className="text-xs text-slate-500 truncate">{state.currentUser?.role}</p>
+                </div>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleLogout();
+                  }} 
+                  className="text-slate-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+                >
+                  <span className="material-symbols-outlined text-[20px]">logout</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </aside>
