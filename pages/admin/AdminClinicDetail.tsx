@@ -201,7 +201,7 @@ const AdminClinicDetail: React.FC = () => {
   // Estados para edição/exclusão de usuário
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<ClinicUser | null>(null);
-  const [editUserForm, setEditUserForm] = useState({ name: '', role: '', status: '', instanceId: '' as string | null });
+  const [editUserForm, setEditUserForm] = useState({ name: '', role: '', status: '', instanceId: '' as string | null, newPassword: '' });
   const [savingUser, setSavingUser] = useState(false);
   const [editUserError, setEditUserError] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
@@ -1056,7 +1056,7 @@ const AdminClinicDetail: React.FC = () => {
 
   const handleEditUser = (u: ClinicUser) => {
     setEditingUser(u);
-    setEditUserForm({ name: u.name, role: u.role, status: u.status, instanceId: u.default_instance_id || null });
+    setEditUserForm({ name: u.name, role: u.role, status: u.status, instanceId: u.default_instance_id || null, newPassword: '' });
     setEditUserError(null);
     setShowEditUserModal(true);
   };
@@ -1068,6 +1068,7 @@ const AdminClinicDetail: React.FC = () => {
     setEditUserError(null);
 
     try {
+      // Atualizar dados do usuário
       const { error } = await supabase
         .from('users')
         .update({
@@ -1080,6 +1081,36 @@ const AdminClinicDetail: React.FC = () => {
         .eq('id', editingUser.id);
 
       if (error) throw error;
+
+      // Se uma nova senha foi fornecida, atualizar via Edge Function
+      if (editUserForm.newPassword && editUserForm.newPassword.length >= 6) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session?.access_token) {
+          throw new Error('Sessão expirada. Faça login novamente.');
+        }
+        
+        const response = await fetch(`${supabaseUrl}/functions/v1/update-user-password`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseAnonKey,
+          },
+          body: JSON.stringify({
+            user_id: editingUser.id,
+            new_password: editUserForm.newPassword,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Erro ao atualizar senha');
+        }
+      }
 
       setShowEditUserModal(false);
       setEditingUser(null);
@@ -2718,6 +2749,21 @@ const AdminClinicDetail: React.FC = () => {
                   {editUserForm.instanceId 
                     ? 'Usuário vinculado a esta instância. Ao remover, ele precisará criar uma nova.'
                     : 'Sem instância. O usuário precisará criar ou vincular uma ao fazer login.'}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nova Senha</label>
+                <input 
+                  type="password"
+                  value={editUserForm.newPassword}
+                  onChange={(e) => setEditUserForm({...editUserForm, newPassword: e.target.value})}
+                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                  placeholder="Deixe em branco para manter a atual"
+                  minLength={6}
+                />
+                <p className="mt-1.5 text-xs text-slate-500">
+                  Mínimo 6 caracteres. Deixe em branco para não alterar.
                 </p>
               </div>
             </div>

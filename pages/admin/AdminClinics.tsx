@@ -12,7 +12,8 @@ import {
   UserCheck,
   Ban,
   Users,
-  MessageSquare
+  MessageSquare,
+  Key
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -36,6 +37,8 @@ const AdminClinics: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [selectedClinicForPassword, setSelectedClinicForPassword] = useState<Clinic | null>(null);
 
   useEffect(() => {
     fetchClinics();
@@ -299,6 +302,17 @@ const AdminClinics: React.FC = () => {
                               <Eye className="w-4 h-4" />
                               Ver detalhes
                             </Link>
+                            <button
+                              onClick={() => {
+                                setSelectedClinicForPassword(clinic);
+                                setShowPasswordModal(true);
+                                setActionMenuOpen(null);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 w-full text-left"
+                            >
+                              <Key className="w-4 h-4" />
+                              Alterar Senha Admin
+                            </button>
                             {clinic.status === 'pending' && (
                               <button
                                 onClick={() => updateClinicStatus(clinic.id, 'active')}
@@ -348,6 +362,17 @@ const AdminClinics: React.FC = () => {
           }}
         />
       )}
+
+      {/* Password Modal */}
+      {showPasswordModal && selectedClinicForPassword && (
+        <ChangePasswordModal
+          clinic={selectedClinicForPassword}
+          onClose={() => {
+            setShowPasswordModal(false);
+            setSelectedClinicForPassword(null);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -363,6 +388,9 @@ const CreateClinicModal: React.FC<CreateClinicModalProps> = ({ onClose, onCreate
     slug: '',
     email: '',
     phone: '',
+    adminName: '',
+    adminEmail: '',
+    adminPassword: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -373,7 +401,8 @@ const CreateClinicModal: React.FC<CreateClinicModalProps> = ({ onClose, onCreate
     setError('');
 
     try {
-      const { error: insertError } = await supabase
+      // Criar a clínica
+      const { data: clinicData, error: insertError } = await supabase
         .from('clinics')
         .insert({
           name: formData.name,
@@ -381,9 +410,46 @@ const CreateClinicModal: React.FC<CreateClinicModalProps> = ({ onClose, onCreate
           email: formData.email || null,
           phone: formData.phone || null,
           status: 'active',
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) throw insertError;
+
+      // Criar o usuário admin se os campos foram preenchidos
+      if (formData.adminName && formData.adminEmail && formData.adminPassword) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session?.access_token) {
+          throw new Error('Sessão expirada. Faça login novamente.');
+        }
+        
+        const response = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseAnonKey,
+          },
+          body: JSON.stringify({
+            name: formData.adminName,
+            email: formData.adminEmail,
+            password: formData.adminPassword,
+            role: 'Admin',
+            clinic_id: clinicData.id,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          // Se falhar ao criar usuário, deletar a clínica criada
+          await supabase.from('clinics').delete().eq('id', clinicData.id);
+          throw new Error(result.error || 'Erro ao criar usuário administrador');
+        }
+      }
 
       onCreated();
     } catch (err: any) {
@@ -477,6 +543,55 @@ const CreateClinicModal: React.FC<CreateClinicModalProps> = ({ onClose, onCreate
             />
           </div>
 
+          <div className="border-t border-slate-200 pt-4 mt-4">
+            <h3 className="text-sm font-semibold text-slate-800 mb-3">Usuário Administrador</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Nome do Admin *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.adminName}
+                  onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="Nome completo"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Email do Admin *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={formData.adminEmail}
+                  onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="admin@clinica.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Senha *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={formData.adminPassword}
+                  onChange={(e) => setFormData({ ...formData, adminPassword: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="Mínimo 6 caracteres"
+                  minLength={6}
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-4">
             <button
               type="button"
@@ -491,6 +606,274 @@ const CreateClinicModal: React.FC<CreateClinicModalProps> = ({ onClose, onCreate
               className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50"
             >
               {loading ? 'Criando...' : 'Criar Clínica'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+interface ChangePasswordModalProps {
+  clinic: Clinic;
+  onClose: () => void;
+}
+
+const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ clinic, onClose }) => {
+  const [adminUsers, setAdminUsers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [newUserName, setNewUserName] = useState(clinic.name ? `Admin ${clinic.name}` : '');
+  const [newUserEmail, setNewUserEmail] = useState(clinic.email || '');
+
+  useEffect(() => {
+    fetchAdminUsers();
+  }, []);
+
+  const fetchAdminUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .eq('clinic_id', clinic.id)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      setAdminUsers(data || []);
+      if (data && data.length > 0) {
+        setSelectedUserId(data[0].id);
+      } else {
+        setIsCreatingNew(true);
+      }
+    } catch (err: any) {
+      setError('Erro ao carregar usuários');
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (isCreatingNew) {
+      if (!newUserName || !newUserEmail || !newPassword) {
+        setError('Preencha todos os campos');
+        return;
+      }
+    } else {
+      if (!selectedUserId || !newPassword) {
+        setError('Selecione um usuário e informe a nova senha');
+        return;
+      }
+    }
+
+    if (newPassword.length < 6) {
+      setError('A senha deve ter no mínimo 6 caracteres');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+
+      if (isCreatingNew) {
+        const response = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseAnonKey,
+          },
+          body: JSON.stringify({
+            name: newUserName,
+            email: newUserEmail,
+            password: newPassword,
+            role: 'Admin',
+            clinic_id: clinic.id,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Erro ao criar usuário');
+        }
+
+        setSuccess('Usuário admin criado com sucesso!');
+      } else {
+        const response = await fetch(`${supabaseUrl}/functions/v1/update-user-password`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseAnonKey,
+          },
+          body: JSON.stringify({
+            user_id: selectedUserId,
+            new_password: newPassword,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Erro ao atualizar senha');
+        }
+
+        setSuccess('Senha atualizada com sucesso!');
+      }
+
+      setNewPassword('');
+      setTimeout(() => onClose(), 1500);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao processar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className="p-6 border-b border-slate-200">
+          <h2 className="text-xl font-semibold text-slate-800">
+            {isCreatingNew ? 'Criar Usuário Admin' : 'Alterar Senha'}
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">{clinic.name}</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+              {success}
+            </div>
+          )}
+
+          {loadingUsers ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600"></div>
+            </div>
+          ) : isCreatingNew ? (
+            <>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+                Esta clínica não possui usuários. Crie um administrador abaixo.
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Nome do Admin *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="Nome completo"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="admin@clinica.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Senha *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="Mínimo 6 caracteres"
+                  minLength={6}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Usuário
+                </label>
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                >
+                  {adminUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Nova Senha *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="Mínimo 6 caracteres"
+                  minLength={6}
+                />
+              </div>
+            </>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading || loadingUsers}
+              className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Salvando...' : (isCreatingNew ? 'Criar Admin' : 'Alterar Senha')}
             </button>
           </div>
         </form>
