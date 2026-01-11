@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   Building2, 
@@ -74,8 +75,86 @@ interface BillingStats {
     totalRevenue: number;
     monthlyRevenue: number;
     conversions: number;
+    avgResponseTimeMinutes?: number;
   }>;
 }
+
+interface MetricsData {
+  periodRevenue: number;
+  periodConversions: number;
+  periodLeads: number;
+  previousPeriodRevenue: number;
+  previousPeriodConversions: number;
+  previousPeriodLeads: number;
+  leadsBySource: Array<{
+    id: string;
+    name: string;
+    color: string;
+    count: number;
+    converted: number;
+    revenue: number;
+  }>;
+  leadsByStatus: {
+    novo: number;
+    emAtendimento: number;
+    convertido: number;
+    perdido: number;
+  };
+  // Métricas de Tempo e Produtividade
+  avgResponseTimeMinutes: number;
+  avgConversionTimeDays: number;
+  leadsAwaiting: number;
+  lostLeads: number;
+  lossRate: number;
+  responseTimeByAttendant: Map<string, { total: number; count: number }>;
+}
+
+// Componente de Tooltip para informações
+const InfoTooltip: React.FC<{ text: string }> = ({ text }) => {
+  const [show, setShow] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+
+  const handleMouseEnter = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.top - 8,
+        left: rect.left - 200
+      });
+    }
+    setShow(true);
+  };
+
+  return (
+    <div className="relative inline-block">
+      <button
+        ref={buttonRef}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setShow(false)}
+        onClick={() => setShow(!show)}
+        className="ml-1 text-slate-400 hover:text-slate-600 transition-colors"
+      >
+        <span className="material-symbols-outlined text-[16px]">info</span>
+      </button>
+      {show && ReactDOM.createPortal(
+        <div 
+          className="bg-slate-800 text-white text-xs rounded-lg shadow-xl p-3 w-64"
+          style={{ 
+            position: 'fixed',
+            top: position.top,
+            left: position.left,
+            zIndex: 99999,
+            transform: 'translateY(-100%)'
+          }}>
+          {text}
+          <div className="absolute top-full right-4 border-4 border-transparent border-t-slate-800"></div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
 
 const AdminClinicDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -119,6 +198,26 @@ const AdminClinicDetail: React.FC = () => {
   
   // Estado para abas
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'whatsapp' | 'metrics'>('overview');
+  
+  // Estados para métricas avançadas
+  const [metricsPeriod, setMetricsPeriod] = useState<'7d' | '30d' | 'month' | 'lastMonth' | 'custom'>('month');
+  const [metricsData, setMetricsData] = useState<MetricsData>({
+    periodRevenue: 0,
+    periodConversions: 0,
+    periodLeads: 0,
+    previousPeriodRevenue: 0,
+    previousPeriodConversions: 0,
+    previousPeriodLeads: 0,
+    leadsBySource: [],
+    leadsByStatus: { novo: 0, emAtendimento: 0, convertido: 0, perdido: 0 },
+    avgResponseTimeMinutes: 0,
+    avgConversionTimeDays: 0,
+    leadsAwaiting: 0,
+    lostLeads: 0,
+    lossRate: 0,
+    responseTimeByAttendant: new Map()
+  });
+  const [loadingMetrics, setLoadingMetrics] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -259,6 +358,233 @@ const AdminClinicDetail: React.FC = () => {
       console.error('Error fetching billing stats:', error);
     }
   };
+
+  // Buscar métricas avançadas com filtro de período
+  const fetchMetricsData = async () => {
+    if (!id) return;
+    setLoadingMetrics(true);
+    
+    try {
+      // Calcular datas do período
+      const now = new Date();
+      let startDate: Date;
+      let endDate: Date = now;
+      let prevStartDate: Date;
+      let prevEndDate: Date;
+      
+      switch (metricsPeriod) {
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          prevStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+          prevEndDate = new Date(startDate.getTime() - 1);
+          break;
+        case '30d':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          prevStartDate = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+          prevEndDate = new Date(startDate.getTime() - 1);
+          break;
+        case 'lastMonth':
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+          prevStartDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+          prevEndDate = new Date(now.getFullYear(), now.getMonth() - 1, 0);
+          break;
+        case 'month':
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          prevStartDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          prevEndDate = new Date(now.getFullYear(), now.getMonth(), 0);
+          break;
+      }
+      
+      // Buscar chats da clínica
+      const { data: chatsData } = await supabase
+        .from('chats')
+        .select('id, status, created_at, source_id')
+        .eq('clinic_id', id);
+      
+      const allChats = (chatsData || []) as any[];
+      
+      // Filtrar por período
+      const periodChats = allChats.filter(c => {
+        const created = new Date(c.created_at);
+        return created >= startDate && created <= endDate;
+      });
+      
+      const prevPeriodChats = allChats.filter(c => {
+        const created = new Date(c.created_at);
+        return created >= prevStartDate && created <= prevEndDate;
+      });
+      
+      // Buscar pagamentos
+      const { data: paymentsData } = await supabase
+        .from('payments' as any)
+        .select('value, payment_date, chat_id');
+      
+      const allPayments = (paymentsData || []) as any[];
+      
+      // Filtrar pagamentos por período
+      const periodPayments = allPayments.filter(p => {
+        const payDate = new Date(p.payment_date);
+        return payDate >= startDate && payDate <= endDate;
+      });
+      
+      const prevPeriodPayments = allPayments.filter(p => {
+        const payDate = new Date(p.payment_date);
+        return payDate >= prevStartDate && payDate <= prevEndDate;
+      });
+      
+      // Calcular métricas do período
+      const periodRevenue = periodPayments.reduce((sum, p) => sum + Number(p.value), 0);
+      const periodConversions = periodChats.filter(c => c.status === 'Convertido').length;
+      const periodLeads = periodChats.length;
+      
+      // Calcular métricas do período anterior
+      const previousPeriodRevenue = prevPeriodPayments.reduce((sum, p) => sum + Number(p.value), 0);
+      const previousPeriodConversions = prevPeriodChats.filter(c => c.status === 'Convertido').length;
+      const previousPeriodLeads = prevPeriodChats.length;
+      
+      // Buscar origens de leads
+      const { data: sourcesData } = await supabase
+        .from('lead_sources' as any)
+        .select('id, name, color')
+        .eq('clinic_id', id);
+      
+      const leadsBySource = ((sourcesData || []) as any[]).map(source => {
+        const sourceChats = periodChats.filter(c => c.source_id === source.id);
+        const converted = sourceChats.filter(c => c.status === 'Convertido').length;
+        const sourceChatIds = sourceChats.map(c => c.id);
+        const revenue = periodPayments
+          .filter(p => sourceChatIds.includes(p.chat_id))
+          .reduce((sum, p) => sum + Number(p.value), 0);
+        
+        return {
+          id: source.id,
+          name: source.name,
+          color: source.color || '#6B7280',
+          count: sourceChats.length,
+          converted,
+          revenue
+        };
+      }).filter(s => s.count > 0).sort((a, b) => b.count - a.count);
+      
+      // Contar leads por status (todos os chats, não só do período)
+      const leadsByStatus = {
+        novo: allChats.filter(c => c.status === 'Novo Lead').length,
+        emAtendimento: allChats.filter(c => c.status === 'Em Atendimento').length,
+        convertido: allChats.filter(c => c.status === 'Convertido').length,
+        perdido: allChats.filter(c => c.status === 'Perdido').length
+      };
+      
+      // Métricas de Tempo e Produtividade
+      // Limitar análise aos últimos 30 chats para performance
+      const recentChats = allChats.slice(0, 30);
+      let allMessages: any[] = [];
+      
+      // Buscar mensagens chat por chat (incluindo sent_by para métricas por atendente)
+      for (const chat of recentChats) {
+        const { data: chatMessages } = await supabase
+          .from('messages')
+          .select('chat_id, created_at, is_from_client, sent_by')
+          .eq('chat_id', chat.id)
+          .order('created_at', { ascending: true })
+          .limit(10);
+        
+        if (chatMessages) {
+          allMessages = [...allMessages, ...(chatMessages as any[])];
+        }
+      }
+      
+      const messages = allMessages;
+      
+      // Calcular tempo médio de primeira resposta (geral)
+      let totalResponseTime = 0;
+      let responseCount = 0;
+      
+      // Mapa para tempo de resposta por atendente
+      const responseTimeByAttendant: Map<string, { total: number; count: number }> = new Map();
+      
+      recentChats.forEach(chat => {
+        const chatMessages = messages.filter(m => m.chat_id === chat.id);
+        const firstClientMsg = chatMessages.find(m => m.is_from_client === true);
+        const firstResponse = chatMessages.find(m => m.is_from_client === false && firstClientMsg && new Date(m.created_at) > new Date(firstClientMsg.created_at));
+        
+        if (firstClientMsg && firstResponse) {
+          const responseTime = new Date(firstResponse.created_at).getTime() - new Date(firstClientMsg.created_at).getTime();
+          totalResponseTime += responseTime;
+          responseCount++;
+          
+          // Registrar tempo por atendente
+          if (firstResponse.sent_by) {
+            const existing = responseTimeByAttendant.get(firstResponse.sent_by) || { total: 0, count: 0 };
+            responseTimeByAttendant.set(firstResponse.sent_by, {
+              total: existing.total + responseTime,
+              count: existing.count + 1
+            });
+          }
+        }
+      });
+      
+      const avgResponseTimeMinutes = responseCount > 0 ? Math.round((totalResponseTime / responseCount) / (1000 * 60)) : 0;
+      
+      // Calcular tempo médio de conversão (dias entre criação e status Convertido)
+      const convertedChats = recentChats.filter(c => c.status === 'Convertido');
+      let totalConversionTime = 0;
+      
+      convertedChats.forEach(chat => {
+        const chatMessages = messages.filter(m => m.chat_id === chat.id);
+        if (chatMessages.length > 0) {
+          const lastMsg = chatMessages[chatMessages.length - 1];
+          const conversionTime = new Date(lastMsg.created_at).getTime() - new Date(chat.created_at).getTime();
+          totalConversionTime += conversionTime;
+        }
+      });
+      
+      const avgConversionTimeDays = convertedChats.length > 0 ? Math.round((totalConversionTime / convertedChats.length) / (1000 * 60 * 60 * 24)) : 0;
+      
+      // Leads aguardando resposta (Novo Lead há mais de 2 horas)
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      const leadsAwaiting = allChats.filter(c => {
+        if (c.status !== 'Novo Lead') return false;
+        const created = new Date(c.created_at);
+        return created < twoHoursAgo;
+      }).length;
+      
+      // Leads perdidos no período
+      const lostLeads = periodChats.filter(c => c.status === 'Perdido').length;
+      
+      // Taxa de perda
+      const lossRate = periodLeads > 0 ? (lostLeads / periodLeads) * 100 : 0;
+      
+      setMetricsData({
+        periodRevenue,
+        periodConversions,
+        periodLeads,
+        previousPeriodRevenue,
+        previousPeriodConversions,
+        previousPeriodLeads,
+        leadsBySource,
+        leadsByStatus,
+        avgResponseTimeMinutes,
+        avgConversionTimeDays,
+        leadsAwaiting,
+        lostLeads,
+        lossRate,
+        responseTimeByAttendant
+      });
+    } catch (error) {
+      console.error('Error fetching metrics:', error);
+    } finally {
+      setLoadingMetrics(false);
+    }
+  };
+
+  // Buscar métricas quando mudar o período ou a aba
+  useEffect(() => {
+    if (activeTab === 'metrics' && id) {
+      fetchMetricsData();
+    }
+  }, [activeTab, metricsPeriod, id]);
 
   const handleImpersonate = async () => {
     if (!clinic || !user) return;
@@ -1148,69 +1474,318 @@ const AdminClinicDetail: React.FC = () => {
       {/* Tab: Métricas */}
       {activeTab === 'metrics' && (
         <div className="space-y-6">
-          {/* Cards de Métricas Principais */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white">
-              <p className="text-emerald-100 text-sm mb-1">Faturamento Total</p>
-              <p className="text-3xl font-bold">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.totalRevenue)}
-              </p>
-            </div>
-            <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-5 text-white">
-              <p className="text-cyan-100 text-sm mb-1">Faturamento do Mês</p>
-              <p className="text-3xl font-bold">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.monthlyRevenue)}
-              </p>
-            </div>
-            <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-5 text-white">
-              <p className="text-violet-100 text-sm mb-1">Total Conversões</p>
-              <p className="text-3xl font-bold">{billingStats.totalConversions}</p>
-            </div>
-            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-5 text-white">
-              <p className="text-amber-100 text-sm mb-1">Taxa de Conversão</p>
-              <p className="text-3xl font-bold">
-                {stats.leads_count > 0 ? ((billingStats.totalConversions / stats.leads_count) * 100).toFixed(1) : '0'}%
-              </p>
+          {/* Filtro de Período */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-slate-500">calendar_month</span>
+                <span className="text-sm font-medium text-slate-700">Período:</span>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { id: '7d', label: '7 dias' },
+                  { id: '30d', label: '30 dias' },
+                  { id: 'month', label: 'Este mês' },
+                  { id: 'lastMonth', label: 'Mês anterior' },
+                ].map(period => (
+                  <button
+                    key={period.id}
+                    onClick={() => setMetricsPeriod(period.id as any)}
+                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      metricsPeriod === period.id
+                        ? 'bg-cyan-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {period.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Ticket Médio e Métricas Adicionais */}
+          {loadingMetrics ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+            </div>
+          ) : (
+          <>
+          {/* Cards com Comparativo */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white">
+              <div className="flex items-center gap-1 text-emerald-100 text-sm mb-1">
+                Faturamento do Período
+                <InfoTooltip text="Soma de todos os pagamentos registrados no período selecionado. Inclui todas as vendas confirmadas." />
+              </div>
+              <p className="text-3xl font-bold">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metricsData.periodRevenue)}
+              </p>
+              {metricsData.previousPeriodRevenue > 0 && (
+                <div className={`mt-2 flex items-center gap-1 text-sm ${
+                  metricsData.periodRevenue >= metricsData.previousPeriodRevenue ? 'text-emerald-200' : 'text-red-200'
+                }`}>
+                  <span className="material-symbols-outlined text-[16px]">
+                    {metricsData.periodRevenue >= metricsData.previousPeriodRevenue ? 'trending_up' : 'trending_down'}
+                  </span>
+                  {((metricsData.periodRevenue - metricsData.previousPeriodRevenue) / metricsData.previousPeriodRevenue * 100).toFixed(1)}% vs período anterior
+                </div>
+              )}
+            </div>
+            <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-5 text-white">
+              <div className="flex items-center gap-1 text-cyan-100 text-sm mb-1">
+                Leads no Período
+                <InfoTooltip text="Quantidade de novos leads (conversas) que entraram no período selecionado." />
+              </div>
+              <p className="text-3xl font-bold">{metricsData.periodLeads}</p>
+              {metricsData.previousPeriodLeads > 0 && (
+                <div className={`mt-2 flex items-center gap-1 text-sm ${
+                  metricsData.periodLeads >= metricsData.previousPeriodLeads ? 'text-cyan-200' : 'text-red-200'
+                }`}>
+                  <span className="material-symbols-outlined text-[16px]">
+                    {metricsData.periodLeads >= metricsData.previousPeriodLeads ? 'trending_up' : 'trending_down'}
+                  </span>
+                  {((metricsData.periodLeads - metricsData.previousPeriodLeads) / metricsData.previousPeriodLeads * 100).toFixed(1)}% vs período anterior
+                </div>
+              )}
+            </div>
+            <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-5 text-white">
+              <div className="flex items-center gap-1 text-violet-100 text-sm mb-1">
+                Conversões no Período
+                <InfoTooltip text="Quantidade de leads que foram convertidos em clientes (status 'Convertido') no período." />
+              </div>
+              <p className="text-3xl font-bold">{metricsData.periodConversions}</p>
+              {metricsData.previousPeriodConversions > 0 && (
+                <div className={`mt-2 flex items-center gap-1 text-sm ${
+                  metricsData.periodConversions >= metricsData.previousPeriodConversions ? 'text-violet-200' : 'text-red-200'
+                }`}>
+                  <span className="material-symbols-outlined text-[16px]">
+                    {metricsData.periodConversions >= metricsData.previousPeriodConversions ? 'trending_up' : 'trending_down'}
+                  </span>
+                  {((metricsData.periodConversions - metricsData.previousPeriodConversions) / metricsData.previousPeriodConversions * 100).toFixed(1)}% vs período anterior
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Métricas Adicionais */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
                   <span className="material-symbols-outlined text-emerald-600">receipt_long</span>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Ticket Médio</p>
+                  <div className="flex items-center gap-1 text-sm text-slate-500">
+                    Ticket Médio
+                    <InfoTooltip text="Valor médio de cada venda. Calculado dividindo o faturamento total pelo número de conversões." />
+                  </div>
                   <p className="text-xl font-bold text-slate-800">
-                    {billingStats.totalConversions > 0 
-                      ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.totalRevenue / billingStats.totalConversions)
+                    {metricsData.periodConversions > 0 
+                      ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metricsData.periodRevenue / metricsData.periodConversions)
                       : 'R$ 0,00'}
                   </p>
                 </div>
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <span className="material-symbols-outlined text-blue-600">trending_up</span>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-amber-600">percent</span>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Leads no Mês</p>
-                  <p className="text-xl font-bold text-slate-800">{stats.leads_count}</p>
+                  <div className="flex items-center gap-1 text-sm text-slate-500">
+                    Taxa de Conversão
+                    <InfoTooltip text="Percentual de leads que se tornaram clientes. Quanto maior, melhor a eficiência comercial." />
+                  </div>
+                  <p className="text-xl font-bold text-slate-800">
+                    {metricsData.periodLeads > 0 ? ((metricsData.periodConversions / metricsData.periodLeads) * 100).toFixed(1) : '0'}%
+                  </p>
                 </div>
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-blue-600">payments</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-1 text-sm text-slate-500">
+                    Faturamento Total
+                    <InfoTooltip text="Soma de todos os pagamentos registrados desde o início. Representa o faturamento acumulado da clínica." />
+                  </div>
+                  <p className="text-xl font-bold text-slate-800">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.totalRevenue)}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+              <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                   <span className="material-symbols-outlined text-purple-600">groups</span>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Atendentes Ativos</p>
+                  <div className="flex items-center gap-1 text-sm text-slate-500">
+                    Atendentes Ativos
+                    <InfoTooltip text="Quantidade de usuários com status 'Ativo' que podem atender conversas." />
+                  </div>
                   <p className="text-xl font-bold text-slate-800">{users.filter(u => u.status === 'Ativo').length}</p>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tempo e Produtividade */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                <span className="material-symbols-outlined text-blue-600">schedule</span>
+                Tempo e Produtividade
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">Métricas de eficiência do atendimento</p>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="text-center p-4 bg-blue-50 rounded-xl">
+                <div className="flex items-center justify-center gap-1 text-sm text-blue-600 mb-2">
+                  <span className="material-symbols-outlined text-[18px]">avg_time</span>
+                  Tempo de Resposta
+                  <InfoTooltip text="Tempo médio entre a primeira mensagem do cliente e a primeira resposta da equipe. Quanto menor, melhor o atendimento." />
+                </div>
+                <p className="text-2xl font-bold text-blue-700">
+                  {metricsData.avgResponseTimeMinutes > 60 
+                    ? `${Math.floor(metricsData.avgResponseTimeMinutes / 60)}h ${metricsData.avgResponseTimeMinutes % 60}min`
+                    : `${metricsData.avgResponseTimeMinutes} min`}
+                </p>
+                <p className="text-xs text-blue-500 mt-1">média de primeira resposta</p>
+              </div>
+              
+              <div className="text-center p-4 bg-emerald-50 rounded-xl">
+                <div className="flex items-center justify-center gap-1 text-sm text-emerald-600 mb-2">
+                  <span className="material-symbols-outlined text-[18px]">event_available</span>
+                  Tempo de Conversão
+                  <InfoTooltip text="Tempo médio em dias desde o primeiro contato até a conversão em cliente. Indica a velocidade do ciclo de vendas." />
+                </div>
+                <p className="text-2xl font-bold text-emerald-700">
+                  {metricsData.avgConversionTimeDays} dias
+                </p>
+                <p className="text-xs text-emerald-500 mt-1">média até converter</p>
+              </div>
+              
+              <div className="text-center p-4 bg-amber-50 rounded-xl">
+                <div className="flex items-center justify-center gap-1 text-sm text-amber-600 mb-2">
+                  <span className="material-symbols-outlined text-[18px]">pending</span>
+                  Aguardando
+                  <InfoTooltip text="Leads com status 'Novo Lead' há mais de 2 horas sem resposta. Requer atenção imediata!" />
+                </div>
+                <p className={`text-2xl font-bold ${metricsData.leadsAwaiting > 0 ? 'text-amber-700' : 'text-emerald-600'}`}>
+                  {metricsData.leadsAwaiting}
+                </p>
+                <p className="text-xs text-amber-500 mt-1">leads sem resposta (+2h)</p>
+              </div>
+              
+              <div className="text-center p-4 bg-red-50 rounded-xl">
+                <div className="flex items-center justify-center gap-1 text-sm text-red-600 mb-2">
+                  <span className="material-symbols-outlined text-[18px]">person_off</span>
+                  Leads Perdidos
+                  <InfoTooltip text="Quantidade de leads que foram marcados como 'Perdido' no período selecionado." />
+                </div>
+                <p className="text-2xl font-bold text-red-700">
+                  {metricsData.lostLeads}
+                </p>
+                <p className="text-xs text-red-500 mt-1">no período</p>
+              </div>
+              
+              <div className="text-center p-4 bg-slate-50 rounded-xl">
+                <div className="flex items-center justify-center gap-1 text-sm text-slate-600 mb-2">
+                  <span className="material-symbols-outlined text-[18px]">trending_down</span>
+                  Taxa de Perda
+                  <InfoTooltip text="Percentual de leads perdidos em relação ao total de leads do período. Quanto menor, melhor." />
+                </div>
+                <p className={`text-2xl font-bold ${metricsData.lossRate > 30 ? 'text-red-600' : metricsData.lossRate > 15 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {metricsData.lossRate.toFixed(1)}%
+                </p>
+                <p className="text-xs text-slate-500 mt-1">do período</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Funil de Conversão e Leads por Origem */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Funil de Conversão */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+              <div className="p-6 border-b border-slate-200">
+                <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-cyan-600">filter_alt</span>
+                  Funil de Conversão
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">Status atual de todos os leads</p>
+              </div>
+              <div className="p-6 space-y-4">
+                {[
+                  { label: 'Novo Lead', value: metricsData.leadsByStatus.novo, color: 'bg-blue-500', total: stats.leads_count },
+                  { label: 'Em Atendimento', value: metricsData.leadsByStatus.emAtendimento, color: 'bg-amber-500', total: stats.leads_count },
+                  { label: 'Convertido', value: metricsData.leadsByStatus.convertido, color: 'bg-emerald-500', total: stats.leads_count },
+                  { label: 'Perdido', value: metricsData.leadsByStatus.perdido, color: 'bg-red-500', total: stats.leads_count },
+                ].map((item, idx) => (
+                  <div key={idx}>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-medium text-slate-700">{item.label}</span>
+                      <span className="text-sm font-bold text-slate-800">{item.value}</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-3">
+                      <div 
+                        className={`${item.color} h-3 rounded-full transition-all duration-500`}
+                        style={{ width: `${item.total > 0 ? (item.value / item.total) * 100 : 0}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {item.total > 0 ? ((item.value / item.total) * 100).toFixed(1) : 0}% do total
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Leads por Origem */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+              <div className="p-6 border-b border-slate-200">
+                <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-violet-600">source</span>
+                  Leads por Origem
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">Performance por canal de aquisição</p>
+              </div>
+              <div className="p-6">
+                {metricsData.leadsBySource.length > 0 ? (
+                  <div className="space-y-3">
+                    {metricsData.leadsBySource.map(source => (
+                      <div key={source.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: source.color }}></div>
+                          <span className="font-medium text-slate-800">{source.name}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <div className="text-center">
+                            <p className="font-bold text-slate-800">{source.count}</p>
+                            <p className="text-xs text-slate-500">leads</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="font-bold text-emerald-600">{source.converted}</p>
+                            <p className="text-xs text-slate-500">conv.</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="font-bold text-cyan-600">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(source.revenue)}
+                            </p>
+                            <p className="text-xs text-slate-500">receita</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-slate-500 py-8">Nenhuma origem cadastrada</p>
+                )}
               </div>
             </div>
           </div>
@@ -1222,24 +1797,32 @@ const AdminClinicDetail: React.FC = () => {
                 <span className="material-symbols-outlined text-amber-500">emoji_events</span>
                 Ranking de Atendentes
               </h2>
-              <p className="text-sm text-slate-500 mt-1">Performance de vendas por atendente</p>
+              <p className="text-sm text-slate-500 mt-1">Performance de vendas e tempo de resposta por atendente</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase">#</th>
-                    <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase">Atendente</th>
-                    <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase">Faturamento Total</th>
-                    <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase">Faturamento Mês</th>
-                    <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase">Conversões</th>
-                    <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase">Ticket Médio</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase">#</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase">Atendente</th>
+                    <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase">Faturamento</th>
+                    <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase">Conversões</th>
+                    <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase">Ticket Médio</th>
+                    <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase">
+                      <div className="flex items-center justify-end gap-1">
+                        Tempo Resposta
+                        <InfoTooltip text="Tempo médio de primeira resposta do atendente. Calculado com base nos últimos 30 chats." />
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {billingStats.byAttendant.map((att, index) => (
+                  {billingStats.byAttendant.map((att, index) => {
+                    const responseData = metricsData.responseTimeByAttendant.get(att.id);
+                    const avgResponseTime = responseData ? Math.round((responseData.total / responseData.count) / (1000 * 60)) : null;
+                    return (
                     <tr key={att.id} className="hover:bg-slate-50">
-                      <td className="py-4 px-6">
+                      <td className="py-4 px-4">
                         <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
                           index === 0 ? 'bg-amber-100 text-amber-700' :
                           index === 1 ? 'bg-slate-200 text-slate-700' :
@@ -1249,7 +1832,7 @@ const AdminClinicDetail: React.FC = () => {
                           {index + 1}
                         </span>
                       </td>
-                      <td className="py-4 px-6">
+                      <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-cyan-100 rounded-full flex items-center justify-center">
                             <span className="text-cyan-700 font-medium text-sm">
@@ -1259,24 +1842,37 @@ const AdminClinicDetail: React.FC = () => {
                           <span className="font-medium text-slate-800">{att.name}</span>
                         </div>
                       </td>
-                      <td className="py-4 px-6 text-right font-semibold text-emerald-600">
+                      <td className="py-4 px-4 text-right font-semibold text-emerald-600">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.totalRevenue)}
                       </td>
-                      <td className="py-4 px-6 text-right font-medium text-cyan-600">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.monthlyRevenue)}
-                      </td>
-                      <td className="py-4 px-6 text-right">
+                      <td className="py-4 px-4 text-right">
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
                           {att.conversions}
                         </span>
                       </td>
-                      <td className="py-4 px-6 text-right text-slate-600">
+                      <td className="py-4 px-4 text-right text-slate-600">
                         {att.conversions > 0 
                           ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.totalRevenue / att.conversions)
                           : '-'}
                       </td>
+                      <td className="py-4 px-4 text-right">
+                        {avgResponseTime !== null ? (
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            avgResponseTime <= 5 ? 'bg-emerald-100 text-emerald-700' :
+                            avgResponseTime <= 15 ? 'bg-amber-100 text-amber-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {avgResponseTime > 60 
+                              ? `${Math.floor(avgResponseTime / 60)}h ${avgResponseTime % 60}min`
+                              : `${avgResponseTime} min`}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {billingStats.byAttendant.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-slate-500">
@@ -1288,6 +1884,8 @@ const AdminClinicDetail: React.FC = () => {
               </table>
             </div>
           </div>
+          </>
+          )}
         </div>
       )}
 
