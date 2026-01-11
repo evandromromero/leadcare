@@ -586,6 +586,188 @@ const AdminClinicDetail: React.FC = () => {
     }
   }, [activeTab, metricsPeriod, id]);
 
+  // Função para exportar relatório em Excel (CSV)
+  const exportToExcel = () => {
+    if (!clinic) return;
+    
+    const periodLabel = metricsPeriod === '7d' ? '7 dias' : 
+                       metricsPeriod === '30d' ? '30 dias' : 
+                       metricsPeriod === 'month' ? 'Este mês' : 'Mês anterior';
+    
+    // Cabeçalho
+    let csv = `Relatório de Métricas - ${clinic.name}\n`;
+    csv += `Período: ${periodLabel}\n`;
+    csv += `Gerado em: ${new Date().toLocaleString('pt-BR')}\n\n`;
+    
+    // Métricas Gerais
+    csv += `MÉTRICAS GERAIS\n`;
+    csv += `Métrica;Valor\n`;
+    csv += `Faturamento do Período;${metricsData.periodRevenue.toFixed(2).replace('.', ',')}\n`;
+    csv += `Leads no Período;${metricsData.periodLeads}\n`;
+    csv += `Conversões no Período;${metricsData.periodConversions}\n`;
+    csv += `Taxa de Conversão;${metricsData.periodLeads > 0 ? ((metricsData.periodConversions / metricsData.periodLeads) * 100).toFixed(1) : '0'}%\n`;
+    csv += `Ticket Médio;${metricsData.periodConversions > 0 ? (metricsData.periodRevenue / metricsData.periodConversions).toFixed(2).replace('.', ',') : '0'}\n`;
+    csv += `Tempo Médio de Resposta;${metricsData.avgResponseTimeMinutes} min\n`;
+    csv += `Tempo Médio de Conversão;${metricsData.avgConversionTimeDays} dias\n`;
+    csv += `Leads Aguardando;${metricsData.leadsAwaiting}\n`;
+    csv += `Leads Perdidos;${metricsData.lostLeads}\n`;
+    csv += `Taxa de Perda;${metricsData.lossRate.toFixed(1)}%\n\n`;
+    
+    // Funil de Conversão
+    csv += `FUNIL DE CONVERSÃO\n`;
+    csv += `Status;Quantidade\n`;
+    csv += `Novo Lead;${metricsData.leadsByStatus.novo}\n`;
+    csv += `Em Atendimento;${metricsData.leadsByStatus.emAtendimento}\n`;
+    csv += `Convertido;${metricsData.leadsByStatus.convertido}\n`;
+    csv += `Perdido;${metricsData.leadsByStatus.perdido}\n\n`;
+    
+    // Leads por Origem
+    csv += `LEADS POR ORIGEM\n`;
+    csv += `Origem;Leads;Conversões;Receita\n`;
+    metricsData.leadsBySource.forEach(source => {
+      csv += `${source.name};${source.count};${source.converted};${source.revenue.toFixed(2).replace('.', ',')}\n`;
+    });
+    csv += `\n`;
+    
+    // Ranking de Atendentes
+    csv += `RANKING DE ATENDENTES\n`;
+    csv += `Atendente;Faturamento;Conversões;Ticket Médio;Tempo Resposta (min)\n`;
+    billingStats.byAttendant.forEach(att => {
+      const responseData = metricsData.responseTimeByAttendant.get(att.id);
+      const avgResponseTime = responseData ? Math.round((responseData.total / responseData.count) / (1000 * 60)) : '-';
+      csv += `${att.name};${att.totalRevenue.toFixed(2).replace('.', ',')};${att.conversions};${att.conversions > 0 ? (att.totalRevenue / att.conversions).toFixed(2).replace('.', ',') : '0'};${avgResponseTime}\n`;
+    });
+    
+    // Criar e baixar arquivo
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `relatorio_${clinic.slug || clinic.id}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  // Função para exportar relatório em PDF (via impressão)
+  const exportToPDF = () => {
+    if (!clinic) return;
+    
+    const periodLabel = metricsPeriod === '7d' ? '7 dias' : 
+                       metricsPeriod === '30d' ? '30 dias' : 
+                       metricsPeriod === 'month' ? 'Este mês' : 'Mês anterior';
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const formatCurrency = (value: number) => 
+      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Relatório - ${clinic.name}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+          h1 { color: #0891b2; border-bottom: 2px solid #0891b2; padding-bottom: 10px; }
+          h2 { color: #475569; margin-top: 30px; }
+          .header { margin-bottom: 20px; }
+          .header p { margin: 5px 0; color: #64748b; }
+          table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+          th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+          th { background: #f1f5f9; font-weight: 600; }
+          .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0; }
+          .metric-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; }
+          .metric-card .label { font-size: 12px; color: #64748b; }
+          .metric-card .value { font-size: 24px; font-weight: bold; color: #0f172a; }
+          .text-right { text-align: right; }
+          .text-green { color: #059669; }
+          .text-red { color: #dc2626; }
+          @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Relatório de Métricas</h1>
+          <p><strong>Clínica:</strong> ${clinic.name}</p>
+          <p><strong>Período:</strong> ${periodLabel}</p>
+          <p><strong>Gerado em:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+        </div>
+        
+        <h2>Métricas Gerais</h2>
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="label">Faturamento do Período</div>
+            <div class="value text-green">${formatCurrency(metricsData.periodRevenue)}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Leads no Período</div>
+            <div class="value">${metricsData.periodLeads}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Conversões</div>
+            <div class="value">${metricsData.periodConversions}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Taxa de Conversão</div>
+            <div class="value">${metricsData.periodLeads > 0 ? ((metricsData.periodConversions / metricsData.periodLeads) * 100).toFixed(1) : '0'}%</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Ticket Médio</div>
+            <div class="value">${metricsData.periodConversions > 0 ? formatCurrency(metricsData.periodRevenue / metricsData.periodConversions) : 'R$ 0,00'}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Tempo Médio de Resposta</div>
+            <div class="value">${metricsData.avgResponseTimeMinutes} min</div>
+          </div>
+        </div>
+        
+        <h2>Funil de Conversão</h2>
+        <table>
+          <tr><th>Status</th><th class="text-right">Quantidade</th><th class="text-right">%</th></tr>
+          <tr><td>Novo Lead</td><td class="text-right">${metricsData.leadsByStatus.novo}</td><td class="text-right">${stats.leads_count > 0 ? ((metricsData.leadsByStatus.novo / stats.leads_count) * 100).toFixed(1) : 0}%</td></tr>
+          <tr><td>Em Atendimento</td><td class="text-right">${metricsData.leadsByStatus.emAtendimento}</td><td class="text-right">${stats.leads_count > 0 ? ((metricsData.leadsByStatus.emAtendimento / stats.leads_count) * 100).toFixed(1) : 0}%</td></tr>
+          <tr><td>Convertido</td><td class="text-right">${metricsData.leadsByStatus.convertido}</td><td class="text-right">${stats.leads_count > 0 ? ((metricsData.leadsByStatus.convertido / stats.leads_count) * 100).toFixed(1) : 0}%</td></tr>
+          <tr><td>Perdido</td><td class="text-right">${metricsData.leadsByStatus.perdido}</td><td class="text-right">${stats.leads_count > 0 ? ((metricsData.leadsByStatus.perdido / stats.leads_count) * 100).toFixed(1) : 0}%</td></tr>
+        </table>
+        
+        <h2>Leads por Origem</h2>
+        <table>
+          <tr><th>Origem</th><th class="text-right">Leads</th><th class="text-right">Conversões</th><th class="text-right">Receita</th></tr>
+          ${metricsData.leadsBySource.map(source => `
+            <tr>
+              <td>${source.name}</td>
+              <td class="text-right">${source.count}</td>
+              <td class="text-right">${source.converted}</td>
+              <td class="text-right">${formatCurrency(source.revenue)}</td>
+            </tr>
+          `).join('')}
+        </table>
+        
+        <h2>Ranking de Atendentes</h2>
+        <table>
+          <tr><th>#</th><th>Atendente</th><th class="text-right">Faturamento</th><th class="text-right">Conversões</th><th class="text-right">Ticket Médio</th><th class="text-right">Tempo Resposta</th></tr>
+          ${billingStats.byAttendant.map((att, index) => {
+            const responseData = metricsData.responseTimeByAttendant.get(att.id);
+            const avgResponseTime = responseData ? Math.round((responseData.total / responseData.count) / (1000 * 60)) : null;
+            return `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${att.name}</td>
+                <td class="text-right text-green">${formatCurrency(att.totalRevenue)}</td>
+                <td class="text-right">${att.conversions}</td>
+                <td class="text-right">${att.conversions > 0 ? formatCurrency(att.totalRevenue / att.conversions) : '-'}</td>
+                <td class="text-right">${avgResponseTime !== null ? avgResponseTime + ' min' : '-'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </table>
+        
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const handleImpersonate = async () => {
     if (!clinic || !user) return;
     
@@ -1474,32 +1656,50 @@ const AdminClinicDetail: React.FC = () => {
       {/* Tab: Métricas */}
       {activeTab === 'metrics' && (
         <div className="space-y-6">
-          {/* Filtro de Período */}
+          {/* Filtro de Período e Exportação */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
             <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-slate-500">calendar_month</span>
-                <span className="text-sm font-medium text-slate-700">Período:</span>
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-slate-500">calendar_month</span>
+                  <span className="text-sm font-medium text-slate-700">Período:</span>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { id: '7d', label: '7 dias' },
+                    { id: '30d', label: '30 dias' },
+                    { id: 'month', label: 'Este mês' },
+                    { id: 'lastMonth', label: 'Mês anterior' },
+                  ].map(period => (
+                    <button
+                      key={period.id}
+                      onClick={() => setMetricsPeriod(period.id as any)}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        metricsPeriod === period.id
+                          ? 'bg-cyan-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {period.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex gap-2 flex-wrap">
-                {[
-                  { id: '7d', label: '7 dias' },
-                  { id: '30d', label: '30 dias' },
-                  { id: 'month', label: 'Este mês' },
-                  { id: 'lastMonth', label: 'Mês anterior' },
-                ].map(period => (
-                  <button
-                    key={period.id}
-                    onClick={() => setMetricsPeriod(period.id as any)}
-                    className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                      metricsPeriod === period.id
-                        ? 'bg-cyan-600 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {period.label}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={exportToExcel}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px]">table_chart</span>
+                  Excel
+                </button>
+                <button
+                  onClick={exportToPDF}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                  PDF
+                </button>
               </div>
             </div>
           </div>
