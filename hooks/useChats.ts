@@ -301,6 +301,8 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     }
 
     console.log('[useChats] Setting up realtime subscriptions...');
+    let realtimeWorking = false;
+    
     const chatsSubscription = supabase
       .channel(`chats-changes-${clinicId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `clinic_id=eq.${clinicId}` }, () => {
@@ -325,11 +327,21 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
       })
       .subscribe((status) => {
         console.log('[useChats] Realtime subscription status:', status);
+        realtimeWorking = status === 'SUBSCRIBED';
       });
+
+    // Fallback: polling a cada 5 segundos se realtime não funcionar
+    const pollingInterval = setInterval(() => {
+      if (!realtimeWorking) {
+        console.log('[useChats] Polling fallback - fetching chats...');
+        fetchChats();
+      }
+    }, 5000);
 
     return () => {
       console.log('[useChats] Cleaning up subscriptions');
       supabase.removeChannel(chatsSubscription);
+      clearInterval(pollingInterval);
     };
   }, [clinicId]);
 

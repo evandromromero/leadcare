@@ -393,15 +393,91 @@ Processa eventos da Evolution API:
 
 ---
 
-## Próximos Passos (Fase 6)
+### Fase 6: Sistema de Permissões e Metas ✅ COMPLETA
 
 | Funcionalidade | Status |
 |----------------|--------|
-| Relatórios avançados | 🔄 Pendente |
+| Sistema de permissões por perfil (Admin/Atendente) | ✅ Completo |
+| Modal de configuração de permissões no AdminClinicDetail | ✅ Completo |
+| Gerenciamento de instância WhatsApp no modal de edição de usuário | ✅ Completo |
+| Sistema de encaminhamento de atendimento | ✅ Completo |
+| Gráficos de Evolução e Metas (Meta vs Realizado) | ✅ Completo |
+| Configuração de metas mensais por atendente | ✅ Completo |
+| Visualização de meta para atendente no Dashboard | ✅ Completo |
+| Checkbox "Pode ver meta" por atendente | ✅ Completo |
+| Correção de áudio/imagem do WhatsApp | ✅ Completo |
+| Polling fallback para Realtime | ✅ Completo |
+
+### Sistema de Permissões
+
+| Permissão | Admin | Atendente |
+|-----------|-------|-----------|
+| `send_message` | ✅ | ✅ |
+| `move_lead` | ✅ | ✅ |
+| `add_payment` | ✅ | ❌ |
+| `add_quote` | ✅ | ✅ |
+| `view_reports` | ✅ | ❌ |
+| `manage_users` | ✅ | ❌ |
+| `manage_tags` | ✅ | ❌ |
+| `manage_quick_replies` | ✅ | ❌ |
+
+### Sistema de Metas
+
+- **Meta da Clínica**: Configurável pelo SuperAdmin no AdminClinicDetail
+- **Meta por Atendente**: Cada atendente pode ter sua meta individual
+- **Visualização**: Atendentes só veem sua meta se `can_see_goal = true`
+- **Gráfico**: Meta vs Realizado com barra de progresso e previsão
+
+### Encaminhamento de Atendimento
+
+- Encaminhar conversa para outro atendente
+- Opção de bloquear conversa para o destinatário
+- Liberar conversa (remover bloqueio)
+- Assumir atendimento
+
+### Correção de Mídia do WhatsApp
+
+- **Problema**: Áudios e imagens não apareciam no chat
+- **Causa**: Mimetype `audio/ogg; codecs=opus` não aceito pelo Supabase Storage
+- **Solução**: Usar mimetype simplificado `audio/ogg`
+- **Fluxo**: Webhook busca base64 via API `getBase64FromMediaMessage` → Upload para Storage → Salva URL no banco
+
+### Realtime com Polling Fallback
+
+- **Problema**: `CHANNEL_ERROR` no Realtime do Supabase (plano gratuito)
+- **Solução**: Polling automático a cada 5 segundos quando Realtime falha
+- **Comportamento**: Se Realtime funcionar (`SUBSCRIBED`), polling é desativado
+
+### Novas Tabelas/Campos
+
+| Tabela | Campo | Descrição |
+|--------|-------|-----------|
+| `clinics` | `monthly_goal` | Meta mensal da clínica |
+| `users` | `monthly_goal` | Meta mensal individual do atendente |
+| `users` | `can_see_goal` | Se o atendente pode ver sua meta |
+| `chats` | `assigned_to` | Atendente responsável pelo chat |
+| `webhook_debug` | - | Tabela para debug de payloads do webhook |
+
+### Edge Function: evolution-webhook (v13)
+
+Melhorias implementadas:
+- Busca mídia via API `getBase64FromMediaMessage`
+- Upload de mídia para Supabase Storage
+- Mimetype corrigido para compatibilidade
+- Suporte a áudio, imagem, vídeo e documentos
+
+---
+
+## Próximos Passos (Fase 7)
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Relatórios avançados com exportação | 🔄 Pendente |
 | Gestão de planos e assinaturas | 🔄 Pendente |
 | Auto-registro de clínicas | 🔄 Pendente |
 | Notificações push | 🔄 Pendente |
 | Agendamentos integrados | 🔄 Pendente |
+| Chatbot/IA para respostas automáticas | 🔄 Pendente |
 
 ---
 
