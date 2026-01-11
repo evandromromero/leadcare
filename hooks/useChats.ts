@@ -307,13 +307,12 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
         console.log('[useChats] Chat change detected');
         fetchChats();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
-        console.log('[useChats] Message change detected');
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        console.log('[useChats] New message detected:', payload);
         fetchChats();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_instances', filter: `clinic_id=eq.${clinicId}` }, (payload) => {
         console.log('[useChats] WhatsApp instance change detected:', payload);
-        // Atualizar imediatamente com os dados do payload se disponível
         if (payload.new && typeof payload.new === 'object' && 'status' in payload.new) {
           const newData = payload.new as { instance_name: string; status: string };
           setWhatsappInstance({
@@ -324,7 +323,9 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
           fetchWhatsAppInstance();
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[useChats] Realtime subscription status:', status);
+      });
 
     return () => {
       console.log('[useChats] Cleaning up subscriptions');

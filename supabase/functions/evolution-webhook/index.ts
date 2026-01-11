@@ -78,6 +78,11 @@ serve(async (req) => {
     let message = ''
     let mediaType: string | null = null
     let tempMediaUrl: string | null = null
+    const messageId = key.id
+
+    // Capturar base64 se vier no payload (quando Webhook Base64 está ativado)
+    const base64Media = data.base64 || messageObj?.base64 || webhookData.base64
+    const mediaMimetype = data.mimetype || messageObj?.mimetype || webhookData.mimetype
 
     if (messageType === 'conversation') {
       message = messageObj?.conversation || ''
@@ -86,21 +91,89 @@ serve(async (req) => {
     } else if (messageType === 'imageMessage') {
       message = messageObj?.imageMessage?.caption || '[Imagem]'
       mediaType = 'image'
-      tempMediaUrl = data.mediaUrl || messageObj?.imageMessage?.url
+      if (base64Media) {
+        tempMediaUrl = `data:${mediaMimetype || 'image/jpeg'};base64,${base64Media}`
+      } else {
+        tempMediaUrl = data.mediaUrl || messageObj?.imageMessage?.url || data.media?.url
+      }
     } else if (messageType === 'videoMessage') {
       message = messageObj?.videoMessage?.caption || '[Video]'
       mediaType = 'video'
-      tempMediaUrl = data.mediaUrl || messageObj?.videoMessage?.url
-    } else if (messageType === 'audioMessage') {
+      if (base64Media) {
+        tempMediaUrl = `data:${mediaMimetype || 'video/mp4'};base64,${base64Media}`
+      } else {
+        tempMediaUrl = data.mediaUrl || messageObj?.videoMessage?.url || data.media?.url
+      }
+    } else if (messageType === 'audioMessage' || messageType === 'pttMessage') {
       message = '[Audio]'
       mediaType = 'audio'
-      tempMediaUrl = data.mediaUrl || messageObj?.audioMessage?.url
+      if (base64Media) {
+        tempMediaUrl = `data:${mediaMimetype || 'audio/ogg'};base64,${base64Media}`
+      } else {
+        tempMediaUrl = data.mediaUrl || messageObj?.audioMessage?.url || data.media?.url
+      }
     } else if (messageType === 'documentMessage') {
       message = messageObj?.documentMessage?.fileName || '[Documento]'
       mediaType = 'document'
-      tempMediaUrl = data.mediaUrl || messageObj?.documentMessage?.url
+      if (base64Media) {
+        tempMediaUrl = `data:${mediaMimetype || 'application/octet-stream'};base64,${base64Media}`
+      } else {
+        tempMediaUrl = data.mediaUrl || messageObj?.documentMessage?.url || data.media?.url
+      }
+    } else if (messageType === 'stickerMessage') {
+      message = '[Sticker]'
+      mediaType = 'image'
+      if (base64Media) {
+        tempMediaUrl = `data:${mediaMimetype || 'image/webp'};base64,${base64Media}`
+      } else {
+        tempMediaUrl = data.mediaUrl || data.media?.url
+      }
     } else {
       message = messageObj?.conversation || messageObj?.extendedTextMessage?.text || `[${messageType}]`
+    }
+    
+    console.log('Message type:', messageType, 'Has base64:', !!base64Media, 'Has tempMediaUrl:', !!tempMediaUrl)
+
+    // Se não temos URL da mídia mas temos mediaType, tentar buscar via API
+    if (mediaType && !tempMediaUrl && messageId) {
+      try {
+        // Buscar configurações globais da Evolution API
+        const { data: settings } = await supabase
+          .from('settings')
+          .select('evolution_api_url, evolution_api_key')
+          .eq('id', 1)
+          .single()
+        
+        if (settings?.evolution_api_url && settings?.evolution_api_key) {
+          // Buscar mídia via API da Evolution
+          const mediaResponse = await fetch(
+            `${settings.evolution_api_url}/chat/getBase64FromMediaMessage/${instanceName}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': settings.evolution_api_key
+              },
+              body: JSON.stringify({
+                message: {
+                  key: key
+                },
+                convertToMp4: mediaType === 'video'
+              })
+            }
+          )
+          
+          if (mediaResponse.ok) {
+            const mediaData = await mediaResponse.json()
+            if (mediaData.base64) {
+              // Temos a mídia em base64, vamos fazer upload direto
+              tempMediaUrl = `data:${mediaData.mimetype || 'application/octet-stream'};base64,${mediaData.base64}`
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching media from Evolution API:', e)
+      }
     }
 
     // Get or create chat
@@ -146,24 +219,54 @@ serve(async (req) => {
     let finalMediaUrl: string | null = null
     if (tempMediaUrl && mediaType && chat) {
       try {
-        const response = await fetch(tempMediaUrl)
-        if (response.ok) {
-          const blob = await response.blob()
-          const ext = mediaType === 'image' ? 'jpg' : mediaType === 'video' ? 'mp4' : mediaType === 'audio' ? 'ogg' : 'bin'
-          const fileName = `${chat.id}/${Date.now()}.${ext}`
-          
-          const { error: uploadError } = await supabase.storage
-            .from('chat-media')
-            .upload(fileName, blob, { contentType: blob.type })
-          
-          if (!uploadError) {
-            const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(fileName)
-            finalMediaUrl = urlData?.publicUrl || null
+        const ext = mediaType === 'image' ? 'jpg' : mediaType === 'video' ? 'mp4' : mediaType === 'audio' ? 'ogg' : 'bin'
+        const fileName = `${chat.id}/${Date.now()}.${ext}`
+        
+        // Verificar se é base64
+        if (tempMediaUrl.startsWith('data:')) {
+          // Extrair base64 e mimetype
+          const matches = tempMediaUrl.match(/^data:([^;]+);base64,(.+)$/)
+          if (matches) {
+            const mimeType = matches[1]
+            const base64Data = matches[2]
+            // Converter base64 para Uint8Array
+            const binaryString = atob(base64Data)
+            const bytes = new Uint8Array(binaryString.length)
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i)
+            }
+            
+            const { error: uploadError } = await supabase.storage
+              .from('chat-media')
+              .upload(fileName, bytes, { contentType: mimeType })
+            
+            if (!uploadError) {
+              const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(fileName)
+              finalMediaUrl = urlData?.publicUrl || null
+            } else {
+              console.error('Upload error (base64):', uploadError)
+            }
+          }
+        } else {
+          // URL normal - fazer fetch
+          const response = await fetch(tempMediaUrl)
+          if (response.ok) {
+            const blob = await response.blob()
+            
+            const { error: uploadError } = await supabase.storage
+              .from('chat-media')
+              .upload(fileName, blob, { contentType: blob.type })
+            
+            if (!uploadError) {
+              const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(fileName)
+              finalMediaUrl = urlData?.publicUrl || null
+            } else {
+              console.error('Upload error (url):', uploadError)
+            }
           }
         }
       } catch (e) {
         console.error('Media upload failed:', e)
-        finalMediaUrl = tempMediaUrl // fallback to original URL
       }
     }
 
