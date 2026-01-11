@@ -116,6 +116,9 @@ const AdminClinicDetail: React.FC = () => {
   // Estados para modal de permissões
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [permissionsUser, setPermissionsUser] = useState<ClinicUser | null>(null);
+  
+  // Estado para abas
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'whatsapp' | 'metrics'>('overview');
 
   useEffect(() => {
     if (id) {
@@ -630,6 +633,33 @@ const AdminClinicDetail: React.FC = () => {
         </div>
       </div>
 
+      {/* Tabs Navigation */}
+      <div className="mb-6 border-b border-slate-200">
+        <nav className="flex gap-1">
+          {[
+            { id: 'overview', label: 'Visão Geral', icon: 'dashboard' },
+            { id: 'users', label: 'Usuários', icon: 'group' },
+            { id: 'whatsapp', label: 'WhatsApp', icon: 'chat' },
+            { id: 'metrics', label: 'Métricas', icon: 'analytics' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? 'border-cyan-600 text-cyan-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[20px]">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Clinic Info */}
         <div className="lg:col-span-2 space-y-6">
@@ -963,6 +993,303 @@ const AdminClinicDetail: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
+
+      {/* Tab: Usuários */}
+      {activeTab === 'users' && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+          <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-800">Usuários ({users.length}/{clinic.max_users})</h2>
+            <button
+              onClick={() => setShowCreateUserModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 transition-colors"
+            >
+              <Users className="w-4 h-4" />
+              Criar Usuário
+            </button>
+          </div>
+          <div className="divide-y divide-slate-200">
+            {users.length === 0 ? (
+              <div className="p-6 text-center text-slate-500">
+                Nenhum usuário cadastrado
+              </div>
+            ) : (
+              users.map((u) => (
+                <div key={u.id} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
+                      <span className="text-slate-600 font-medium">
+                        {u.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-800">{u.name}</p>
+                      <p className="text-sm text-slate-500">{u.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      u.role === 'Admin' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-800'
+                    }`}>
+                      {u.role}
+                    </span>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      u.status === 'Ativo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {u.status}
+                    </span>
+                    <button
+                      onClick={() => { setPermissionsUser(u); setShowPermissionsModal(true); }}
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                      title="Ver Permissões"
+                    >
+                      <Shield className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleEditUser(u)}
+                      className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded transition-colors"
+                      title="Editar"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">edit</span>
+                    </button>
+                    <button
+                      onClick={() => { setUserToDelete(u); setShowDeleteConfirm(true); }}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Excluir"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: WhatsApp */}
+      {activeTab === 'whatsapp' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-semibold text-slate-800 mb-4">
+              Instâncias WhatsApp ({whatsappInstances.length})
+            </h2>
+            {whatsappInstances.length > 0 ? (
+              <div className="space-y-3">
+                {whatsappInstances.map((instance) => (
+                  <div key={instance.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {instance.status === 'connected' ? (
+                          <Wifi className="w-5 h-5 text-green-500" />
+                        ) : (
+                          <WifiOff className="w-5 h-5 text-red-500" />
+                        )}
+                        <span className={`text-sm font-medium ${
+                          instance.status === 'connected' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {instance.status === 'connected' ? 'Conectado' : 'Desconectado'}
+                        </span>
+                      </div>
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                        instance.is_shared ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                      }`}>
+                        {instance.is_shared ? 'Compartilhada' : 'Pessoal'}
+                      </span>
+                    </div>
+                    <p className="text-base font-medium text-slate-800">
+                      {instance.display_name || instance.phone_number || 'Sem nome'}
+                    </p>
+                    {instance.phone_number && (
+                      <p className="text-sm text-slate-500 mt-1">
+                        <Phone className="w-4 h-4 inline mr-1" />
+                        {instance.phone_number}
+                      </p>
+                    )}
+                    {instance.connected_at && (
+                      <p className="text-xs text-slate-400 mt-2">
+                        Conectado em: {new Date(instance.connected_at).toLocaleDateString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-sm">Nenhuma instância configurada</p>
+            )}
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-semibold text-slate-800 mb-4">Configurações</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-slate-800">Criar usuários</p>
+                  <p className="text-sm text-slate-500">Permitir que a clínica crie seus próprios usuários</p>
+                </div>
+                <button
+                  onClick={toggleCanCreateUsers}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    clinic.can_create_users ? 'bg-cyan-600' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      clinic.can_create_users ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Métricas */}
+      {activeTab === 'metrics' && (
+        <div className="space-y-6">
+          {/* Cards de Métricas Principais */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white">
+              <p className="text-emerald-100 text-sm mb-1">Faturamento Total</p>
+              <p className="text-3xl font-bold">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.totalRevenue)}
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-5 text-white">
+              <p className="text-cyan-100 text-sm mb-1">Faturamento do Mês</p>
+              <p className="text-3xl font-bold">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.monthlyRevenue)}
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-5 text-white">
+              <p className="text-violet-100 text-sm mb-1">Total Conversões</p>
+              <p className="text-3xl font-bold">{billingStats.totalConversions}</p>
+            </div>
+            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-5 text-white">
+              <p className="text-amber-100 text-sm mb-1">Taxa de Conversão</p>
+              <p className="text-3xl font-bold">
+                {stats.leads_count > 0 ? ((billingStats.totalConversions / stats.leads_count) * 100).toFixed(1) : '0'}%
+              </p>
+            </div>
+          </div>
+
+          {/* Ticket Médio e Métricas Adicionais */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-emerald-600">receipt_long</span>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Ticket Médio</p>
+                  <p className="text-xl font-bold text-slate-800">
+                    {billingStats.totalConversions > 0 
+                      ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.totalRevenue / billingStats.totalConversions)
+                      : 'R$ 0,00'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-blue-600">trending_up</span>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Leads no Mês</p>
+                  <p className="text-xl font-bold text-slate-800">{stats.leads_count}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-purple-600">groups</span>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Atendentes Ativos</p>
+                  <p className="text-xl font-bold text-slate-800">{users.filter(u => u.status === 'Ativo').length}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Ranking de Atendentes */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-500">emoji_events</span>
+                Ranking de Atendentes
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">Performance de vendas por atendente</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase">#</th>
+                    <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase">Atendente</th>
+                    <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase">Faturamento Total</th>
+                    <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase">Faturamento Mês</th>
+                    <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase">Conversões</th>
+                    <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase">Ticket Médio</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {billingStats.byAttendant.map((att, index) => (
+                    <tr key={att.id} className="hover:bg-slate-50">
+                      <td className="py-4 px-6">
+                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
+                          index === 0 ? 'bg-amber-100 text-amber-700' :
+                          index === 1 ? 'bg-slate-200 text-slate-700' :
+                          index === 2 ? 'bg-orange-100 text-orange-700' :
+                          'bg-slate-100 text-slate-500'
+                        }`}>
+                          {index + 1}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-cyan-100 rounded-full flex items-center justify-center">
+                            <span className="text-cyan-700 font-medium text-sm">
+                              {att.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <span className="font-medium text-slate-800">{att.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-right font-semibold text-emerald-600">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.totalRevenue)}
+                      </td>
+                      <td className="py-4 px-6 text-right font-medium text-cyan-600">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.monthlyRevenue)}
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                          {att.conversions}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-right text-slate-600">
+                        {att.conversions > 0 
+                          ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.totalRevenue / att.conversions)
+                          : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                  {billingStats.byAttendant.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-500">
+                        Nenhum dado de faturamento disponível
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Criar Usuário */}
       {showCreateUserModal && (

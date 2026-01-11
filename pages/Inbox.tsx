@@ -116,7 +116,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Estados para bloqueio de conversa
-  const [chatLock, setChatLock] = useState<{ locked_by: string | null; locked_by_name: string | null } | null>(null);
+  const [chatLock, setChatLock] = useState<{ locked_by: string | null; locked_by_name: string | null; isForwardLock?: boolean; locked_at?: string } | null>(null);
   const [isLocking, setIsLocking] = useState(false);
   
   // Estados para encaminhamento de atendimento
@@ -248,19 +248,22 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     setShowStageDropdown(false);
   };
 
-  // Buscar responsável atual do chat
+  // Buscar responsável atual do chat e status de bloqueio
   const fetchChatAssignment = async (chatId: string) => {
     const { data: chatData } = await supabase
       .from('chats')
-      .select('assigned_to, locked_by')
+      .select('assigned_to, locked_by, locked_at')
       .eq('id', chatId)
       .single();
     
-    if (chatData?.assigned_to) {
+    const chat = chatData as any;
+    
+    // Buscar responsável (assigned_to)
+    if (chat?.assigned_to) {
       const { data: userData } = await supabase
         .from('users')
         .select('id, name')
-        .eq('id', (chatData as any).assigned_to)
+        .eq('id', chat.assigned_to)
         .single();
       
       if (userData) {
@@ -270,6 +273,25 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       }
     } else {
       setChatAssignedTo(null);
+    }
+    
+    // Buscar bloqueio (locked_by)
+    if (chat?.locked_by) {
+      const { data: lockerData } = await supabase
+        .from('users')
+        .select('id, name')
+        .eq('id', chat.locked_by)
+        .single();
+      
+      if (lockerData) {
+        setChatLock({ 
+          locked_by: chat.locked_by, 
+          locked_by_name: (lockerData as any).name, 
+          locked_at: chat.locked_at 
+        });
+      }
+    } else {
+      setChatLock(null);
     }
   };
 
@@ -363,45 +385,66 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   };
 
-  // Bloquear conversa quando usuário seleciona
+  // Bloquear conversa quando usuário seleciona (apenas bloqueio temporário de digitação)
   const lockChat = async (chatId: string) => {
     if (!user?.id) return;
     setIsLocking(true);
     
     try {
-      // Verificar se já está bloqueada por outro usuário
+      // Verificar se já está bloqueada (por encaminhamento ou outro usuário)
       const { data: chatData } = await supabase
         .from('chats')
-        .select('locked_by, locked_at')
+        .select('locked_by, locked_at, assigned_to')
         .eq('id', chatId)
         .single();
       
+      const chat = chatData as any;
       const lockTimeout = 5 * 60 * 1000; // 5 minutos
       const now = new Date();
       
-      if (chatData?.locked_by && chatData.locked_by !== user.id) {
-        const lockedAt = new Date(chatData.locked_at);
+      // Se tem assigned_to E locked_by, é bloqueio de encaminhamento - NÃO sobrescrever
+      if (chat?.assigned_to && chat?.locked_by) {
+        // Buscar nome do usuário que bloqueou
+        const { data: lockerData } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', chat.locked_by)
+          .single();
+        
+        setChatLock({ 
+          locked_by: chat.locked_by, 
+          locked_by_name: (lockerData as any)?.name || 'Outro usuário',
+          isForwardLock: true // Marcar como bloqueio de encaminhamento
+        });
+        return;
+      }
+      
+      // Bloqueio temporário de outro usuário
+      if (chat?.locked_by && chat.locked_by !== user.id) {
+        const lockedAt = new Date(chat.locked_at);
         if (now.getTime() - lockedAt.getTime() < lockTimeout) {
-          // Buscar nome do usuário que bloqueou
           const { data: lockerData } = await supabase
             .from('users')
             .select('name')
-            .eq('id', chatData.locked_by)
+            .eq('id', chat.locked_by)
             .single();
           
           setChatLock({ 
-            locked_by: chatData.locked_by, 
-            locked_by_name: (lockerData as any)?.name || 'Outro usuário' 
+            locked_by: chat.locked_by, 
+            locked_by_name: (lockerData as any)?.name || 'Outro usuário',
+            isForwardLock: false
           });
           return;
         }
       }
       
-      // Bloquear para este usuário
-      await supabase
-        .from('chats')
-        .update({ locked_by: user.id, locked_at: now.toISOString() })
-        .eq('id', chatId);
+      // Bloquear temporariamente para este usuário (apenas se não tem bloqueio de encaminhamento)
+      if (!chat?.assigned_to || !chat?.locked_by) {
+        await supabase
+          .from('chats')
+          .update({ locked_by: user.id, locked_at: now.toISOString() } as any)
+          .eq('id', chatId);
+      }
       
       setChatLock(null);
     } catch (err) {
@@ -411,16 +454,31 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   };
 
-  // Desbloquear conversa
+  // Desbloquear conversa (apenas bloqueio temporário, não de encaminhamento)
   const unlockChat = async (chatId: string) => {
     if (!user?.id) return;
     
     try {
+      // Verificar se é bloqueio de encaminhamento (tem assigned_to)
+      const { data: chatData } = await supabase
+        .from('chats')
+        .select('assigned_to, locked_by')
+        .eq('id', chatId)
+        .single();
+      
+      const chat = chatData as any;
+      
+      // Se tem assigned_to E locked_by, é bloqueio de encaminhamento - NÃO desbloquear automaticamente
+      if (chat?.assigned_to && chat?.locked_by) {
+        return;
+      }
+      
+      // Desbloquear apenas bloqueio temporário
       await supabase
         .from('chats')
-        .update({ locked_by: null, locked_at: null })
+        .update({ locked_by: null, locked_at: null } as any)
         .eq('id', chatId)
-        .eq('locked_by', user.id); // Só desbloqueia se foi ele que bloqueou
+        .eq('locked_by', user.id);
     } catch (err) {
       console.error('Error unlocking chat:', err);
     }
@@ -433,30 +491,51 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     const checkLock = async () => {
       const { data: chatData } = await supabase
         .from('chats')
-        .select('locked_by, locked_at')
+        .select('locked_by, locked_at, assigned_to')
         .eq('id', selectedChatId)
         .single();
       
-      if (chatData?.locked_by && chatData.locked_by !== user?.id) {
+      const chat = chatData as any;
+      
+      // Se é bloqueio de encaminhamento (tem assigned_to E locked_by), manter o lock
+      if (chat?.assigned_to && chat?.locked_by) {
+        const { data: lockerData } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', chat.locked_by)
+          .single();
+        
+        setChatLock({ 
+          locked_by: chat.locked_by, 
+          locked_by_name: (lockerData as any)?.name || 'Outro usuário',
+          isForwardLock: true
+        });
+        return;
+      }
+      
+      // Bloqueio temporário de outro usuário
+      if (chat?.locked_by && chat.locked_by !== user?.id) {
         const lockTimeout = 5 * 60 * 1000;
         const now = new Date();
-        const lockedAt = new Date(chatData.locked_at);
+        const lockedAt = new Date(chat.locked_at);
         
         if (now.getTime() - lockedAt.getTime() < lockTimeout) {
           const { data: lockerData } = await supabase
             .from('users')
             .select('name')
-            .eq('id', chatData.locked_by)
+            .eq('id', chat.locked_by)
             .single();
           
           setChatLock({ 
-            locked_by: chatData.locked_by, 
-            locked_by_name: (lockerData as any)?.name || 'Outro usuário' 
+            locked_by: chat.locked_by, 
+            locked_by_name: (lockerData as any)?.name || 'Outro usuário',
+            isForwardLock: false
           });
         } else {
           setChatLock(null);
         }
-      } else {
+      } else if (!chat?.assigned_to) {
+        // Só reseta se não for bloqueio de encaminhamento
         setChatLock(null);
       }
     };
@@ -1382,7 +1461,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     </>
                   )}
                 </div>
-                {chatLock ? (
+                {chatLock && chatLock.locked_by !== user?.id && chatAssignedTo?.id !== user?.id ? (
                   <div className="flex-1 flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
                     <span className="material-symbols-outlined text-lg">lock</span>
                     <span className="text-sm font-medium">{chatLock.locked_by_name} está respondendo esta conversa</span>
@@ -1525,7 +1604,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           </p>
                         </div>
                       </div>
-                      {chatAssignedTo.id === user?.id && chatLock && (
+                      {chatLock && chatAssignedTo.id === user?.id && (
                         <button
                           onClick={handleReleaseChat}
                           className="text-xs font-bold text-amber-600 hover:text-amber-700 bg-amber-50 px-2 py-1 rounded-lg"
@@ -1549,11 +1628,22 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   )}
                 </div>
                 {chatLock && chatLock.locked_by !== user?.id && (
-                  <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
-                    <span className="material-symbols-outlined text-amber-600 text-[16px]">lock</span>
-                    <p className="text-xs text-amber-700">
-                      <strong>{chatLock.locked_by_name}</strong> está atendendo esta conversa
-                    </p>
+                  <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-amber-600 text-[16px]">lock</span>
+                      <p className="text-xs text-amber-700">
+                        <strong>{chatLock.locked_by_name}</strong> está atendendo esta conversa
+                      </p>
+                    </div>
+                    {(user?.role === 'Admin' || user?.role === 'SuperAdmin' || user?.role === 'Gerente') && (
+                      <button
+                        onClick={handleReleaseChat}
+                        className="mt-2 w-full text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">lock_open</span>
+                        Desbloquear Conversa
+                      </button>
+                    )}
                   </div>
                 )}
               </section>
