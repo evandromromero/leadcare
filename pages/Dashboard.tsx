@@ -33,6 +33,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
   const [leadSourceStats, setLeadSourceStats] = useState<LeadSourceStats[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
+  
+  // Estados para meta do atendente
+  const [userGoalData, setUserGoalData] = useState<{
+    monthlyGoal: number;
+    canSeeGoal: boolean;
+    myMonthlyRevenue: number;
+  } | null>(null);
 
   const novosLeads = chats.filter(c => c.status === 'Novo Lead').length;
   const emAtendimento = chats.filter(c => c.status === 'Em Atendimento').length;
@@ -50,10 +57,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
       try {
         // Buscar view_mode do usuário para filtrar faturamento
         let userViewModeForStats = 'shared';
+        let userMonthlyGoal = 0;
+        let userCanSeeGoal = false;
         if (user?.id) {
           const { data: userData } = await supabase
             .from('users')
-            .select('view_mode, role')
+            .select('view_mode, role, monthly_goal, can_see_goal')
             .eq('id', user.id)
             .single();
           
@@ -61,6 +70,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           if (userData && (userData as any).role !== 'Admin' && (userData as any).role !== 'SuperAdmin') {
             userViewModeForStats = (userData as any).view_mode || 'personal';
           }
+          
+          // Dados de meta do usuário
+          userMonthlyGoal = (userData as any)?.monthly_goal || 0;
+          userCanSeeGoal = (userData as any)?.can_see_goal || false;
         }
         
         // Determinar quais chats usar para faturamento
@@ -78,6 +91,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           setTotalRevenue(0);
           setMonthlyRevenue(0);
           setLeadSourceStats([]);
+          // Setar dados de meta mesmo sem faturamento
+          if (userCanSeeGoal && userMonthlyGoal > 0) {
+            setUserGoalData({
+              monthlyGoal: userMonthlyGoal,
+              canSeeGoal: userCanSeeGoal,
+              myMonthlyRevenue: 0
+            });
+          } else {
+            setUserGoalData(null);
+          }
           setLoadingStats(false);
           return;
         }
@@ -99,9 +122,28 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             .filter(p => new Date(p.payment_date) >= firstDayOfMonth)
             .reduce((sum, p) => sum + Number(p.value), 0);
           setMonthlyRevenue(monthly);
+          
+          // Calcular faturamento pessoal do mês para meta do atendente
+          if (userCanSeeGoal && userMonthlyGoal > 0 && user?.id) {
+            // Buscar apenas chats do usuário
+            const myChats = chats.filter(c => c.assigned_to === user.id);
+            const myChatIds = myChats.map(c => c.id);
+            const myMonthlyRevenue = (paymentsData as any[])
+              .filter(p => myChatIds.includes(p.chat_id) && new Date(p.payment_date) >= firstDayOfMonth)
+              .reduce((sum, p) => sum + Number(p.value), 0);
+            
+            setUserGoalData({
+              monthlyGoal: userMonthlyGoal,
+              canSeeGoal: userCanSeeGoal,
+              myMonthlyRevenue
+            });
+          } else {
+            setUserGoalData(null);
+          }
         } else {
           setTotalRevenue(0);
           setMonthlyRevenue(0);
+          setUserGoalData(null);
         }
         
         // Buscar origens de leads apenas se houver chats visíveis
@@ -222,6 +264,64 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             </div>
           </div>
         </div>
+        )}
+
+        {/* Minha Meta do Mês - Visível apenas para atendentes com permissão */}
+        {userGoalData && userGoalData.canSeeGoal && userGoalData.monthlyGoal > 0 && (
+          <div className="bg-gradient-to-br from-violet-500 to-violet-600 p-6 rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <p className="text-violet-100 text-sm font-medium uppercase tracking-wider flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[16px]">flag</span>
+                  Minha Meta do Mês
+                </p>
+                <p className="text-4xl font-black mt-1">
+                  {((userGoalData.myMonthlyRevenue / userGoalData.monthlyGoal) * 100).toFixed(0)}%
+                </p>
+              </div>
+              <div className="bg-white/20 p-3 rounded-xl">
+                <span className="material-symbols-outlined text-2xl">
+                  {userGoalData.myMonthlyRevenue >= userGoalData.monthlyGoal ? 'emoji_events' : 'target'}
+                </span>
+              </div>
+            </div>
+            
+            {/* Barra de progresso */}
+            <div className="mb-4">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-violet-100">
+                  R$ {userGoalData.myMonthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+                <span className="text-violet-200">
+                  Meta: R$ {userGoalData.monthlyGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="w-full bg-white/20 rounded-full h-3 overflow-hidden">
+                <div 
+                  className={`h-3 rounded-full transition-all duration-500 ${
+                    userGoalData.myMonthlyRevenue >= userGoalData.monthlyGoal 
+                      ? 'bg-emerald-400' 
+                      : 'bg-white'
+                  }`}
+                  style={{ width: `${Math.min((userGoalData.myMonthlyRevenue / userGoalData.monthlyGoal) * 100, 100)}%` }}
+                ></div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 text-violet-100 text-sm">
+              {userGoalData.myMonthlyRevenue >= userGoalData.monthlyGoal ? (
+                <>
+                  <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                  Parabéns! Meta atingida! 🎉
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[16px]">trending_up</span>
+                  Faltam R$ {(userGoalData.monthlyGoal - userGoalData.myMonthlyRevenue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para a meta
+                </>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Leads por Origem */}

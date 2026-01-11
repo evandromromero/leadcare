@@ -35,6 +35,7 @@ interface ClinicDetail {
   can_create_users: boolean;
   created_at: string;
   updated_at: string;
+  monthly_goal?: number;
 }
 
 interface ClinicUser {
@@ -45,6 +46,8 @@ interface ClinicUser {
   status: string;
   created_at: string;
   default_instance_id?: string | null;
+  monthly_goal?: number | null;
+  can_see_goal?: boolean;
 }
 
 interface ClinicStats {
@@ -107,6 +110,19 @@ interface MetricsData {
   lostLeads: number;
   lossRate: number;
   responseTimeByAttendant: Map<string, { total: number; count: number }>;
+  // Dados para gráficos de evolução
+  dailyData: Array<{
+    date: string;
+    revenue: number;
+    leads: number;
+    conversions: number;
+  }>;
+  // Meta mensal
+  monthlyGoal: number;
+  monthlyRevenue: number;
+  // Previsão
+  projectedRevenue: number;
+  daysRemaining: number;
 }
 
 // Componente de Tooltip para informações
@@ -196,6 +212,13 @@ const AdminClinicDetail: React.FC = () => {
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [permissionsUser, setPermissionsUser] = useState<ClinicUser | null>(null);
   
+  // Estados para modal de metas
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [clinicGoal, setClinicGoal] = useState<number>(50000);
+  const [userGoals, setUserGoals] = useState<Record<string, number>>({});
+  const [userCanSeeGoal, setUserCanSeeGoal] = useState<Record<string, boolean>>({});
+  const [savingGoals, setSavingGoals] = useState(false);
+  
   // Estado para abas
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'whatsapp' | 'metrics'>('overview');
   
@@ -215,7 +238,12 @@ const AdminClinicDetail: React.FC = () => {
     leadsAwaiting: 0,
     lostLeads: 0,
     lossRate: 0,
-    responseTimeByAttendant: new Map()
+    responseTimeByAttendant: new Map(),
+    dailyData: [],
+    monthlyGoal: 0,
+    monthlyRevenue: 0,
+    projectedRevenue: 0,
+    daysRemaining: 0
   });
   const [loadingMetrics, setLoadingMetrics] = useState(false);
 
@@ -240,11 +268,11 @@ const AdminClinicDetail: React.FC = () => {
       // Buscar usuários da clínica
       const { data: usersData } = await supabase
         .from('users')
-        .select('id, name, email, role, status, created_at, default_instance_id')
+        .select('id, name, email, role, status, created_at, default_instance_id, monthly_goal, can_see_goal')
         .eq('clinic_id', id)
         .order('created_at', { ascending: false });
 
-      setUsers((usersData || []) as ClinicUser[]);
+      setUsers((usersData || []) as unknown as ClinicUser[]);
 
       // Buscar estatísticas
       const [usersCount, chatsCount, messagesCount, leadsCount] = await Promise.all([
@@ -556,6 +584,42 @@ const AdminClinicDetail: React.FC = () => {
       // Taxa de perda
       const lossRate = periodLeads > 0 ? (lostLeads / periodLeads) * 100 : 0;
       
+      // Dados diários para gráfico de evolução (últimos 30 dias)
+      const dailyData: Array<{ date: string; revenue: number; leads: number; conversions: number }> = [];
+      const today = new Date();
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        const dayLeads = allChats.filter(c => c.created_at.startsWith(dateStr)).length;
+        const dayConversions = allChats.filter(c => c.status === 'Convertido' && c.created_at.startsWith(dateStr)).length;
+        const dayRevenue = allPayments.filter(p => p.payment_date.startsWith(dateStr)).reduce((sum, p) => sum + p.value, 0);
+        
+        dailyData.push({
+          date: dateStr,
+          revenue: dayRevenue,
+          leads: dayLeads,
+          conversions: dayConversions
+        });
+      }
+      
+      // Meta mensal da clínica (do banco de dados)
+      const monthlyGoal = clinic?.monthly_goal || 50000;
+      
+      // Faturamento do mês atual
+      const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      const monthlyRevenue = allPayments
+        .filter(p => new Date(p.payment_date) >= currentMonthStart)
+        .reduce((sum, p) => sum + p.value, 0);
+      
+      // Previsão de faturamento (baseado no ritmo atual)
+      const dayOfMonth = today.getDate();
+      const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      const daysRemaining = daysInMonth - dayOfMonth;
+      const dailyAverage = dayOfMonth > 0 ? monthlyRevenue / dayOfMonth : 0;
+      const projectedRevenue = monthlyRevenue + (dailyAverage * daysRemaining);
+      
       setMetricsData({
         periodRevenue,
         periodConversions,
@@ -570,7 +634,12 @@ const AdminClinicDetail: React.FC = () => {
         leadsAwaiting,
         lostLeads,
         lossRate,
-        responseTimeByAttendant
+        responseTimeByAttendant,
+        dailyData,
+        monthlyGoal,
+        monthlyRevenue,
+        projectedRevenue,
+        daysRemaining
       });
     } catch (error) {
       console.error('Error fetching metrics:', error);
@@ -585,6 +654,62 @@ const AdminClinicDetail: React.FC = () => {
       fetchMetricsData();
     }
   }, [activeTab, metricsPeriod, id]);
+
+  // Função para abrir modal de metas
+  const openGoalsModal = () => {
+    setClinicGoal(clinic?.monthly_goal || 50000);
+    const goals: Record<string, number> = {};
+    const canSee: Record<string, boolean> = {};
+    users.forEach(u => {
+      goals[u.id] = u.monthly_goal || 0;
+      canSee[u.id] = u.can_see_goal || false;
+    });
+    setUserGoals(goals);
+    setUserCanSeeGoal(canSee);
+    setShowGoalsModal(true);
+  };
+
+  // Função para salvar metas
+  const saveGoals = async () => {
+    if (!clinic) return;
+    setSavingGoals(true);
+    try {
+      // Salvar meta da clínica
+      await supabase
+        .from('clinics')
+        .update({ monthly_goal: clinicGoal } as any)
+        .eq('id', clinic.id);
+      
+      // Salvar metas dos usuários
+      for (const [userId, goalValue] of Object.entries(userGoals)) {
+        const goal = goalValue as number;
+        const canSee = userCanSeeGoal[userId] || false;
+        await supabase
+          .from('users')
+          .update({ 
+            monthly_goal: goal > 0 ? goal : null,
+            can_see_goal: canSee
+          } as any)
+          .eq('id', userId);
+      }
+      
+      // Atualizar dados locais
+      setClinic({ ...clinic, monthly_goal: clinicGoal });
+      setUsers(users.map(u => ({ 
+        ...u, 
+        monthly_goal: userGoals[u.id] || null,
+        can_see_goal: userCanSeeGoal[u.id] || false
+      })));
+      
+      setShowGoalsModal(false);
+      // Recarregar métricas
+      fetchMetricsData();
+    } catch (error) {
+      console.error('Erro ao salvar metas:', error);
+    } finally {
+      setSavingGoals(false);
+    }
+  };
 
   // Função para exportar relatório em Excel (CSV)
   const exportToExcel = () => {
@@ -1835,6 +1960,219 @@ const AdminClinicDetail: React.FC = () => {
             </div>
           </div>
 
+          {/* Meta vs Realizado e Previsão */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Meta vs Realizado */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-violet-600">flag</span>
+                    Meta do Mês
+                  </h2>
+                  <p className="text-sm text-slate-500">Progresso em relação à meta mensal</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={openGoalsModal}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">settings</span>
+                    Configurar
+                  </button>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-slate-800">
+                      {((metricsData.monthlyRevenue / metricsData.monthlyGoal) * 100).toFixed(0)}%
+                    </p>
+                    <p className="text-xs text-slate-500">da meta</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mb-4">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-slate-600">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metricsData.monthlyRevenue)}
+                  </span>
+                  <span className="text-slate-400">
+                    Meta: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metricsData.monthlyGoal)}
+                  </span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden">
+                  <div 
+                    className={`h-4 rounded-full transition-all duration-500 ${
+                      metricsData.monthlyRevenue >= metricsData.monthlyGoal 
+                        ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' 
+                        : metricsData.monthlyRevenue >= metricsData.monthlyGoal * 0.7
+                          ? 'bg-gradient-to-r from-amber-500 to-amber-400'
+                          : 'bg-gradient-to-r from-violet-500 to-violet-400'
+                    }`}
+                    style={{ width: `${Math.min((metricsData.monthlyRevenue / metricsData.monthlyGoal) * 100, 100)}%` }}
+                  ></div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                {metricsData.monthlyRevenue >= metricsData.monthlyGoal ? (
+                  <span className="flex items-center gap-1 text-emerald-600">
+                    <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                    Meta atingida!
+                  </span>
+                ) : (
+                  <span className="text-slate-500">
+                    Faltam {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metricsData.monthlyGoal - metricsData.monthlyRevenue)} para a meta
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Previsão de Faturamento */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-cyan-600">trending_up</span>
+                    Previsão do Mês
+                  </h2>
+                  <p className="text-sm text-slate-500">Estimativa baseada no ritmo atual</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-slate-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-slate-500 mb-1">Realizado até agora</p>
+                  <p className="text-xl font-bold text-slate-800">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metricsData.monthlyRevenue)}
+                  </p>
+                </div>
+                <div className="bg-cyan-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-cyan-600 mb-1">Previsão final</p>
+                  <p className="text-xl font-bold text-cyan-700">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metricsData.projectedRevenue)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">
+                  {metricsData.daysRemaining} dias restantes no mês
+                </span>
+                {metricsData.projectedRevenue >= metricsData.monthlyGoal ? (
+                  <span className="flex items-center gap-1 text-emerald-600">
+                    <span className="material-symbols-outlined text-[18px]">thumb_up</span>
+                    Deve atingir a meta
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-amber-600">
+                    <span className="material-symbols-outlined text-[18px]">warning</span>
+                    Abaixo da meta prevista
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Gráfico de Evolução */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                <span className="material-symbols-outlined text-indigo-600">show_chart</span>
+                Evolução dos Últimos 30 Dias
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">Faturamento, leads e conversões por dia</p>
+            </div>
+            <div className="p-6">
+              {/* Mini gráfico de barras */}
+              <div className="space-y-6">
+                {/* Faturamento */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                      <span className="w-3 h-3 bg-emerald-500 rounded"></span>
+                      Faturamento Diário
+                    </span>
+                    <span className="text-sm text-slate-500">
+                      Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                        metricsData.dailyData.reduce((sum, d) => sum + d.revenue, 0)
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-end gap-[2px] h-16">
+                    {metricsData.dailyData.map((day, idx) => {
+                      const maxRevenue = Math.max(...metricsData.dailyData.map(d => d.revenue), 1);
+                      const height = (day.revenue / maxRevenue) * 100;
+                      return (
+                        <div 
+                          key={idx}
+                          className="flex-1 bg-emerald-500 rounded-t hover:bg-emerald-400 transition-colors cursor-pointer group relative"
+                          style={{ height: `${Math.max(height, 2)}%` }}
+                          title={`${new Date(day.date).toLocaleDateString('pt-BR')}: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(day.revenue)}`}
+                        >
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>{new Date(metricsData.dailyData[0]?.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+                    <span>Hoje</span>
+                  </div>
+                </div>
+
+                {/* Leads */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                      <span className="w-3 h-3 bg-cyan-500 rounded"></span>
+                      Leads por Dia
+                    </span>
+                    <span className="text-sm text-slate-500">
+                      Total: {metricsData.dailyData.reduce((sum, d) => sum + d.leads, 0)} leads
+                    </span>
+                  </div>
+                  <div className="flex items-end gap-[2px] h-12">
+                    {metricsData.dailyData.map((day, idx) => {
+                      const maxLeads = Math.max(...metricsData.dailyData.map(d => d.leads), 1);
+                      const height = (day.leads / maxLeads) * 100;
+                      return (
+                        <div 
+                          key={idx}
+                          className="flex-1 bg-cyan-500 rounded-t hover:bg-cyan-400 transition-colors cursor-pointer"
+                          style={{ height: `${Math.max(height, 2)}%` }}
+                          title={`${new Date(day.date).toLocaleDateString('pt-BR')}: ${day.leads} leads`}
+                        >
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Conversões */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                      <span className="w-3 h-3 bg-violet-500 rounded"></span>
+                      Conversões por Dia
+                    </span>
+                    <span className="text-sm text-slate-500">
+                      Total: {metricsData.dailyData.reduce((sum, d) => sum + d.conversions, 0)} conversões
+                    </span>
+                  </div>
+                  <div className="flex items-end gap-[2px] h-12">
+                    {metricsData.dailyData.map((day, idx) => {
+                      const maxConversions = Math.max(...metricsData.dailyData.map(d => d.conversions), 1);
+                      const height = (day.conversions / maxConversions) * 100;
+                      return (
+                        <div 
+                          key={idx}
+                          className="flex-1 bg-violet-500 rounded-t hover:bg-violet-400 transition-colors cursor-pointer"
+                          style={{ height: `${Math.max(height, 2)}%` }}
+                          title={`${new Date(day.date).toLocaleDateString('pt-BR')}: ${day.conversions} conversões`}
+                        >
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Tempo e Produtividade */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
             <div className="p-6 border-b border-slate-200">
@@ -2006,8 +2344,13 @@ const AdminClinicDetail: React.FC = () => {
                     <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase">#</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase">Atendente</th>
                     <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase">Faturamento</th>
+                    <th className="text-center py-3 px-4 text-xs font-semibold text-slate-500 uppercase">
+                      <div className="flex items-center justify-center gap-1">
+                        Meta
+                        <InfoTooltip text="Progresso em relação à meta individual do mês. Configure as metas no botão 'Configurar'." />
+                      </div>
+                    </th>
                     <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase">Conversões</th>
-                    <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase">Ticket Médio</th>
                     <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase">
                       <div className="flex items-center justify-end gap-1">
                         Tempo Resposta
@@ -2020,6 +2363,9 @@ const AdminClinicDetail: React.FC = () => {
                   {billingStats.byAttendant.map((att, index) => {
                     const responseData = metricsData.responseTimeByAttendant.get(att.id);
                     const avgResponseTime = responseData ? Math.round((responseData.total / responseData.count) / (1000 * 60)) : null;
+                    const userInfo = users.find(u => u.id === att.id);
+                    const userGoal = userInfo?.monthly_goal || 0;
+                    const goalProgress = userGoal > 0 ? (att.monthlyRevenue / userGoal) * 100 : null;
                     return (
                     <tr key={att.id} className="hover:bg-slate-50">
                       <td className="py-4 px-4">
@@ -2043,17 +2389,37 @@ const AdminClinicDetail: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-4 px-4 text-right font-semibold text-emerald-600">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.totalRevenue)}
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.monthlyRevenue)}
+                      </td>
+                      <td className="py-4 px-4">
+                        {goalProgress !== null ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden" style={{ minWidth: '80px' }}>
+                              <div 
+                                className={`h-2 rounded-full transition-all ${
+                                  goalProgress >= 100 ? 'bg-emerald-500' :
+                                  goalProgress >= 70 ? 'bg-amber-500' :
+                                  'bg-violet-500'
+                                }`}
+                                style={{ width: `${Math.min(goalProgress, 100)}%` }}
+                              ></div>
+                            </div>
+                            <span className={`text-xs font-medium ${
+                              goalProgress >= 100 ? 'text-emerald-600' :
+                              goalProgress >= 70 ? 'text-amber-600' :
+                              'text-violet-600'
+                            }`}>
+                              {goalProgress.toFixed(0)}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs">Sem meta</span>
+                        )}
                       </td>
                       <td className="py-4 px-4 text-right">
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
                           {att.conversions}
                         </span>
-                      </td>
-                      <td className="py-4 px-4 text-right text-slate-600">
-                        {att.conversions > 0 
-                          ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.totalRevenue / att.conversions)
-                          : '-'}
                       </td>
                       <td className="py-4 px-4 text-right">
                         {avgResponseTime !== null ? (
@@ -2535,6 +2901,127 @@ const AdminClinicDetail: React.FC = () => {
               <button 
                 onClick={() => { setShowDeleteConfirm(false); setUserToDelete(null); }}
                 className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Configuração de Metas */}
+      {showGoalsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowGoalsModal(false)}></div>
+          <div className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex-shrink-0">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <span className="material-symbols-outlined text-violet-600">flag</span>
+                Configurar Metas Mensais
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">Defina as metas de faturamento da clínica e dos atendentes</p>
+            </div>
+            
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+              {/* Meta da Clínica */}
+              <div className="bg-violet-50 rounded-xl p-4">
+                <label className="text-sm font-bold text-violet-700 flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined text-[18px]">business</span>
+                  Meta Geral da Clínica
+                </label>
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-500">R$</span>
+                  <input 
+                    type="number"
+                    value={clinicGoal}
+                    onChange={(e) => setClinicGoal(Number(e.target.value))}
+                    className="flex-1 h-12 rounded-lg border-slate-200 focus:ring-violet-500 focus:border-violet-500 px-4 text-lg font-bold"
+                    placeholder="50000"
+                  />
+                </div>
+                <p className="text-xs text-violet-600 mt-2">
+                  Esta é a meta total de faturamento mensal da clínica
+                </p>
+              </div>
+
+              {/* Metas por Atendente */}
+              <div>
+                <label className="text-sm font-bold text-slate-700 flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined text-[18px]">group</span>
+                  Metas Individuais por Atendente
+                </label>
+                <div className="space-y-3">
+                  {users.filter(u => u.status === 'Ativo').map(user => (
+                    <div key={user.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                      <div className="w-10 h-10 bg-cyan-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span className="text-cyan-700 font-medium">
+                          {user.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-800 truncate">{user.name}</p>
+                        <p className="text-xs text-slate-500">{user.role}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-400 text-sm">R$</span>
+                          <input 
+                            type="number"
+                            value={userGoals[user.id] || ''}
+                            onChange={(e) => setUserGoals({ ...userGoals, [user.id]: Number(e.target.value) })}
+                            className="w-24 h-10 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-3 text-right font-medium"
+                            placeholder="0"
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer" title="Permitir que o atendente veja sua meta">
+                          <input
+                            type="checkbox"
+                            checked={userCanSeeGoal[user.id] || false}
+                            onChange={(e) => setUserCanSeeGoal({ ...userCanSeeGoal, [user.id]: e.target.checked })}
+                            className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                          />
+                          <span className="material-symbols-outlined text-[18px] text-slate-500">visibility</span>
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                  {users.filter(u => u.status === 'Ativo').length === 0 && (
+                    <p className="text-sm text-slate-500 text-center py-4">
+                      Nenhum atendente ativo encontrado
+                    </p>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-3">
+                  Deixe em branco ou 0 para atendentes sem meta individual. 
+                  <span className="inline-flex items-center gap-1 ml-1">
+                    <span className="material-symbols-outlined text-[14px]">visibility</span>
+                    = atendente pode ver sua meta
+                  </span>
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 flex gap-3 flex-shrink-0">
+              <button 
+                onClick={saveGoals}
+                disabled={savingGoals}
+                className="flex-1 h-11 bg-violet-600 text-white font-bold rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingGoals ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">save</span>
+                    Salvar Metas
+                  </>
+                )}
+              </button>
+              <button 
+                onClick={() => setShowGoalsModal(false)}
+                className="px-6 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
               >
                 Cancelar
               </button>
