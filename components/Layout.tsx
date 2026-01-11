@@ -5,6 +5,7 @@ import { GlobalState, WhatsAppStatus } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useChats } from '../hooks/useChats';
 import ImpersonateBanner from './ImpersonateBanner';
+import { canAccessPage, MenuPage } from '../lib/permissions';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -39,13 +40,15 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
     navigate('/login');
   };
 
-  const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { path: '/inbox', label: 'Caixa de Entrada', icon: 'inbox', badge: state.chats.reduce((acc, c) => acc + c.unreadCount, 0) },
-    { path: '/kanban', label: 'Leads (Kanban)', icon: 'view_kanban' },
-    { path: '/users', label: 'Usuários (Admin)', icon: 'group' },
-    { path: '/settings', label: 'Configurações', icon: 'settings' },
+  const allNavItems = [
+    { path: '/dashboard', label: 'Dashboard', icon: 'dashboard', page: 'dashboard' as MenuPage },
+    { path: '/inbox', label: 'Caixa de Entrada', icon: 'inbox', badge: state.chats.reduce((acc, c) => acc + c.unreadCount, 0), page: 'inbox' as MenuPage },
+    { path: '/kanban', label: 'Leads (Kanban)', icon: 'view_kanban', page: 'kanban' as MenuPage },
+    { path: '/users', label: 'Usuários', icon: 'group', page: 'users' as MenuPage },
+    { path: '/settings', label: 'Configurações', icon: 'settings', page: 'settings' as MenuPage },
   ];
+
+  const navItems = allNavItems.filter(item => canAccessPage(user?.role, item.page));
 
   const statusColors = {
     connected: 'bg-green-500',

@@ -4,6 +4,7 @@ import { GlobalState } from '../types';
 import { useChats, ChatWithMessages, DbTag } from '../hooks/useChats';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { hasPermission } from '../lib/permissions';
 
 const DEFAULT_QUICK_REPLIES = [
   { id: '1', text: 'Olá! Como posso ajudar você hoje?' },
@@ -34,6 +35,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [msgInput, setMsgInput] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('todos');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const canSendMessage = hasPermission(user?.role, 'send_message');
+  const canMoveLead = hasPermission(user?.role, 'move_lead');
+  const canAddPayment = hasPermission(user?.role, 'add_payment');
+  const canAddQuote = hasPermission(user?.role, 'add_quote');
   
   // Estados para modais
   const [showStageDropdown, setShowStageDropdown] = useState(false);
@@ -113,6 +119,14 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [chatLock, setChatLock] = useState<{ locked_by: string | null; locked_by_name: string | null } | null>(null);
   const [isLocking, setIsLocking] = useState(false);
   
+  // Estados para encaminhamento de atendimento
+  const [clinicUsers, setClinicUsers] = useState<Array<{ id: string; name: string; role: string; status: string }>>([]);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [forwardingTo, setForwardingTo] = useState<string | null>(null);
+  const [forwardWithLock, setForwardWithLock] = useState(true);
+  const [savingForward, setSavingForward] = useState(false);
+  const [chatAssignedTo, setChatAssignedTo] = useState<{ id: string; name: string } | null>(null);
+  
   // Cache de nomes de usuários para exibir nas mensagens
   const [userNames, setUserNames] = useState<Record<string, string>>({});
   
@@ -142,6 +156,26 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       }
     };
     fetchQuickReplies();
+  }, [clinicId]);
+
+  // Buscar usuários da clínica para encaminhamento
+  useEffect(() => {
+    const fetchClinicUsers = async () => {
+      if (!clinicId) return;
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, name, role, status')
+        .eq('clinic_id', clinicId)
+        .eq('status', 'Ativo')
+        .order('name');
+      
+      console.log('[Inbox] Buscando usuários da clínica:', clinicId, 'Resultado:', data, 'Erro:', error);
+      
+      if (data) {
+        setClinicUsers(data as Array<{ id: string; name: string; role: string; status: string }>);
+      }
+    };
+    fetchClinicUsers();
   }, [clinicId]);
 
   // Buscar chats com follow-up pendente (mensagens agendadas)
@@ -212,6 +246,121 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     if (!selectedChatId) return;
     await updateChatStatus(selectedChatId, newStatus);
     setShowStageDropdown(false);
+  };
+
+  // Buscar responsável atual do chat
+  const fetchChatAssignment = async (chatId: string) => {
+    const { data: chatData } = await supabase
+      .from('chats')
+      .select('assigned_to, locked_by')
+      .eq('id', chatId)
+      .single();
+    
+    if (chatData?.assigned_to) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id, name')
+        .eq('id', (chatData as any).assigned_to)
+        .single();
+      
+      if (userData) {
+        setChatAssignedTo({ id: (userData as any).id, name: (userData as any).name });
+      } else {
+        setChatAssignedTo(null);
+      }
+    } else {
+      setChatAssignedTo(null);
+    }
+  };
+
+  // Encaminhar conversa para outro usuário
+  const handleForwardChat = async () => {
+    if (!selectedChatId || !forwardingTo) return;
+    
+    setSavingForward(true);
+    try {
+      const updateData: any = {
+        assigned_to: forwardingTo,
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Se marcou para bloquear, adiciona o bloqueio
+      if (forwardWithLock) {
+        updateData.locked_by = forwardingTo;
+        updateData.locked_at = new Date().toISOString();
+      }
+      
+      await supabase
+        .from('chats')
+        .update(updateData)
+        .eq('id', selectedChatId);
+      
+      // Atualizar estado local
+      const forwardedUser = clinicUsers.find(u => u.id === forwardingTo);
+      if (forwardedUser) {
+        setChatAssignedTo({ id: forwardedUser.id, name: forwardedUser.name });
+      }
+      
+      // Se bloqueou para outro usuário, mostrar o lock
+      if (forwardWithLock && forwardingTo !== user?.id) {
+        setChatLock({ 
+          locked_by: forwardingTo, 
+          locked_by_name: forwardedUser?.name || 'Outro usuário' 
+        });
+      }
+      
+      setShowForwardModal(false);
+      setForwardingTo(null);
+      refetch();
+    } catch (err) {
+      console.error('Error forwarding chat:', err);
+    } finally {
+      setSavingForward(false);
+    }
+  };
+
+  // Liberar conversa (remover bloqueio e responsável)
+  const handleReleaseChat = async () => {
+    if (!selectedChatId) return;
+    
+    try {
+      await supabase
+        .from('chats')
+        .update({ 
+          locked_by: null, 
+          locked_at: null,
+          updated_at: new Date().toISOString()
+        } as any)
+        .eq('id', selectedChatId);
+      
+      setChatLock(null);
+      refetch();
+    } catch (err) {
+      console.error('Error releasing chat:', err);
+    }
+  };
+
+  // Assumir atendimento
+  const handleAssumeChat = async () => {
+    if (!selectedChatId || !user?.id) return;
+    
+    try {
+      await supabase
+        .from('chats')
+        .update({ 
+          assigned_to: user.id,
+          locked_by: user.id,
+          locked_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        } as any)
+        .eq('id', selectedChatId);
+      
+      setChatAssignedTo({ id: user.id, name: user.name || 'Você' });
+      setChatLock(null);
+      refetch();
+    } catch (err) {
+      console.error('Error assuming chat:', err);
+    }
   };
 
   // Bloquear conversa quando usuário seleciona
@@ -788,6 +937,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   useEffect(() => {
     if (selectedChatId) {
       lockChat(selectedChatId);
+      fetchChatAssignment(selectedChatId);
     }
     
     // Cleanup: desbloquear ao sair da conversa
@@ -1237,6 +1387,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     <span className="material-symbols-outlined text-lg">lock</span>
                     <span className="text-sm font-medium">{chatLock.locked_by_name} está respondendo esta conversa</span>
                   </div>
+                ) : !canSendMessage ? (
+                  <div className="flex-1 flex items-center gap-2 text-slate-500 bg-slate-50 px-3 py-2 rounded-lg">
+                    <span className="material-symbols-outlined text-lg">visibility</span>
+                    <span className="text-sm font-medium">Modo visualização - sem permissão para responder</span>
+                  </div>
                 ) : (
                   <>
                     <textarea 
@@ -1294,12 +1449,14 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               <section className="relative">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Funil de Vendas</h3>
+                  {canMoveLead && (
                   <button 
                     onClick={() => setShowStageDropdown(!showStageDropdown)}
                     className="text-xs font-bold text-cyan-600 hover:text-cyan-700"
                   >
                     Alterar
                   </button>
+                  )}
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                    <p className="text-xs font-bold text-slate-400 uppercase mb-1">Etapa Atual</p>
@@ -1333,6 +1490,70 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         )}
                       </button>
                     ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Seção Responsável pelo Atendimento */}
+              <section>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Responsável</h3>
+                  {canSendMessage && (
+                    <button 
+                      onClick={() => setShowForwardModal(true)}
+                      className="text-xs font-bold text-cyan-600 hover:text-cyan-700"
+                    >
+                      Encaminhar
+                    </button>
+                  )}
+                </div>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  {chatAssignedTo ? (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="size-10 bg-cyan-100 rounded-full flex items-center justify-center">
+                          <span className="text-cyan-700 font-bold text-sm">
+                            {chatAssignedTo.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">
+                            {chatAssignedTo.id === user?.id ? 'Você' : chatAssignedTo.name}
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            {chatLock ? 'Atendendo agora' : 'Responsável'}
+                          </p>
+                        </div>
+                      </div>
+                      {chatAssignedTo.id === user?.id && chatLock && (
+                        <button
+                          onClick={handleReleaseChat}
+                          className="text-xs font-bold text-amber-600 hover:text-amber-700 bg-amber-50 px-2 py-1 rounded-lg"
+                        >
+                          Liberar
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-slate-500">Nenhum responsável</p>
+                      {canSendMessage && (
+                        <button
+                          onClick={handleAssumeChat}
+                          className="text-xs font-bold text-cyan-600 hover:text-cyan-700 bg-cyan-50 px-2 py-1 rounded-lg"
+                        >
+                          Assumir
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {chatLock && chatLock.locked_by !== user?.id && (
+                  <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
+                    <span className="material-symbols-outlined text-amber-600 text-[16px]">lock</span>
+                    <p className="text-xs text-amber-700">
+                      <strong>{chatLock.locked_by_name}</strong> está atendendo esta conversa
+                    </p>
                   </div>
                 )}
               </section>
@@ -2142,6 +2363,105 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           </div>
         )}
       </aside>
+
+      {/* Modal de Encaminhamento */}
+      {showForwardModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowForwardModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-cyan-500 to-blue-600">
+              <div className="flex items-center gap-3">
+                <div className="size-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white">forward_to_inbox</span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-white">Encaminhar Atendimento</h3>
+                  <p className="text-white/80 text-sm">Selecione o responsável</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowForwardModal(false)}
+                className="text-white/80 hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-2">
+                {clinicUsers.filter(u => u.id !== user?.id).map(u => (
+                  <button
+                    key={u.id}
+                    onClick={() => setForwardingTo(u.id)}
+                    className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                      forwardingTo === u.id 
+                        ? 'border-cyan-500 bg-cyan-50' 
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className={`size-10 rounded-full flex items-center justify-center ${
+                      forwardingTo === u.id ? 'bg-cyan-500 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      <span className="font-bold text-sm">{u.name.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-bold text-slate-800">{u.name}</p>
+                      <p className="text-xs text-slate-500">{u.role}</p>
+                    </div>
+                    {forwardingTo === u.id && (
+                      <span className="material-symbols-outlined text-cyan-600">check_circle</span>
+                    )}
+                  </button>
+                ))}
+                
+                {clinicUsers.filter(u => u.id !== user?.id).length === 0 && (
+                  <p className="text-center text-slate-500 py-4">Nenhum outro usuário disponível</p>
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={forwardWithLock}
+                    onChange={(e) => setForwardWithLock(e.target.checked)}
+                    className="size-5 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                  />
+                  <div>
+                    <p className="font-bold text-sm text-slate-800">Bloquear conversa</p>
+                    <p className="text-xs text-slate-500">Apenas o responsável poderá responder</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={handleForwardChat}
+                disabled={!forwardingTo || savingForward}
+                className="flex-1 h-11 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingForward ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Encaminhando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">send</span>
+                    Encaminhar
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setShowForwardModal(false)}
+                className="px-6 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

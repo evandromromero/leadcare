@@ -4,6 +4,7 @@ import { GlobalState } from '../types';
 import { useUsers } from '../hooks/useUsers';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { hasPermission, getRoleDescription, ROLE_PERMISSIONS, UserRole } from '../lib/permissions';
 
 interface UsersProps {
   state: GlobalState;
@@ -19,7 +20,13 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
   const [creatingUser, setCreatingUser] = useState(false);
   const [createUserError, setCreateUserError] = useState<string | null>(null);
 
-  const isAdmin = user?.role === 'Admin' || user?.role === 'SuperAdmin';
+  const canCreateUser = hasPermission(user?.role, 'create_user');
+  const canEditUser = hasPermission(user?.role, 'edit_user');
+  const canChangeRole = hasPermission(user?.role, 'change_role');
+  const canChangeStatus = hasPermission(user?.role, 'change_status');
+  
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingRole, setEditingRole] = useState<string>('');
 
   useEffect(() => {
     const checkPermission = async () => {
@@ -95,7 +102,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestão de Equipe</h1>
             <p className="text-slate-500">Gerencie o acesso e permissões dos membros da sua clínica.</p>
           </div>
-          {isAdmin && canCreateUsers && (
+          {canCreateUser && canCreateUsers && (
             <button 
               onClick={() => setIsModalOpen(true)}
               className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold h-11 px-6 rounded-xl shadow-lg shadow-cyan-500/30 flex items-center gap-2 transition-all transform hover:-translate-y-0.5"
@@ -157,11 +164,31 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                        <span className="text-xs font-bold text-slate-600">{clinic?.name || '-'}</span>
                     </td>
                     <td className="px-6 py-4">
-                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-tighter ${
-                         user.role === 'Admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-cyan-50 text-cyan-700 border-cyan-200'
-                       }`}>
-                         {user.role}
-                       </span>
+                       {editingUserId === user.id && canChangeRole ? (
+                         <select
+                           value={editingRole}
+                           onChange={(e) => setEditingRole(e.target.value)}
+                           className="h-8 text-xs rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-2"
+                         >
+                           {Object.keys(ROLE_PERMISSIONS).filter(r => r !== 'SuperAdmin').map(role => (
+                             <option key={role} value={role}>{role}</option>
+                           ))}
+                         </select>
+                       ) : (
+                         <span 
+                           className={`px-2 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-tighter cursor-help ${
+                             user.role === 'Admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 
+                             user.role === 'Gerente' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                             user.role === 'Supervisor' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                             user.role === 'Financeiro' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                             user.role === 'Visualizador' ? 'bg-slate-50 text-slate-700 border-slate-200' :
+                             'bg-cyan-50 text-cyan-700 border-cyan-200'
+                           }`}
+                           title={getRoleDescription(user.role)}
+                         >
+                           {user.role}
+                         </span>
+                       )}
                     </td>
                     <td className="px-6 py-4">
                        <div className="flex items-center gap-1.5">
@@ -170,15 +197,59 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                        </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            onClick={() => updateUserStatus(user.id, user.status === 'Ativo' ? 'Inativo' : 'Ativo')}
-                            className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
-                            title={user.status === 'Ativo' ? 'Desativar' : 'Ativar'}
-                          >
-                            <span className="material-symbols-outlined text-[20px]">{user.status === 'Ativo' ? 'person_off' : 'person'}</span>
-                          </button>
-                          <button className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"><span className="material-symbols-outlined text-[20px]">edit</span></button>
+                       <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {editingUserId === user.id ? (
+                            <>
+                              <button 
+                                onClick={async () => {
+                                  if (editingRole !== user.role) {
+                                    await updateUserRole(user.id, editingRole);
+                                  }
+                                  setEditingUserId(null);
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-green-100 text-green-600 transition-colors"
+                                title="Salvar"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">check</span>
+                              </button>
+                              <button 
+                                onClick={() => setEditingUserId(null)}
+                                className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+                                title="Cancelar"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">close</span>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {canChangeStatus && (
+                                <button 
+                                  onClick={() => updateUserStatus(user.id, user.status === 'Ativo' ? 'Inativo' : 'Ativo')}
+                                  className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+                                  title={user.status === 'Ativo' ? 'Desativar' : 'Ativar'}
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">{user.status === 'Ativo' ? 'person_off' : 'person'}</span>
+                                </button>
+                              )}
+                              {canChangeRole && (
+                                <button 
+                                  onClick={() => {
+                                    setEditingUserId(user.id);
+                                    setEditingRole(user.role);
+                                  }}
+                                  className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+                                  title="Alterar perfil"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">badge</span>
+                                </button>
+                              )}
+                              {canEditUser && (
+                                <button className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors" title="Editar">
+                                  <span className="material-symbols-outlined text-[18px]">edit</span>
+                                </button>
+                              )}
+                            </>
+                          )}
                        </div>
                     </td>
                   </tr>

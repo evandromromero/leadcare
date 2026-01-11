@@ -14,10 +14,12 @@ import {
   LogIn,
   Edit,
   Wifi,
-  WifiOff
+  WifiOff,
+  Shield
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
+import { ROLE_PERMISSIONS, getRoleDescription, UserRole } from '../../lib/permissions';
 
 interface ClinicDetail {
   id: string;
@@ -41,6 +43,7 @@ interface ClinicUser {
   role: string;
   status: string;
   created_at: string;
+  default_instance_id?: string | null;
 }
 
 interface ClinicStats {
@@ -103,12 +106,16 @@ const AdminClinicDetail: React.FC = () => {
   // Estados para edição/exclusão de usuário
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<ClinicUser | null>(null);
-  const [editUserForm, setEditUserForm] = useState({ name: '', role: '', status: '' });
+  const [editUserForm, setEditUserForm] = useState({ name: '', role: '', status: '', instanceId: '' as string | null });
   const [savingUser, setSavingUser] = useState(false);
   const [editUserError, setEditUserError] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState<ClinicUser | null>(null);
+  
+  // Estados para modal de permissões
+  const [showPermissionsModal, setShowPermissionsModal] = useState(false);
+  const [permissionsUser, setPermissionsUser] = useState<ClinicUser | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -131,11 +138,11 @@ const AdminClinicDetail: React.FC = () => {
       // Buscar usuários da clínica
       const { data: usersData } = await supabase
         .from('users')
-        .select('id, name, email, role, status, created_at')
+        .select('id, name, email, role, status, created_at, default_instance_id')
         .eq('clinic_id', id)
         .order('created_at', { ascending: false });
 
-      setUsers(usersData || []);
+      setUsers((usersData || []) as ClinicUser[]);
 
       // Buscar estatísticas
       const [usersCount, chatsCount, messagesCount, leadsCount] = await Promise.all([
@@ -413,7 +420,7 @@ const AdminClinicDetail: React.FC = () => {
 
   const handleEditUser = (u: ClinicUser) => {
     setEditingUser(u);
-    setEditUserForm({ name: u.name, role: u.role, status: u.status });
+    setEditUserForm({ name: u.name, role: u.role, status: u.status, instanceId: u.default_instance_id || null });
     setEditUserError(null);
     setShowEditUserModal(true);
   };
@@ -431,8 +438,9 @@ const AdminClinicDetail: React.FC = () => {
           name: editUserForm.name,
           role: editUserForm.role,
           status: editUserForm.status,
+          default_instance_id: editUserForm.instanceId || null,
           updated_at: new Date().toISOString(),
-        })
+        } as any)
         .eq('id', editingUser.id);
 
       if (error) throw error;
@@ -820,6 +828,13 @@ const AdminClinicDetail: React.FC = () => {
                         {u.status}
                       </span>
                       <button
+                        onClick={() => { setPermissionsUser(u); setShowPermissionsModal(true); }}
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                        title="Ver Permissões"
+                      >
+                        <Shield className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() => handleEditUser(u)}
                         className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded transition-colors"
                         title="Editar"
@@ -1175,6 +1190,9 @@ const AdminClinicDetail: React.FC = () => {
                   <option value="Financeiro">Financeiro</option>
                   <option value="Visualizador">Visualizador</option>
                 </select>
+                <p className="mt-1.5 text-xs text-slate-500">
+                  {getRoleDescription(editUserForm.role)}
+                </p>
               </div>
 
               <div>
@@ -1187,6 +1205,29 @@ const AdminClinicDetail: React.FC = () => {
                   <option value="Ativo">Ativo</option>
                   <option value="Inativo">Inativo</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Instância WhatsApp</label>
+                <select 
+                  value={editUserForm.instanceId || ''}
+                  onChange={(e) => setEditUserForm({...editUserForm, instanceId: e.target.value || null})}
+                  className="w-full mt-2 h-11 rounded-lg border-slate-200 focus:ring-cyan-500 focus:border-cyan-500 px-4 text-sm"
+                >
+                  <option value="">Sem instância vinculada</option>
+                  {whatsappInstances.map(inst => (
+                    <option key={inst.id} value={inst.id}>
+                      {inst.display_name || inst.phone_number || inst.instance_name}
+                      {inst.status === 'connected' ? ' ✓' : ' (desconectado)'}
+                      {inst.is_shared ? ' [Compartilhada]' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-slate-500">
+                  {editUserForm.instanceId 
+                    ? 'Usuário vinculado a esta instância. Ao remover, ele precisará criar uma nova.'
+                    : 'Sem instância. O usuário precisará criar ou vincular uma ao fazer login.'}
+                </p>
               </div>
             </div>
 
@@ -1211,6 +1252,127 @@ const AdminClinicDetail: React.FC = () => {
               >
                 Cancelar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Permissões */}
+      {showPermissionsModal && permissionsUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-indigo-500 to-purple-600">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-white">Permissões do Usuário</h3>
+                  <p className="text-white/80 text-sm">{permissionsUser.name}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => { setShowPermissionsModal(false); setPermissionsUser(null); }}
+                className="text-white/80 hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="bg-slate-50 p-4 rounded-xl">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold text-slate-700">Perfil Atual</span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    permissionsUser.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
+                    permissionsUser.role === 'Gerente' ? 'bg-blue-100 text-blue-700' :
+                    permissionsUser.role === 'Supervisor' ? 'bg-indigo-100 text-indigo-700' :
+                    permissionsUser.role === 'Financeiro' ? 'bg-amber-100 text-amber-700' :
+                    permissionsUser.role === 'Visualizador' ? 'bg-slate-100 text-slate-700' :
+                    'bg-cyan-100 text-cyan-700'
+                  }`}>
+                    {permissionsUser.role}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">{getRoleDescription(permissionsUser.role)}</p>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Páginas com Acesso</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.menu.map(page => (
+                    <div key={page} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
+                      <span className="material-symbols-outlined text-green-600 text-[16px]">check_circle</span>
+                      <span className="text-sm text-green-700 capitalize">{page === 'inbox' ? 'Caixa de Entrada' : page === 'kanban' ? 'Pipeline' : page === 'users' ? 'Usuários' : page === 'settings' ? 'Configurações' : page === 'connect' ? 'WhatsApp' : page}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Ações Permitidas</h4>
+                <div className="space-y-1.5">
+                  {[
+                    { key: 'send_message', label: 'Enviar mensagens', icon: 'chat' },
+                    { key: 'move_lead', label: 'Mover leads no pipeline', icon: 'swap_horiz' },
+                    { key: 'create_lead', label: 'Criar novos leads', icon: 'person_add' },
+                    { key: 'add_quote', label: 'Adicionar orçamentos', icon: 'request_quote' },
+                    { key: 'add_payment', label: 'Registrar pagamentos', icon: 'payments' },
+                    { key: 'edit_tags', label: 'Gerenciar etiquetas', icon: 'label' },
+                    { key: 'edit_quick_replies', label: 'Editar mensagens rápidas', icon: 'bolt' },
+                    { key: 'create_user', label: 'Criar usuários', icon: 'group_add' },
+                    { key: 'edit_user', label: 'Editar usuários', icon: 'manage_accounts' },
+                    { key: 'change_role', label: 'Alterar perfis', icon: 'badge' },
+                  ].map(action => {
+                    const hasAction = ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.actions.includes(action.key as any);
+                    return (
+                      <div key={action.key} className={`flex items-center gap-2 p-2 rounded-lg ${hasAction ? 'bg-green-50' : 'bg-slate-50'}`}>
+                        <span className={`material-symbols-outlined text-[16px] ${hasAction ? 'text-green-600' : 'text-slate-300'}`}>
+                          {hasAction ? 'check_circle' : 'cancel'}
+                        </span>
+                        <span className={`material-symbols-outlined text-[16px] ${hasAction ? 'text-green-600' : 'text-slate-400'}`}>{action.icon}</span>
+                        <span className={`text-sm ${hasAction ? 'text-green-700' : 'text-slate-400'}`}>{action.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Acesso a Dados Financeiros</h4>
+                <div className={`p-3 rounded-lg ${
+                  ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.data === 'all_billing' ? 'bg-green-50' :
+                  ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.data === 'own_billing' ? 'bg-amber-50' :
+                  'bg-red-50'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`material-symbols-outlined text-[18px] ${
+                      ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.data === 'all_billing' ? 'text-green-600' :
+                      ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.data === 'own_billing' ? 'text-amber-600' :
+                      'text-red-600'
+                    }`}>
+                      {ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.data === 'all_billing' ? 'visibility' :
+                       ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.data === 'own_billing' ? 'visibility_lock' :
+                       'visibility_off'}
+                    </span>
+                    <span className={`text-sm font-medium ${
+                      ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.data === 'all_billing' ? 'text-green-700' :
+                      ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.data === 'own_billing' ? 'text-amber-700' :
+                      'text-red-700'
+                    }`}>
+                      {ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.data === 'all_billing' ? 'Vê faturamento de toda a clínica' :
+                       ROLE_PERMISSIONS[permissionsUser.role as UserRole]?.data === 'own_billing' ? 'Vê apenas próprio faturamento' :
+                       'Sem acesso a dados financeiros'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100">
+              <p className="text-xs text-slate-500 text-center">
+                Para alterar as permissões, edite o perfil do usuário clicando no botão de edição.
+              </p>
             </div>
           </div>
         </div>

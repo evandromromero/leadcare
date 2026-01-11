@@ -4,6 +4,7 @@ import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { getDataAccess } from '../lib/permissions';
 
 interface DashboardProps {
   state: GlobalState;
@@ -23,6 +24,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
   const { chats, loading } = useChats(clinicId, user?.id);
+  
+  const dataAccess = getDataAccess(user?.role);
+  const canSeeBilling = dataAccess !== 'no_billing';
   
   // Estados para métricas avançadas
   const [totalRevenue, setTotalRevenue] = useState(0);
@@ -180,6 +184,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         </div>
 
         {/* Faturamento Cards */}
+        {canSeeBilling && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 rounded-2xl shadow-lg text-white">
             <div className="flex justify-between items-start mb-4">
@@ -217,9 +222,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             </div>
           </div>
         </div>
+        )}
 
         {/* Leads por Origem */}
-        {leadSourceStats.length > 0 && (
+        {canSeeBilling && leadSourceStats.length > 0 && (
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex justify-between items-center mb-6">
               <div>

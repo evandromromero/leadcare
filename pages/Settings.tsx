@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { GlobalState } from '../types';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
+import { hasPermission } from '../lib/permissions';
 
 interface Tag {
   id: string;
@@ -20,7 +22,12 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
+  const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
+  
+  const canEditTags = hasPermission(user?.role, 'edit_tags');
+  const canEditQuickReplies = hasPermission(user?.role, 'edit_quick_replies');
+  const canEditClinicProfile = hasPermission(user?.role, 'edit_clinic_profile');
   
   // Estados para etiquetas
   const [tags, setTags] = useState<Tag[]>([]);
@@ -113,6 +120,7 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Card: Etiquetas */}
+        {canEditTags && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center gap-3 mb-2">
             <div className="size-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
@@ -200,8 +208,10 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
             )}
           </div>
         </div>
+        )}
 
         {/* Card: Mensagens Rápidas */}
+        {canEditQuickReplies && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center gap-3 mb-2">
             <div className="size-10 bg-cyan-50 text-cyan-600 rounded-xl flex items-center justify-center">
@@ -276,8 +286,10 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
             )}
           </div>
         </div>
+        )}
 
         {/* Card: Perfil da Clínica */}
+        {canEditClinicProfile && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center gap-3 mb-2">
             <div className="size-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center">
@@ -311,8 +323,10 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
             Salvar Alterações
           </button>
         </div>
+        )}
 
         {/* Card: Integração WhatsApp */}
+        {canEditClinicProfile && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center gap-3 mb-2">
             <div className="size-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center">
@@ -342,6 +356,7 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

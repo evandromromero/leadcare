@@ -4,6 +4,7 @@ import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { hasPermission } from '../lib/permissions';
 
 interface KanbanProps {
   state: GlobalState;
@@ -28,6 +29,10 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const columns: ChatStatus[] = ['Novo Lead', 'Em Atendimento', 'Agendado', 'Convertido', 'Perdido'];
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [quotesMap, setQuotesMap] = useState<Record<string, Array<{ service_type: string; value: number; status: string }>>>({});
+  
+  const canMoveLead = hasPermission(user?.role, 'move_lead');
+  const canCreateLead = hasPermission(user?.role, 'create_lead');
+  const canEditPipelineLabels = hasPermission(user?.role, 'edit_pipeline_labels');
   
   // Estados para modal de novo lead
   const [showNewLeadModal, setShowNewLeadModal] = useState(false);
@@ -139,17 +144,23 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   };
 
   const onDragStart = (e: React.DragEvent, id: string) => {
+    if (!canMoveLead) {
+      e.preventDefault();
+      return;
+    }
     setDraggedId(id);
     e.dataTransfer.setData('text/plain', id);
     e.dataTransfer.effectAllowed = 'move';
   };
 
   const onDragOver = (e: React.DragEvent) => {
+    if (!canMoveLead) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
 
   const onDrop = (e: React.DragEvent, newStage: ChatStatus) => {
+    if (!canMoveLead) return;
     e.preventDefault();
     const id = e.dataTransfer.getData('text/plain');
     if (id) {
@@ -193,6 +204,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
           <p className="text-slate-500">Arraste e solte os leads para atualizar o status.</p>
         </div>
         <div className="flex items-center gap-3">
+           {canEditPipelineLabels && (
            <button 
               onClick={() => {
                 setEditingLabels({ ...pipelineLabels });
@@ -203,16 +215,19 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
            >
               <span className="material-symbols-outlined text-[20px]">settings</span>
            </button>
+           )}
            <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined text-[20px]">search</span>
               <input type="text" placeholder="Buscar lead..." className="pl-10 pr-4 py-2 bg-white border-slate-200 rounded-lg text-sm" />
            </div>
+           {canCreateLead && (
            <button 
               onClick={() => setShowNewLeadModal(true)}
               className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-sm h-10 px-6 rounded-lg shadow-lg shadow-cyan-500/30 flex items-center gap-2"
            >
               <span className="material-symbols-outlined text-[20px]">add</span> Novo Lead
            </button>
+           )}
         </div>
       </div>
 
@@ -250,9 +265,9 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                 {leadsInCol.map(lead => (
                   <div 
                     key={lead.id} 
-                    draggable
+                    draggable={canMoveLead}
                     onDragStart={(e) => onDragStart(e, lead.id)}
-                    className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-cyan-400 transition-all cursor-grab active:cursor-grabbing group relative ${draggedId === lead.id ? 'opacity-50' : ''}`}
+                    className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-cyan-400 transition-all ${canMoveLead ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} group relative ${draggedId === lead.id ? 'opacity-50' : ''}`}
                   >
                     <div className="flex justify-between items-start mb-3">
                       <h4 className="font-bold text-slate-900 text-sm truncate pr-4">{lead.client_name}</h4>
