@@ -81,6 +81,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     description: string | null;
     payment_date: string;
     created_at: string;
+    status: 'active' | 'cancelled';
   }>>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0] });
@@ -698,6 +699,24 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   };
 
+  // Excluir orçamento
+  const handleDeleteQuote = async (quoteId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este orçamento?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('quotes' as any)
+        .delete()
+        .eq('id', quoteId);
+      
+      if (!error && selectedChatId) {
+        await fetchQuotes(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error deleting quote:', err);
+    }
+  };
+
   // Buscar origens de leads da clínica
   const fetchLeadSources = async () => {
     if (!clinicId) return;
@@ -783,7 +802,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     try {
       const { data, error } = await supabase
         .from('payments' as any)
-        .select('id, value, description, payment_date, created_at')
+        .select('id, value, description, payment_date, created_at, status')
         .eq('chat_id', chatId)
         .order('payment_date', { ascending: false });
       
@@ -821,6 +840,24 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       console.error('Error saving payment:', err);
     } finally {
       setSavingPayment(false);
+    }
+  };
+
+  // Cancelar pagamento/negociação
+  const handleCancelPayment = async (paymentId: string) => {
+    if (!confirm('Tem certeza que deseja cancelar esta negociação?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('payments' as any)
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', paymentId);
+      
+      if (!error && selectedChatId) {
+        await fetchPayments(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error cancelling payment:', err);
     }
   };
 
@@ -1932,24 +1969,42 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           <span className="text-[10px] text-slate-400">
                             {new Date(quote.created_at).toLocaleDateString('pt-BR')}
                           </span>
-                          {quote.status === 'pending' && (
-                            <div className="flex gap-1">
+                          <div className="flex gap-1">
+                            {quote.status === 'pending' && (
+                              <>
+                                <button
+                                  onClick={() => handleUpdateQuoteStatus(quote.id, 'approved')}
+                                  className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
+                                  title="Aprovar"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">check</span>
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateQuoteStatus(quote.id, 'rejected')}
+                                  className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                                  title="Recusar"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">close</span>
+                                </button>
+                              </>
+                            )}
+                            {quote.status !== 'pending' && (
                               <button
-                                onClick={() => handleUpdateQuoteStatus(quote.id, 'approved')}
-                                className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
-                                title="Aprovar"
+                                onClick={() => handleUpdateQuoteStatus(quote.id, 'pending')}
+                                className="p-1 text-amber-600 hover:bg-amber-100 rounded transition-colors"
+                                title="Voltar para Pendente"
                               >
-                                <span className="material-symbols-outlined text-[16px]">check</span>
+                                <span className="material-symbols-outlined text-[16px]">undo</span>
                               </button>
-                              <button
-                                onClick={() => handleUpdateQuoteStatus(quote.id, 'rejected')}
-                                className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
-                                title="Recusar"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">close</span>
-                              </button>
-                            </div>
-                          )}
+                            )}
+                            <button
+                              onClick={() => handleDeleteQuote(quote.id)}
+                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Excluir"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -2051,18 +2106,42 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     {payments.map(payment => (
                       <div 
                         key={payment.id} 
-                        className="p-3 rounded-xl border bg-emerald-50 border-emerald-200"
+                        className={`p-3 rounded-xl border ${
+                          payment.status === 'cancelled' 
+                            ? 'bg-red-50 border-red-200 opacity-60' 
+                            : 'bg-emerald-50 border-emerald-200'
+                        }`}
                       >
                         <div className="flex justify-between items-start mb-1">
-                          <span className="text-sm font-black text-emerald-700">
-                            R$ {payment.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            {new Date(payment.payment_date).toLocaleDateString('pt-BR')}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-black ${
+                              payment.status === 'cancelled' ? 'text-red-600 line-through' : 'text-emerald-700'
+                            }`}>
+                              R$ {payment.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                            {payment.status === 'cancelled' && (
+                              <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
+                                CANCELADO
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(payment.payment_date).toLocaleDateString('pt-BR')}
+                            </span>
+                            {payment.status !== 'cancelled' && (
+                              <button
+                                onClick={() => handleCancelPayment(payment.id)}
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                title="Cancelar"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">cancel</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                         {payment.description && (
-                          <p className="text-[11px] text-slate-600">{payment.description}</p>
+                          <p className={`text-[11px] ${payment.status === 'cancelled' ? 'text-slate-400' : 'text-slate-600'}`}>{payment.description}</p>
                         )}
                       </div>
                     ))}
@@ -2073,6 +2152,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         <span className="text-xs font-bold text-slate-500">Total Faturado:</span>
                         <span className="text-sm font-black text-emerald-600">
                           R$ {payments
+                            .filter(p => p.status !== 'cancelled')
                             .reduce((sum, p) => sum + p.value, 0)
                             .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>
@@ -2347,32 +2427,32 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         <button
                           onClick={() => {
                             const date = new Date();
-                            date.setDate(date.getDate() + 30);
+                            date.setDate(date.getDate() + 1);
                             setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
                           }}
                           className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                         >
-                          30 dias
+                          1 dia
                         </button>
                         <button
                           onClick={() => {
                             const date = new Date();
-                            date.setDate(date.getDate() + 60);
+                            date.setDate(date.getDate() + 3);
                             setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
                           }}
                           className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                         >
-                          60 dias
+                          3 dias
                         </button>
                         <button
                           onClick={() => {
                             const date = new Date();
-                            date.setDate(date.getDate() + 90);
+                            date.setDate(date.getDate() + 7);
                             setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
                           }}
                           className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                         >
-                          90 dias
+                          7 dias
                         </button>
                       </div>
                       <button

@@ -52,17 +52,8 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
   };
 
   const fetchChats = async () => {
-    console.log('[useChats] fetchChats called, clinicId:', clinicId, 'userId:', userId, 'viewMode:', userViewMode, 'role:', userRole);
-    
     if (!clinicId) {
-      console.log('[useChats] No clinicId, setting loading false');
       setLoading(false);
-      return;
-    }
-    
-    // Esperar userRole e userViewMode serem carregados se tiver userId
-    if (userId && (userRole === null || userViewMode === null)) {
-      console.log('[useChats] Waiting for user settings to load...');
       return;
     }
 
@@ -70,8 +61,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     setError(null);
 
     try {
-      console.log('[useChats] Fetching chats from Supabase...');
-      let query = supabase
+      const { data: chatsData, error: chatsError } = await supabase
         .from('chats')
         .select(`
           *,
@@ -82,13 +72,8 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
             tags (*)
           )
         `)
-        .eq('clinic_id', clinicId);
-      
-      // Todos os usuários da mesma clínica/instância veem TODAS as conversas
-      // view_mode só afeta faturamento/relatórios, não a visualização de chats
-      console.log('[useChats] Showing all chats for clinic');
-      
-      const { data: chatsData, error: chatsError } = await query.order('last_message_time', { ascending: false });
+        .eq('clinic_id', clinicId)
+        .order('last_message_time', { ascending: false });
 
       if (chatsError) {
         console.error('[useChats] Error fetching chats:', chatsError);
@@ -97,15 +82,15 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
         return;
       }
 
-      console.log('[useChats] Chats fetched:', chatsData?.length || 0);
-
       const formattedChats: ChatWithMessages[] = (chatsData || []).map(chat => ({
         ...chat,
-        messages: chat.messages || [],
+        messages: [...(chat.messages || [])].sort((a: DbMessage, b: DbMessage) => 
+          new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+        ),
         tags: chat.chat_tags?.map((ct: { tags: DbTag }) => ct.tags).filter(Boolean) || [],
       }));
 
-      setChats(formattedChats);
+      setChats([...formattedChats]);
     } catch (err) {
       console.error('[useChats] Exception fetching chats:', err);
       setError('Erro ao carregar conversas');
@@ -243,12 +228,14 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
         .from('whatsapp_instances')
         .select('instance_name, status')
         .eq('clinic_id', clinicId)
-        .maybeSingle();
+        .order('status', { ascending: false });
 
-      if (data) {
+      if (data && data.length > 0) {
+        const connectedInstance = data.find(i => i.status === 'connected');
+        const instanceToUse = connectedInstance || data[0];
         setWhatsappInstance({
-          instanceName: data.instance_name,
-          status: data.status,
+          instanceName: instanceToUse.instance_name,
+          status: instanceToUse.status,
         });
       } else {
         setWhatsappInstance(null);
@@ -284,37 +271,22 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
   // Refetch chats quando userRole/viewMode ou clinicId mudar
   useEffect(() => {
     if (clinicId) {
-      console.log('[useChats] Fetching chats - role:', userRole, 'viewMode:', userViewMode);
       fetchChats();
     }
   }, [userRole, userViewMode, clinicId]);
 
   useEffect(() => {
-    console.log('[useChats] useEffect triggered, clinicId:', clinicId);
-    
     fetchWhatsAppInstance();
     fetchEvolutionSettings();
 
-    if (!clinicId) {
-      console.log('[useChats] No clinicId, skipping subscriptions');
-      return;
-    }
+    if (!clinicId) return;
 
-    console.log('[useChats] Setting up realtime subscriptions...');
-    let realtimeWorking = false;
-    
     const chatsSubscription = supabase
       .channel(`chats-changes-${clinicId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `clinic_id=eq.${clinicId}` }, () => {
-        console.log('[useChats] Chat change detected');
-        fetchChats();
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        console.log('[useChats] New message detected:', payload);
         fetchChats();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_instances', filter: `clinic_id=eq.${clinicId}` }, (payload) => {
-        console.log('[useChats] WhatsApp instance change detected:', payload);
         if (payload.new && typeof payload.new === 'object' && 'status' in payload.new) {
           const newData = payload.new as { instance_name: string; status: string };
           setWhatsappInstance({
@@ -325,22 +297,23 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
           fetchWhatsAppInstance();
         }
       })
-      .subscribe((status) => {
-        console.log('[useChats] Realtime subscription status:', status);
-        realtimeWorking = status === 'SUBSCRIBED';
-      });
+      .subscribe();
 
-    // Fallback: polling a cada 5 segundos se realtime não funcionar
-    const pollingInterval = setInterval(() => {
-      if (!realtimeWorking) {
-        console.log('[useChats] Polling fallback - fetching chats...');
+    const messagesSubscription = supabase
+      .channel(`messages-changes-${clinicId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
         fetchChats();
-      }
-    }, 5000);
+      })
+      .subscribe();
+
+    // Polling a cada 7 segundos como fallback
+    const pollingInterval = setInterval(() => {
+      fetchChats();
+    }, 7000);
 
     return () => {
-      console.log('[useChats] Cleaning up subscriptions');
       supabase.removeChannel(chatsSubscription);
+      supabase.removeChannel(messagesSubscription);
       clearInterval(pollingInterval);
     };
   }, [clinicId]);

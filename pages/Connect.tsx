@@ -28,6 +28,7 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
     error, 
     selectInstance,
     connect, 
+    reconnect,
     disconnect, 
     refreshStatus,
     deleteInstance 
@@ -114,6 +115,18 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
     }
     setShowNewInstanceModal(false);
     setNewInstanceName('');
+  };
+
+  const handleReconnect = async () => {
+    if (!selectedInstance) return;
+    setStep('generating');
+    setConnectError(null);
+    const result = await reconnect(selectedInstance.id);
+    
+    if (result.error) {
+      setConnectError(result.error);
+      setStep('list');
+    }
   };
 
   const handleDisconnect = async (instanceId?: string) => {
@@ -321,7 +334,7 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
                         </button>
                       ) : (
                         <button 
-                          onClick={() => handleConnect()}
+                          onClick={() => handleReconnect()}
                           disabled={loading}
                           className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold px-6 py-3 rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50"
                         >

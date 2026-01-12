@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
 import { useAuth } from '../hooks/useAuth';
+import { useTasks } from '../hooks/useTasks';
 import { supabase } from '../lib/supabase';
 import { getDataAccess } from '../lib/permissions';
 
@@ -21,9 +23,11 @@ interface LeadSourceStats {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ state }) => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
   const { chats, loading } = useChats(clinicId, user?.id);
+  const { todayTasks, upcomingTasks, overdueTasks, weekTasks, toggleTask } = useTasks(clinicId, user?.id);
   
   const dataAccess = getDataAccess(user?.role);
   const canSeeBilling = dataAccess !== 'no_billing';
@@ -58,6 +62,15 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     commercialValue: number;
     receivedValue: number;
     status: 'pending' | 'received' | 'partial';
+  }>>([]);
+
+  // Estado para follow-ups agendados
+  const [scheduledFollowups, setScheduledFollowups] = useState<Array<{
+    id: string;
+    chat_id: string;
+    message: string;
+    scheduled_for: string;
+    client_name: string;
   }>>([]);
 
   const novosLeads = chats.filter(c => c.status === 'Novo Lead').length;
@@ -298,6 +311,43 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     
     fetchStats();
   }, [clinicId, chats, loading]);
+
+  // Buscar follow-ups agendados
+  useEffect(() => {
+    const fetchFollowups = async () => {
+      if (!clinicId) return;
+      
+      const { data } = await supabase
+        .from('scheduled_messages' as any)
+        .select(`
+          id,
+          chat_id,
+          message,
+          scheduled_for,
+          chats (
+            client_name
+          )
+        `)
+        .eq('clinic_id', clinicId)
+        .eq('status', 'pending')
+        .gte('scheduled_for', new Date().toISOString())
+        .order('scheduled_for', { ascending: true })
+        .limit(10);
+      
+      if (data) {
+        const followups = (data as any[]).map(d => ({
+          id: d.id,
+          chat_id: d.chat_id,
+          message: d.message,
+          scheduled_for: d.scheduled_for,
+          client_name: d.chats?.client_name || 'Cliente',
+        }));
+        setScheduledFollowups(followups);
+      }
+    };
+    
+    fetchFollowups();
+  }, [clinicId]);
 
   const stats = [
     { label: 'Novos Leads', value: String(novosLeads), change: '+12%', color: 'blue', icon: 'person_add' },
@@ -650,6 +700,165 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             </div>
           </div>
         )}
+
+        {/* Seção de Tarefas */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Tarefas Atrasadas */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-red-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-red-600">warning</span>
+                <h3 className="font-bold text-red-800 text-sm">Atrasadas</h3>
+              </div>
+              <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {overdueTasks.length}
+              </span>
+            </div>
+            <div className="p-4 max-h-64 overflow-y-auto">
+              {overdueTasks.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">Nenhuma tarefa atrasada</p>
+              ) : (
+                <div className="space-y-2">
+                  {overdueTasks.slice(0, 5).map(task => (
+                    <div 
+                      key={task.id}
+                      className="flex items-start gap-2 p-2 rounded-lg bg-red-50 border border-red-100 cursor-pointer hover:bg-red-100 transition-colors"
+                      onClick={() => navigate(`/inbox?chat=${task.chat_id}`)}
+                    >
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleTask(task.id, task.completed); }}
+                        className="mt-0.5 size-4 rounded border-2 border-red-300 hover:bg-red-200 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-slate-800 truncate">{task.title}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{task.chat_name}</p>
+                      </div>
+                      <span className="text-[10px] text-red-600 font-medium whitespace-nowrap">
+                        {task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Tarefas de Hoje */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-amber-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-600">today</span>
+                <h3 className="font-bold text-amber-800 text-sm">Hoje</h3>
+              </div>
+              <span className="bg-amber-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {todayTasks.length}
+              </span>
+            </div>
+            <div className="p-4 max-h-64 overflow-y-auto">
+              {todayTasks.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">Nenhuma tarefa para hoje</p>
+              ) : (
+                <div className="space-y-2">
+                  {todayTasks.slice(0, 5).map(task => (
+                    <div 
+                      key={task.id}
+                      className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 border border-amber-100 cursor-pointer hover:bg-amber-100 transition-colors"
+                      onClick={() => navigate(`/inbox?chat=${task.chat_id}`)}
+                    >
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleTask(task.id, task.completed); }}
+                        className="mt-0.5 size-4 rounded border-2 border-amber-300 hover:bg-amber-200 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-slate-800 truncate">{task.title}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{task.chat_name}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Tarefas da Semana */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-cyan-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-cyan-600">date_range</span>
+                <h3 className="font-bold text-cyan-800 text-sm">Esta Semana</h3>
+              </div>
+              <span className="bg-cyan-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {weekTasks.length}
+              </span>
+            </div>
+            <div className="p-4 max-h-64 overflow-y-auto">
+              {weekTasks.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">Nenhuma tarefa esta semana</p>
+              ) : (
+                <div className="space-y-2">
+                  {weekTasks.slice(0, 5).map(task => (
+                    <div 
+                      key={task.id}
+                      className="flex items-start gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => navigate(`/inbox?chat=${task.chat_id}`)}
+                    >
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleTask(task.id, task.completed); }}
+                        className="mt-0.5 size-4 rounded border-2 border-slate-300 hover:bg-slate-200 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-slate-800 truncate">{task.title}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{task.chat_name}</p>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+                        {task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' }) : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Seção de Follow-ups Agendados */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-blue-50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-blue-600">schedule_send</span>
+              <h3 className="font-bold text-blue-800 text-sm">Follow-ups Agendados</h3>
+            </div>
+            <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              {scheduledFollowups.length}
+            </span>
+          </div>
+          <div className="p-4">
+            {scheduledFollowups.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">Nenhum follow-up agendado</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {scheduledFollowups.map(followup => (
+                  <div 
+                    key={followup.id}
+                    className="flex items-start gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
+                    onClick={() => navigate(`/inbox?chat=${followup.chat_id}`)}
+                  >
+                    <div className="size-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                      <span className="material-symbols-outlined text-white text-lg">schedule</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">{followup.client_name}</p>
+                      <p className="text-xs text-slate-600 truncate">{followup.message}</p>
+                      <p className="text-[10px] text-blue-600 font-medium mt-1">
+                        {new Date(followup.scheduled_for).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} às {new Date(followup.scheduled_for).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Chart Section Simulation */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -22,6 +22,7 @@ interface UseWhatsAppReturn {
   error: string | null;
   selectInstance: (instanceId: string) => void;
   connect: (options?: { isShared?: boolean; displayName?: string }) => Promise<{ error: string | null }>;
+  reconnect: (instanceId: string) => Promise<{ error: string | null }>;
   disconnect: (instanceId?: string) => Promise<{ error: string | null }>;
   refreshStatus: (instanceId?: string) => Promise<void>;
   deleteInstance: (instanceId: string) => Promise<{ error: string | null }>;
@@ -270,6 +271,64 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
     }
   };
 
+  const reconnect = async (instanceId: string) => {
+    const targetInstance = instances.find(i => i.id === instanceId);
+    if (!targetInstance) return { error: 'Instância não encontrada' };
+    if (!settings) return { error: 'Configurações não encontradas' };
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const connectResponse = await fetch(
+        `${settings.apiUrl}/instance/connect/${targetInstance.instanceName}`,
+        {
+          method: 'GET',
+          headers: {
+            'apikey': settings.apiKey,
+          },
+        }
+      );
+
+      if (!connectResponse.ok) {
+        const errorData = await connectResponse.json().catch(() => ({}));
+        if (errorData.message?.includes('not found') || errorData.error?.includes('not found')) {
+          await supabase
+            .from('whatsapp_instances')
+            .update({
+              status: 'disconnected',
+              qr_code: null,
+            })
+            .eq('id', instanceId);
+          setLoading(false);
+          return { error: 'Instância não existe mais na Evolution API. Delete e crie uma nova.' };
+        }
+        throw new Error(errorData.message || 'Erro ao reconectar instância');
+      }
+
+      const data = await connectResponse.json();
+      const qrCode = data.base64 || data.qrcode?.base64 || null;
+
+      await supabase
+        .from('whatsapp_instances')
+        .update({
+          qr_code: qrCode,
+          qr_code_expires_at: new Date(Date.now() + 60000).toISOString(),
+          status: 'connecting',
+        })
+        .eq('id', instanceId);
+
+      setSelectedInstanceId(instanceId);
+      setLoading(false);
+      return { error: null };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+      setError(errorMessage);
+      setLoading(false);
+      return { error: errorMessage };
+    }
+  };
+
   const disconnect = async (instanceId?: string) => {
     const targetInstance = instanceId 
       ? instances.find(i => i.id === instanceId) 
@@ -391,6 +450,7 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
     error,
     selectInstance,
     connect,
+    reconnect,
     disconnect,
     refreshStatus,
     deleteInstance,

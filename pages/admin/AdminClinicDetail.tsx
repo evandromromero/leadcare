@@ -478,7 +478,8 @@ const AdminClinicDetail: React.FC = () => {
       // Buscar pagamentos
       const { data: paymentsData } = await supabase
         .from('payments' as any)
-        .select('value, payment_date, chat_id');
+        .select('value, payment_date, chat_id')
+        .eq('clinic_id', id);
       
       const allPayments = (paymentsData || []) as any[];
       

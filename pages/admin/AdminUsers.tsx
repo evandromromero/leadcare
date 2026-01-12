@@ -110,17 +110,17 @@ const AdminUsers: React.FC = () => {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Criar registro na tabela users
+        // Atualizar registro na tabela users (trigger já cria o registro)
         const { error: userError } = await supabase
           .from('users')
-          .insert({
+          .upsert({
             id: authData.user.id,
             name: formName,
             email: formEmail,
             role: 'SuperAdmin',
             status: 'Ativo',
             clinic_id: null
-          });
+          }, { onConflict: 'id' });
 
         if (userError) throw userError;
       }

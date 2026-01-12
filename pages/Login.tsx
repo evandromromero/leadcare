@@ -4,6 +4,15 @@ import { useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { assets } from '../config/assets';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
+
+interface LoginSettings {
+  login_logo_url: string;
+  login_background_url: string;
+  login_title: string;
+  login_subtitle: string;
+  login_footer_text: string;
+}
 
 interface LoginProps {
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
@@ -16,6 +25,40 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginSettings, setLoginSettings] = useState<LoginSettings>({
+    login_logo_url: '',
+    login_background_url: '',
+    login_title: 'Potencialize suas vendas e gerencie clínicas em um só lugar.',
+    login_subtitle: 'A plataforma completa para gestão de leads, atendimento multicanal e performance de equipe.',
+    login_footer_text: '+2k Clínicas conectadas hoje.',
+  });
+
+  // Carregar configurações de login do banco
+  useEffect(() => {
+    const fetchLoginSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('login_logo_url, login_background_url, login_title, login_subtitle, login_footer_text')
+          .single();
+
+        if (data && !error) {
+          const d = data as any;
+          setLoginSettings({
+            login_logo_url: d.login_logo_url || '',
+            login_background_url: d.login_background_url || '',
+            login_title: d.login_title || 'Potencialize suas vendas e gerencie clínicas em um só lugar.',
+            login_subtitle: d.login_subtitle || 'A plataforma completa para gestão de leads, atendimento multicanal e performance de equipe.',
+            login_footer_text: d.login_footer_text || '+2k Clínicas conectadas hoje.',
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching login settings:', error);
+      }
+    };
+
+    fetchLoginSettings();
+  }, []);
 
   // Redirecionar quando o user carregar após login
   useEffect(() => {
@@ -48,24 +91,24 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
       {/* Left Illustration */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-slate-900">
         <img 
-          src={assets.loginIllustrationUrl} 
+          src={loginSettings.login_background_url || assets.loginIllustrationUrl} 
           className="absolute inset-0 size-full object-cover opacity-30 mix-blend-overlay" 
           alt="Clinic Management" 
         />
         <div className="absolute inset-0 bg-gradient-to-br from-cyan-600/90 to-teal-900 opacity-90"></div>
         <div className="relative z-10 flex flex-col justify-between p-16 text-white h-full">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="LeadCare" className="h-12 w-auto brightness-0 invert" />
+            <img src={loginSettings.login_logo_url || "/logo.png"} alt="LeadCare" className="h-12 w-auto brightness-0 invert" />
           </div>
           <div>
-            <h1 className="text-5xl font-black leading-tight mb-6">Potencialize suas vendas e gerencie clínicas em um só lugar.</h1>
-            <p className="text-xl text-cyan-100 max-w-md">A plataforma completa para gestão de leads, atendimento multicanal e performance de equipe.</p>
+            <h1 className="text-5xl font-black leading-tight mb-6">{loginSettings.login_title}</h1>
+            <p className="text-xl text-cyan-100 max-w-md">{loginSettings.login_subtitle}</p>
           </div>
           <div className="flex items-center gap-2 text-sm text-cyan-200">
             <div className="flex -space-x-2">
               {[1, 2, 3].map(i => <img key={i} src={`https://i.pravatar.cc/100?u=${i}`} className="size-8 rounded-full border-2 border-cyan-600" />)}
             </div>
-            <span>+2k Clínicas conectadas hoje.</span>
+            <span>{loginSettings.login_footer_text}</span>
           </div>
         </div>
       </div>

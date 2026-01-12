@@ -1,9 +1,10 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GlobalState, WhatsAppStatus } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useChats } from '../hooks/useChats';
+import { useTasks } from '../hooks/useTasks';
 import ImpersonateBanner from './ImpersonateBanner';
 import { canAccessPage, MenuPage } from '../lib/permissions';
 
@@ -19,7 +20,23 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const { signOut, isImpersonating, impersonatedClinic, stopImpersonate, user } = useAuth();
   const clinicId = state.selectedClinic?.id;
   const { whatsappConnected } = useChats(clinicId, user?.id);
+  const { todayTasks, upcomingTasks, overdueTasks, toggleTask } = useTasks(clinicId, user?.id);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showTasksDropdown, setShowTasksDropdown] = useState(false);
+  const tasksDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tasksDropdownRef.current && !tasksDropdownRef.current.contains(event.target as Node)) {
+        setShowTasksDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const totalPendingTasks = todayTasks.length + overdueTasks.length;
 
   const handleExitImpersonate = () => {
     stopImpersonate();
@@ -179,10 +196,120 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
               </button>
             )}
 
-            <button className="p-2 text-slate-400 hover:text-slate-600 relative">
-              <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+            <div className="relative" ref={tasksDropdownRef}>
+              <button 
+                onClick={() => setShowTasksDropdown(!showTasksDropdown)}
+                className="p-2 text-slate-400 hover:text-slate-600 relative"
+              >
+                <span className="material-symbols-outlined">notifications</span>
+                {totalPendingTasks > 0 && (
+                  <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                    {totalPendingTasks > 9 ? '9+' : totalPendingTasks}
+                  </span>
+                )}
+              </button>
+
+              {showTasksDropdown && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+                  <div className="p-3 border-b border-slate-100 bg-slate-50">
+                    <h3 className="font-bold text-slate-800 text-sm">Tarefas Pendentes</h3>
+                  </div>
+
+                  <div className="max-h-96 overflow-y-auto">
+                    {overdueTasks.length > 0 && (
+                      <div className="p-3 border-b border-slate-100">
+                        <h4 className="text-xs font-bold text-red-600 uppercase tracking-wide mb-2 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">warning</span>
+                          Atrasadas ({overdueTasks.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {overdueTasks.slice(0, 3).map(task => (
+                            <div 
+                              key={task.id}
+                              className="flex items-start gap-2 p-2 rounded-lg bg-red-50 border border-red-100"
+                            >
+                              <button
+                                onClick={() => toggleTask(task.id, task.completed)}
+                                className="mt-0.5 size-4 rounded border-2 border-red-300 hover:bg-red-200 flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-slate-800 truncate">{task.title}</p>
+                                <p className="text-[10px] text-slate-500 truncate">{task.chat_name}</p>
+                              </div>
+                              <span className="text-[10px] text-red-600 font-medium whitespace-nowrap">
+                                {task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {todayTasks.length > 0 && (
+                      <div className="p-3 border-b border-slate-100">
+                        <h4 className="text-xs font-bold text-amber-600 uppercase tracking-wide mb-2 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">today</span>
+                          Hoje ({todayTasks.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {todayTasks.slice(0, 3).map(task => (
+                            <div 
+                              key={task.id}
+                              className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 border border-amber-100"
+                            >
+                              <button
+                                onClick={() => toggleTask(task.id, task.completed)}
+                                className="mt-0.5 size-4 rounded border-2 border-amber-300 hover:bg-amber-200 flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-slate-800 truncate">{task.title}</p>
+                                <p className="text-[10px] text-slate-500 truncate">{task.chat_name}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {upcomingTasks.length > 0 && (
+                      <div className="p-3">
+                        <h4 className="text-xs font-bold text-cyan-600 uppercase tracking-wide mb-2 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">upcoming</span>
+                          Próximas ({upcomingTasks.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {upcomingTasks.slice(0, 3).map(task => (
+                            <div 
+                              key={task.id}
+                              className="flex items-start gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100"
+                            >
+                              <button
+                                onClick={() => toggleTask(task.id, task.completed)}
+                                className="mt-0.5 size-4 rounded border-2 border-slate-300 hover:bg-slate-200 flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-slate-800 truncate">{task.title}</p>
+                                <p className="text-[10px] text-slate-500 truncate">{task.chat_name}</p>
+                              </div>
+                              <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+                                {task.due_date ? new Date(task.due_date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {todayTasks.length === 0 && upcomingTasks.length === 0 && overdueTasks.length === 0 && (
+                      <div className="p-6 text-center">
+                        <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">task_alt</span>
+                        <p className="text-sm text-slate-500">Nenhuma tarefa pendente</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
