@@ -11,14 +11,22 @@ interface UsersProps {
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
 }
 
+interface WhatsAppInstance {
+  id: string;
+  instance_name: string;
+  display_name: string | null;
+  status: string;
+}
+
 const Users: React.FC<UsersProps> = ({ state, setState }) => {
   const { users, loading, updateUserStatus, updateUserRole, refetch } = useUsers();
   const { clinic, user } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Comercial' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Comercial', default_instance_id: '' });
   const [canCreateUsers, setCanCreateUsers] = useState(false);
   const [creatingUser, setCreatingUser] = useState(false);
   const [createUserError, setCreateUserError] = useState<string | null>(null);
+  const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([]);
 
   const canCreateUser = hasPermission(user?.role, 'create_user');
   const canEditUser = hasPermission(user?.role, 'edit_user');
@@ -42,6 +50,23 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
     };
     
     checkPermission();
+  }, [clinic?.id]);
+
+  // Buscar instâncias WhatsApp da clínica
+  useEffect(() => {
+    const fetchInstances = async () => {
+      if (!clinic?.id) return;
+      
+      const { data } = await supabase
+        .from('whatsapp_instances' as any)
+        .select('id, instance_name, display_name, status')
+        .eq('clinic_id', clinic.id)
+        .eq('status', 'connected');
+      
+      setWhatsappInstances((data || []) as WhatsAppInstance[]);
+    };
+    
+    fetchInstances();
   }, [clinic?.id]);
 
   const handleCreateUser = async () => {
@@ -75,6 +100,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
           password: newUser.password,
           role: newUser.role,
           clinic_id: clinic.id,
+          default_instance_id: newUser.default_instance_id || null,
         }),
       });
 
@@ -85,7 +111,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
       }
 
       setIsModalOpen(false);
-      setNewUser({ name: '', email: '', password: '', role: 'Comercial' });
+      setNewUser({ name: '', email: '', password: '', role: 'Comercial', default_instance_id: '' });
       refetch?.();
     } catch (error) {
       setCreateUserError(error instanceof Error ? error.message : 'Erro ao criar usuário');
@@ -330,6 +356,24 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                      <option value="Visualizador">Visualizador</option>
                   </select>
                </div>
+               {whatsappInstances.length > 0 && (
+                 <div className="space-y-1.5">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Instância WhatsApp</label>
+                    <select 
+                      value={newUser.default_instance_id}
+                      onChange={(e) => setNewUser({...newUser, default_instance_id: e.target.value})}
+                      className="w-full h-12 rounded-xl border-slate-200 focus:ring-cyan-600 focus:border-cyan-600 px-4 text-sm font-medium"
+                    >
+                       <option value="">Selecione uma instância</option>
+                       {whatsappInstances.map(instance => (
+                         <option key={instance.id} value={instance.id}>
+                           {instance.display_name || instance.instance_name}
+                         </option>
+                       ))}
+                    </select>
+                    <p className="text-xs text-slate-400">Opcional - sem instância o usuário só visualiza, não envia mensagens</p>
+                 </div>
+               )}
             </div>
             <div className="px-8 py-6 bg-slate-50 flex gap-3">
                <button 
@@ -349,7 +393,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
                <button 
                 onClick={() => {
                   setIsModalOpen(false);
-                  setNewUser({ name: '', email: '', password: '', role: 'Comercial' });
+                  setNewUser({ name: '', email: '', password: '', role: 'Comercial', default_instance_id: '' });
                   setCreateUserError(null);
                 }}
                 className="flex-1 h-12 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-all"

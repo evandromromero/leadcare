@@ -12,11 +12,13 @@ import Inbox from './pages/Inbox';
 import Kanban from './pages/Kanban';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
+import Receipts from './pages/Receipts';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminClinics from './pages/admin/AdminClinics';
 import AdminClinicDetail from './pages/admin/AdminClinicDetail';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminSettings from './pages/admin/AdminSettings';
+import AdminUsers from './pages/admin/AdminUsers';
 import { useAuth, AuthProvider } from './hooks/useAuth';
 
 interface PrivateRouteProps {
@@ -192,6 +194,12 @@ const AppRoutes: React.FC = () => {
           </PrivateRoute>
         } />
 
+        <Route path="/receipts" element={
+          <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
+            <Receipts state={state} />
+          </PrivateRoute>
+        } />
+
         {/* Admin Routes - sem Layout de clínica */}
         <Route path="/admin" element={
           <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
@@ -221,6 +229,14 @@ const AppRoutes: React.FC = () => {
           <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
             <AdminLayout>
               <AdminSettings />
+            </AdminLayout>
+          </AdminRoute>
+        } />
+
+        <Route path="/admin/users" element={
+          <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
+            <AdminLayout>
+              <AdminUsers />
             </AdminLayout>
           </AdminRoute>
         } />

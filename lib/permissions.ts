@@ -1,6 +1,6 @@
 export type UserRole = 'SuperAdmin' | 'Admin' | 'Gerente' | 'Supervisor' | 'Comercial' | 'Recepcionista' | 'Financeiro' | 'Visualizador';
 
-export type MenuPage = 'dashboard' | 'inbox' | 'kanban' | 'users' | 'settings' | 'connect';
+export type MenuPage = 'dashboard' | 'inbox' | 'kanban' | 'users' | 'settings' | 'connect' | 'receipts';
 
 export type Action = 
   | 'create_user' 
@@ -18,7 +18,10 @@ export type Action =
   | 'edit_clinic_profile'
   | 'create_instance'
   | 'delete_instance'
-  | 'edit_pipeline_labels';
+  | 'edit_pipeline_labels'
+  | 'view_receipts'
+  | 'add_receipt'
+  | 'edit_receipt';
 
 export type DataAccess = 'all_billing' | 'own_billing' | 'no_billing';
 
@@ -31,25 +34,27 @@ interface RolePermissions {
 
 export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
   SuperAdmin: {
-    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings', 'connect'],
+    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings', 'connect', 'receipts'],
     actions: [
       'create_user', 'edit_user', 'delete_user', 'change_role', 'change_status',
       'send_message', 'move_lead', 'create_lead',
       'add_payment', 'add_quote',
       'edit_tags', 'edit_quick_replies', 'edit_clinic_profile',
-      'create_instance', 'delete_instance', 'edit_pipeline_labels'
+      'create_instance', 'delete_instance', 'edit_pipeline_labels',
+      'view_receipts', 'add_receipt', 'edit_receipt'
     ],
     data: 'all_billing',
     description: 'Acesso total ao sistema',
   },
   Admin: {
-    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings', 'connect'],
+    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings', 'connect', 'receipts'],
     actions: [
       'create_user', 'edit_user', 'delete_user', 'change_role', 'change_status',
       'send_message', 'move_lead', 'create_lead',
       'add_payment', 'add_quote',
       'edit_tags', 'edit_quick_replies', 'edit_clinic_profile',
-      'create_instance', 'delete_instance', 'edit_pipeline_labels'
+      'create_instance', 'delete_instance', 'edit_pipeline_labels',
+      'view_receipts', 'add_receipt', 'edit_receipt'
     ],
     data: 'all_billing',
     description: 'Acesso total. Pode criar usuários e configurar a clínica.',
@@ -78,7 +83,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'send_message', 'move_lead', 'create_lead', 'add_quote'
     ],
     data: 'own_billing',
-    description: 'Atende conversas. Vê apenas próprio faturamento.',
+    description: 'Atende conversas. Vê apenas próprio faturamento no Dashboard.',
   },
   Recepcionista: {
     menu: ['dashboard', 'inbox', 'kanban'],
@@ -89,12 +94,13 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     description: 'Foco em agendamentos. Acesso limitado ao Inbox e Kanban.',
   },
   Financeiro: {
-    menu: ['dashboard', 'inbox'],
+    menu: ['dashboard', 'inbox', 'receipts'],
     actions: [
-      'add_payment', 'add_quote'
+      'add_payment', 'add_quote',
+      'view_receipts', 'add_receipt', 'edit_receipt'
     ],
     data: 'all_billing',
-    description: 'Acesso ao faturamento e pagamentos. Não responde mensagens.',
+    description: 'Acesso ao faturamento, pagamentos e lançamentos. Não responde mensagens.',
   },
   Visualizador: {
     menu: ['dashboard', 'inbox'],

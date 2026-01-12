@@ -468,7 +468,62 @@ Melhorias implementadas:
 
 ---
 
-## Próximos Passos (Fase 7)
+### Fase 7: Sistema de Lançamentos e Melhorias Admin ✅ COMPLETA
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Sistema de Lançamentos (Receitas da Clínica) | ✅ Completo |
+| Página `/receipts` para Financeiro/Admin | ✅ Completo |
+| Múltiplas formas de pagamento por lançamento | ✅ Completo |
+| Vinculação de lançamento a pagamento comercial | ✅ Completo |
+| Dashboard do Comercial com vendas próprias | ✅ Completo |
+| Card "Minhas Vendas Detalhadas" no Dashboard | ✅ Completo |
+| Aba "Lançamentos" no AdminClinicDetail | ✅ Completo |
+| Página SuperAdmins (`/admin/users`) | ✅ Completo |
+| Campo Instância WhatsApp na criação de usuário | ✅ Completo |
+| RLS atualizado para SuperAdmin ver receitas | ✅ Completo |
+
+### Novas Tabelas
+
+| Tabela | Descrição |
+|--------|-----------|
+| `clinic_receipts` | Lançamentos/receitas da clínica |
+| `receipt_payments` | Formas de pagamento por lançamento |
+
+### Sistema de Lançamentos
+
+- **Página Lançamentos** (`/receipts`): Visível para Financeiro e Admin
+- **Vincular a Pagamento**: Cada lançamento pode ser vinculado a um pagamento comercial
+- **Múltiplas Formas**: PIX, Cartão Crédito, Cartão Débito, Dinheiro, Boleto, Transferência
+- **Status Automático**: Pendente, Parcial, Recebido (baseado no valor recebido vs comercial)
+
+### Dashboard do Comercial
+
+- **Faturamento do Mês**: Mostra apenas vendas criadas pelo comercial logado
+- **Faturamento Total**: Mostra apenas vendas criadas pelo comercial logado
+- **Minhas Vendas Detalhadas**: Tabela com Cliente, Data, Origem, Valor Comercial, Recebido, Status
+
+### Aba Lançamentos no Admin
+
+- **Cards de Resumo**: Valor Comercial, Receita Clínica, ROI
+- **Por Comercial**: Tabela com vendas, valor comercial, recebido e ROI por atendente
+- **Detalhamento**: Lista completa de vendas com cliente, data, origem, comercial, valor, recebido e status
+
+### Página SuperAdmins
+
+- **Rota**: `/admin/users`
+- **Funcionalidades**: Listar, Criar, Editar, Excluir SuperAdmins
+- **Menu lateral**: Novo item "SuperAdmins" no painel admin
+
+### Criação de Usuário com Instância
+
+- **Campo opcional**: Seleção de instância WhatsApp ao criar usuário
+- **Comportamento**: Sem instância = usuário só visualiza, não envia mensagens
+- **Ideal para**: Perfis como Financeiro e Visualizador
+
+---
+
+## Próximos Passos (Fase 8)
 
 | Funcionalidade | Status |
 |----------------|--------|

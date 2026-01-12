@@ -220,7 +220,40 @@ const AdminClinicDetail: React.FC = () => {
   const [savingGoals, setSavingGoals] = useState(false);
   
   // Estado para abas
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'whatsapp' | 'metrics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'whatsapp' | 'metrics' | 'receipts'>('overview');
+  
+  // Estados para aba de Lançamentos
+  const [receiptsData, setReceiptsData] = useState<{
+    totalComercial: number;
+    totalRecebido: number;
+    roi: string;
+    byAttendant: Array<{
+      id: string;
+      name: string;
+      salesCount: number;
+      commercialValue: number;
+      receivedValue: number;
+      roi: string;
+    }>;
+    details: Array<{
+      id: string;
+      clientName: string;
+      paymentDate: string;
+      sourceName: string;
+      sourceColor: string;
+      attendantName: string;
+      commercialValue: number;
+      receivedValue: number;
+      status: 'pending' | 'received' | 'partial';
+    }>;
+  }>({
+    totalComercial: 0,
+    totalRecebido: 0,
+    roi: '0',
+    byAttendant: [],
+    details: []
+  });
+  const [loadingReceipts, setLoadingReceipts] = useState(false);
   
   // Estados para métricas avançadas
   const [metricsPeriod, setMetricsPeriod] = useState<'7d' | '30d' | 'month' | 'lastMonth' | 'custom'>('month');
@@ -326,10 +359,10 @@ const AdminClinicDetail: React.FC = () => {
       // Buscar todos os pagamentos dos chats
       const { data: paymentsData } = await supabase
         .from('payments' as any)
-        .select('value, payment_date, chat_id')
+        .select('value, payment_date, chat_id, created_by')
         .in('chat_id', chatIds);
 
-      const payments = (paymentsData || []) as Array<{ value: number; payment_date: string; chat_id: string }>;
+      const payments = (paymentsData || []) as Array<{ value: number; payment_date: string; chat_id: string; created_by: string | null }>;
       
       // Calcular totais gerais
       const now = new Date();
@@ -341,14 +374,13 @@ const AdminClinicDetail: React.FC = () => {
         .reduce((sum, p) => sum + Number(p.value), 0);
       const totalConversions = chatsData.filter(c => c.status === 'Convertido').length;
 
-      // Calcular por atendente
+      // Calcular por atendente - usando created_by (quem criou o pagamento)
       const byAttendant: BillingStats['byAttendant'] = [];
       
-      // Adicionar cada usuário
+      // Adicionar cada usuário baseado em quem CRIOU o pagamento
       clinicUsers.forEach(u => {
+        const userPayments = payments.filter(p => p.created_by === u.id);
         const userChats = chatsData.filter(c => c.assigned_to === u.id);
-        const userChatIds = userChats.map(c => c.id);
-        const userPayments = payments.filter(p => userChatIds.includes(p.chat_id));
         
         byAttendant.push({
           id: u.id,
@@ -361,10 +393,9 @@ const AdminClinicDetail: React.FC = () => {
         });
       });
 
-      // Adicionar "Não atribuído" para chats sem assigned_to
+      // Adicionar "Não atribuído" para pagamentos sem created_by
+      const unassignedPayments = payments.filter(p => !p.created_by);
       const unassignedChats = chatsData.filter(c => !c.assigned_to);
-      const unassignedChatIds = unassignedChats.map(c => c.id);
-      const unassignedPayments = payments.filter(p => unassignedChatIds.includes(p.chat_id));
       
       if (unassignedPayments.length > 0 || unassignedChats.filter(c => c.status === 'Convertido').length > 0) {
         byAttendant.push({
@@ -654,6 +685,114 @@ const AdminClinicDetail: React.FC = () => {
       fetchMetricsData();
     }
   }, [activeTab, metricsPeriod, id]);
+
+  // Buscar dados de lançamentos quando abrir a aba
+  useEffect(() => {
+    if (activeTab === 'receipts' && id) {
+      fetchReceiptsData();
+    }
+  }, [activeTab, id]);
+
+  // Função para buscar dados de lançamentos
+  const fetchReceiptsData = async () => {
+    if (!id) return;
+    setLoadingReceipts(true);
+    
+    try {
+      // Buscar todos os payments da clínica
+      const { data: paymentsData } = await supabase
+        .from('payments' as any)
+        .select('id, value, payment_date, chat_id, created_by, chat:chats(id, client_name, source_id)')
+        .eq('clinic_id', id)
+        .order('payment_date', { ascending: false });
+
+      // Buscar usuários da clínica
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('id, name')
+        .eq('clinic_id', id);
+
+      // Buscar origens
+      const { data: sourcesData } = await supabase
+        .from('lead_sources' as any)
+        .select('id, name, color')
+        .eq('clinic_id', id);
+
+      // Buscar receitas
+      const paymentIds = ((paymentsData || []) as any[]).map(p => p.id);
+      let receiptsData: any[] = [];
+      if (paymentIds.length > 0) {
+        const { data } = await supabase
+          .from('clinic_receipts' as any)
+          .select('total_value, payment_id')
+          .in('payment_id', paymentIds);
+        receiptsData = (data || []) as any[];
+      }
+
+      // Calcular totais
+      const totalComercial = ((paymentsData || []) as any[]).reduce((sum, p) => sum + Number(p.value), 0);
+      const totalRecebido = receiptsData.reduce((sum, r) => sum + Number(r.total_value), 0);
+      const roi = totalComercial > 0 ? ((totalRecebido / totalComercial) * 100).toFixed(1) : '0';
+
+      // Agrupar por atendente
+      const attendantMap = new Map<string, { salesCount: number; commercialValue: number; receivedValue: number }>();
+      ((paymentsData || []) as any[]).forEach(p => {
+        const attendantId = p.created_by || 'unknown';
+        if (!attendantMap.has(attendantId)) {
+          attendantMap.set(attendantId, { salesCount: 0, commercialValue: 0, receivedValue: 0 });
+        }
+        const att = attendantMap.get(attendantId)!;
+        att.salesCount++;
+        att.commercialValue += Number(p.value);
+        
+        const paymentReceipts = receiptsData.filter(r => r.payment_id === p.id);
+        att.receivedValue += paymentReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
+      });
+
+      const byAttendant = Array.from(attendantMap.entries()).map(([attendantId, data]) => {
+        const user = ((usersData || []) as any[]).find(u => u.id === attendantId);
+        return {
+          id: attendantId,
+          name: user?.name || 'Desconhecido',
+          salesCount: data.salesCount,
+          commercialValue: data.commercialValue,
+          receivedValue: data.receivedValue,
+          roi: data.commercialValue > 0 ? ((data.receivedValue / data.commercialValue) * 100).toFixed(1) : '0'
+        };
+      }).sort((a, b) => b.commercialValue - a.commercialValue);
+
+      // Montar detalhes
+      const details = ((paymentsData || []) as any[]).map(p => {
+        const paymentReceipts = receiptsData.filter(r => r.payment_id === p.id);
+        const receivedValue = paymentReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
+        const source = ((sourcesData || []) as any[]).find(s => s.id === p.chat?.source_id);
+        const attendant = ((usersData || []) as any[]).find(u => u.id === p.created_by);
+        
+        let status: 'pending' | 'received' | 'partial' = 'pending';
+        if (receivedValue > 0) {
+          status = receivedValue >= Number(p.value) ? 'received' : 'partial';
+        }
+        
+        return {
+          id: p.id,
+          clientName: p.chat?.client_name || 'Cliente',
+          paymentDate: p.payment_date,
+          sourceName: source?.name || '-',
+          sourceColor: source?.color || '#94a3b8',
+          attendantName: attendant?.name || 'Desconhecido',
+          commercialValue: Number(p.value),
+          receivedValue,
+          status
+        };
+      });
+
+      setReceiptsData({ totalComercial, totalRecebido, roi, byAttendant, details });
+    } catch (err) {
+      console.error('Error fetching receipts data:', err);
+    } finally {
+      setLoadingReceipts(false);
+    }
+  };
 
   // Função para abrir modal de metas
   const openGoalsModal = () => {
@@ -1305,6 +1444,7 @@ const AdminClinicDetail: React.FC = () => {
             { id: 'users', label: 'Usuários', icon: 'group' },
             { id: 'whatsapp', label: 'WhatsApp', icon: 'chat' },
             { id: 'metrics', label: 'Métricas', icon: 'analytics' },
+            { id: 'receipts', label: 'Lançamentos', icon: 'receipt_long' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -2791,6 +2931,159 @@ const AdminClinicDetail: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tab: Lançamentos */}
+      {activeTab === 'receipts' && (
+        <div className="space-y-6">
+          {loadingReceipts ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+            </div>
+          ) : (
+            <>
+              {/* Cards de Resumo */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-5 rounded-2xl shadow-lg text-white">
+                  <p className="text-amber-100 text-xs font-medium uppercase tracking-wider">Valor Comercial</p>
+                  <p className="text-2xl font-black mt-1">
+                    R$ {receiptsData.totalComercial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-amber-100 text-xs mt-2">Total fechado pelos comerciais</p>
+                </div>
+                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-2xl shadow-lg text-white">
+                  <p className="text-emerald-100 text-xs font-medium uppercase tracking-wider">Receita Clinica</p>
+                  <p className="text-2xl font-black mt-1">
+                    R$ {receiptsData.totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-emerald-100 text-xs mt-2">Total recebido pela clinica</p>
+                </div>
+                <div className="bg-gradient-to-br from-violet-500 to-purple-600 p-5 rounded-2xl shadow-lg text-white">
+                  <p className="text-violet-100 text-xs font-medium uppercase tracking-wider">ROI</p>
+                  <p className="text-2xl font-black mt-1">{receiptsData.roi}%</p>
+                  <p className="text-violet-100 text-xs mt-2">Retorno sobre vendas</p>
+                </div>
+              </div>
+
+              {/* Tabela por Comercial */}
+              {receiptsData.byAttendant.length > 0 && (
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Por Comercial</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Comercial</th>
+                          <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Vendas</th>
+                          <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Valor Comercial</th>
+                          <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Recebido</th>
+                          <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">ROI</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {receiptsData.byAttendant.map(att => (
+                          <tr key={att.id} className="hover:bg-slate-50">
+                            <td className="py-3 px-4 font-medium text-slate-800">{att.name}</td>
+                            <td className="py-3 px-4 text-center text-slate-600">{att.salesCount}</td>
+                            <td className="py-3 px-4 text-right font-bold text-amber-600">
+                              R$ {att.commercialValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-3 px-4 text-right font-bold text-emerald-600">
+                              R$ {att.receivedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`font-bold ${Number(att.roi) >= 100 ? 'text-emerald-600' : 'text-slate-600'}`}>
+                                {att.roi}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Tabela Detalhada */}
+              {receiptsData.details.length > 0 && (
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Detalhamento</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Cliente</th>
+                          <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Data</th>
+                          <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Origem</th>
+                          <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Comercial</th>
+                          <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Valor</th>
+                          <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Recebido</th>
+                          <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {receiptsData.details.map(sale => (
+                          <tr key={sale.id} className="hover:bg-slate-50">
+                            <td className="py-3 px-4 font-medium text-slate-800">{sale.clientName}</td>
+                            <td className="py-3 px-4 text-center text-sm text-slate-600">
+                              {new Date(sale.paymentDate).toLocaleDateString('pt-BR')}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span 
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                                style={{ backgroundColor: `${sale.sourceColor}20`, color: sale.sourceColor }}
+                              >
+                                {sale.sourceName}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center text-sm text-slate-600">{sale.attendantName}</td>
+                            <td className="py-3 px-4 text-right font-bold text-amber-600">
+                              R$ {sale.commercialValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className={`font-bold ${sale.receivedValue > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                {sale.receivedValue > 0 
+                                  ? `R$ ${sale.receivedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                  : '-'
+                                }
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {sale.status === 'received' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                                  <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                  Recebido
+                                </span>
+                              )}
+                              {sale.status === 'partial' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                                  <span className="material-symbols-outlined text-[14px]">hourglass_top</span>
+                                  Parcial
+                                </span>
+                              )}
+                              {sale.status === 'pending' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                                  <span className="material-symbols-outlined text-[14px]">schedule</span>
+                                  Pendente
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {receiptsData.details.length === 0 && (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center text-slate-500">
+                  Nenhum lancamento encontrado para esta clinica
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
