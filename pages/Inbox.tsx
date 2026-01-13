@@ -30,7 +30,7 @@ const PIPELINE_STAGES = [
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading, sendMessage, markAsRead, updateChatStatus, refetch } = useChats(clinicId, user?.id);
+  const { chats, loading, sendMessage, markAsRead, updateChatStatus, refetch, fetchAndUpdateAvatar } = useChats(clinicId, user?.id);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [msgInput, setMsgInput] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('todos');
@@ -137,6 +137,21 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   // Estados para mensagens rápidas do banco
   const [quickReplies, setQuickReplies] = useState<Array<{ id: string; text: string }>>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  // Estados para cadastro/edição de cliente
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [clientData, setClientData] = useState<{
+    id: string | null;
+    name: string;
+    phone: string;
+    email: string;
+    cpf: string;
+    birth_date: string;
+    address: string;
+    notes: string;
+  } | null>(null);
+  const [savingClient, setSavingClient] = useState(false);
+  const [chatLeadId, setChatLeadId] = useState<string | null>(null);
 
   // Emojis comuns
   const commonEmojis = ['😀', '😂', '😍', '🥰', '😊', '👍', '👏', '🙏', '❤️', '🔥', '✅', '⭐', '🎉', '💪', '🤝', '👋', '😉', '🤔', '😅', '🙌'];
@@ -991,12 +1006,145 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   };
 
+  // Buscar dados do cliente vinculado ao chat
+  const fetchChatClient = async (chatId: string) => {
+    try {
+      const { data: chatData } = await supabase
+        .from('chats')
+        .select('lead_id')
+        .eq('id', chatId)
+        .single();
+      
+      if (chatData?.lead_id) {
+        setChatLeadId(chatData.lead_id);
+        const { data: leadData } = await supabase
+          .from('leads')
+          .select('id, name, phone, email, cpf, birth_date, address, notes')
+          .eq('id', chatData.lead_id)
+          .single();
+        
+        if (leadData) {
+          setClientData({
+            id: (leadData as any).id,
+            name: (leadData as any).name || '',
+            phone: (leadData as any).phone || '',
+            email: (leadData as any).email || '',
+            cpf: (leadData as any).cpf || '',
+            birth_date: (leadData as any).birth_date || '',
+            address: (leadData as any).address || '',
+            notes: (leadData as any).notes || '',
+          });
+        }
+      } else {
+        setChatLeadId(null);
+        setClientData(null);
+      }
+    } catch (err) {
+      console.error('Error fetching chat client:', err);
+    }
+  };
+
+  // Abrir modal de cadastro de cliente
+  const openClientModal = () => {
+    if (chatLeadId && clientData) {
+      // Editar cliente existente
+      setShowClientModal(true);
+    } else {
+      // Novo cliente - preencher com dados do chat
+      setClientData({
+        id: null,
+        name: selectedChat?.client_name || '',
+        phone: selectedChat?.phone_number || '',
+        email: '',
+        cpf: '',
+        birth_date: '',
+        address: '',
+        notes: '',
+      });
+      setShowClientModal(true);
+    }
+  };
+
+  // Salvar cliente (criar ou atualizar)
+  const handleSaveClient = async () => {
+    if (!clientData || !clientData.name.trim() || !clinicId || !selectedChatId) return;
+    
+    setSavingClient(true);
+    try {
+      if (clientData.id) {
+        // Atualizar cliente existente
+        const { error } = await supabase
+          .from('leads')
+          .update({
+            name: clientData.name.trim(),
+            phone: clientData.phone.trim(),
+            email: clientData.email.trim() || null,
+            cpf: clientData.cpf.trim() || null,
+            birth_date: clientData.birth_date || null,
+            address: clientData.address.trim() || null,
+            notes: clientData.notes.trim() || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', clientData.id);
+        
+        if (error) throw error;
+        
+        // Atualizar nome no chat
+        await supabase
+          .from('chats')
+          .update({ client_name: clientData.name.trim() })
+          .eq('id', selectedChatId);
+      } else {
+        // Criar novo cliente
+        const { data: newLead, error } = await supabase
+          .from('leads')
+          .insert({
+            clinic_id: clinicId,
+            name: clientData.name.trim(),
+            phone: clientData.phone.trim(),
+            email: clientData.email.trim() || null,
+            cpf: clientData.cpf.trim() || null,
+            birth_date: clientData.birth_date || null,
+            address: clientData.address.trim() || null,
+            notes: clientData.notes.trim() || null,
+            stage: 'Novo Lead',
+          })
+          .select('id')
+          .single();
+        
+        if (error) throw error;
+        
+        // Vincular cliente ao chat e atualizar nome
+        if (newLead) {
+          await supabase
+            .from('chats')
+            .update({ 
+              lead_id: (newLead as any).id,
+              client_name: clientData.name.trim()
+            })
+            .eq('id', selectedChatId);
+          
+          setChatLeadId((newLead as any).id);
+          setClientData(prev => prev ? { ...prev, id: (newLead as any).id } : null);
+        }
+      }
+      
+      setShowClientModal(false);
+      refetch();
+    } catch (err) {
+      console.error('Error saving client:', err);
+      alert('Erro ao salvar cliente');
+    } finally {
+      setSavingClient(false);
+    }
+  };
+
   // Buscar origens ao carregar
   useEffect(() => {
     fetchLeadSources();
   }, [clinicId]);
 
-  // Buscar notas, orçamentos, origem, pagamentos, tarefas e mensagens agendadas quando mudar de chat
+  // Buscar notas, orçamentos, origem, pagamentos, tarefas, mensagens agendadas e cliente quando mudar de chat
   useEffect(() => {
     if (selectedChatId) {
       fetchNotes(selectedChatId);
@@ -1005,6 +1153,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       fetchPayments(selectedChatId);
       fetchTasks(selectedChatId);
       fetchScheduledMessages(selectedChatId);
+      fetchChatClient(selectedChatId);
     } else {
       setNotes([]);
       setQuotes([]);
@@ -1012,6 +1161,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       setPayments([]);
       setTasks([]);
       setScheduledMessages([]);
+      setChatLeadId(null);
+      setClientData(null);
     }
   }, [selectedChatId]);
 
@@ -1054,6 +1205,12 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     if (selectedChatId) {
       lockChat(selectedChatId);
       fetchChatAssignment(selectedChatId);
+      
+      // Buscar foto de perfil do WhatsApp se não tiver
+      const chat = chats.find(c => c.id === selectedChatId);
+      if (chat && !chat.avatar_url && chat.phone_number) {
+        fetchAndUpdateAvatar(selectedChatId, chat.phone_number);
+      }
     }
     
     // Cleanup: desbloquear ao sair da conversa
@@ -1344,8 +1501,18 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-full transition-colors">
-                  <span className="material-symbols-outlined text-[20px]">person_add</span>
+                <button 
+                  onClick={openClientModal}
+                  className={`p-2 rounded-full transition-colors ${
+                    chatLeadId 
+                      ? 'text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50' 
+                      : 'text-slate-400 hover:text-cyan-600 hover:bg-cyan-50'
+                  }`}
+                  title={chatLeadId ? 'Ver/Editar Cliente' : 'Cadastrar Cliente'}
+                >
+                  <span className="material-symbols-outlined text-[20px]">
+                    {chatLeadId ? 'person' : 'person_add'}
+                  </span>
                 </button>
                 <button className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors">
                   <span className="material-symbols-outlined text-[20px]">check_circle</span>
@@ -2624,6 +2791,145 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </button>
               <button
                 onClick={() => setShowForwardModal(false)}
+                className="px-6 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cadastro/Edição de Cliente */}
+      {showClientModal && clientData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="bg-gradient-to-r from-cyan-600 to-cyan-700 p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="size-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white">
+                    {clientData.id ? 'person' : 'person_add'}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-white">
+                    {clientData.id ? 'Editar Cliente' : 'Cadastrar Cliente'}
+                  </h3>
+                  <p className="text-white/80 text-sm">
+                    {clientData.id ? 'Atualize os dados do cliente' : 'Preencha os dados do cliente'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowClientModal(false)}
+                className="text-white/80 hover:text-white transition-colors"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Nome *</label>
+                  <input
+                    type="text"
+                    value={clientData.name}
+                    onChange={(e) => setClientData({ ...clientData, name: e.target.value })}
+                    className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    placeholder="Nome completo"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Telefone</label>
+                    <input
+                      type="text"
+                      value={clientData.phone}
+                      onChange={(e) => setClientData({ ...clientData, phone: e.target.value })}
+                      className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent bg-slate-50"
+                      placeholder="(00) 00000-0000"
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">CPF</label>
+                    <input
+                      type="text"
+                      value={clientData.cpf}
+                      onChange={(e) => setClientData({ ...clientData, cpf: e.target.value })}
+                      className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                      placeholder="000.000.000-00"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={clientData.email}
+                      onChange={(e) => setClientData({ ...clientData, email: e.target.value })}
+                      className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                      placeholder="email@exemplo.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Data de Nascimento</label>
+                    <input
+                      type="date"
+                      value={clientData.birth_date}
+                      onChange={(e) => setClientData({ ...clientData, birth_date: e.target.value })}
+                      className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Endereço</label>
+                  <input
+                    type="text"
+                    value={clientData.address}
+                    onChange={(e) => setClientData({ ...clientData, address: e.target.value })}
+                    className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    placeholder="Rua, número, bairro, cidade"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Observações</label>
+                  <textarea
+                    value={clientData.notes}
+                    onChange={(e) => setClientData({ ...clientData, notes: e.target.value })}
+                    className="w-full h-24 px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none"
+                    placeholder="Observações sobre o cliente..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={handleSaveClient}
+                disabled={!clientData.name.trim() || savingClient}
+                className="flex-1 h-11 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingClient ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">save</span>
+                    {clientData.id ? 'Atualizar' : 'Cadastrar'}
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setShowClientModal(false)}
                 className="px-6 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
               >
                 Cancelar

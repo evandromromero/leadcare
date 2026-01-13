@@ -26,6 +26,7 @@ interface UseWhatsAppReturn {
   disconnect: (instanceId?: string) => Promise<{ error: string | null }>;
   refreshStatus: (instanceId?: string) => Promise<void>;
   deleteInstance: (instanceId: string) => Promise<{ error: string | null }>;
+  fetchProfilePicture: (phoneNumber: string, instanceName?: string) => Promise<string | null>;
 }
 
 export function useWhatsApp(clinicId: string | undefined, userId?: string): UseWhatsAppReturn {
@@ -443,6 +444,39 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
     }
   };
 
+  // Buscar foto de perfil do WhatsApp
+  const fetchProfilePicture = async (phoneNumber: string, instanceName?: string): Promise<string | null> => {
+    if (!settings) return null;
+    
+    // Usar a instância conectada ou a primeira disponível
+    const instance = instanceName || instances.find(i => i.status === 'connected')?.instanceName;
+    if (!instance) return null;
+    
+    // Formatar número (remover caracteres especiais)
+    const formattedNumber = phoneNumber.replace(/\D/g, '');
+    
+    try {
+      const response = await fetch(`${settings.apiUrl}/chat/fetchProfilePictureUrl/${instance}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': settings.apiKey,
+        },
+        body: JSON.stringify({
+          number: formattedNumber,
+        }),
+      });
+      
+      if (!response.ok) return null;
+      
+      const data = await response.json();
+      return data.profilePictureUrl || data.picture || null;
+    } catch (err) {
+      console.error('Error fetching profile picture:', err);
+      return null;
+    }
+  };
+
   return {
     instances,
     selectedInstance,
@@ -454,5 +488,6 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
     disconnect,
     refreshStatus,
     deleteInstance,
+    fetchProfilePicture,
   };
 }

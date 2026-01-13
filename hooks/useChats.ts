@@ -20,6 +20,7 @@ interface UseChatsReturn {
   updateChatStatus: (chatId: string, status: string) => Promise<void>;
   sendMessage: (chatId: string, content: string, userId: string) => Promise<void>;
   markAsRead: (chatId: string) => Promise<void>;
+  fetchAndUpdateAvatar: (chatId: string, phoneNumber: string) => Promise<void>;
 }
 
 export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
@@ -318,6 +319,46 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     };
   }, [clinicId]);
 
+  // Buscar e atualizar foto de perfil do WhatsApp
+  const fetchAndUpdateAvatar = async (chatId: string, phoneNumber: string) => {
+    if (!whatsappInstance || whatsappInstance.status !== 'connected' || !evolutionSettings) return;
+    
+    const formattedPhone = phoneNumber.replace(/\D/g, '');
+    
+    try {
+      const response = await fetch(`${evolutionSettings.apiUrl}/chat/fetchProfilePictureUrl/${whatsappInstance.instanceName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': evolutionSettings.apiKey,
+        },
+        body: JSON.stringify({
+          number: formattedPhone,
+        }),
+      });
+      
+      if (!response.ok) return;
+      
+      const data = await response.json();
+      const avatarUrl = data.profilePictureUrl || data.picture || null;
+      
+      if (avatarUrl) {
+        // Atualizar no banco de dados
+        await supabase
+          .from('chats')
+          .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
+          .eq('id', chatId);
+        
+        // Atualizar no estado local
+        setChats(prev => prev.map(c => 
+          c.id === chatId ? { ...c, avatar_url: avatarUrl } : c
+        ));
+      }
+    } catch (err) {
+      console.error('Error fetching profile picture:', err);
+    }
+  };
+
   return {
     chats,
     loading,
@@ -327,5 +368,6 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     updateChatStatus,
     sendMessage,
     markAsRead,
+    fetchAndUpdateAvatar,
   };
 }

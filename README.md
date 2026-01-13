@@ -523,7 +523,71 @@ Melhorias implementadas:
 
 ---
 
-## Próximos Passos (Fase 8)
+### Fase 8: Tarefas, Follow-ups e Melhorias ✅ COMPLETA
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Hook `useTasks` para gerenciamento de tarefas | ✅ Completo |
+| Dropdown de tarefas no sino de notificações | ✅ Completo |
+| Seção de tarefas no Dashboard (Atrasadas, Hoje, Semana) | ✅ Completo |
+| Seção de Follow-ups agendados no Dashboard | ✅ Completo |
+| Botões de follow-up alterados para 1/3/7 dias | ✅ Completo |
+| Cancelamento de negociações (manter registro) | ✅ Completo |
+| Botão excluir em orçamentos | ✅ Completo |
+| Botão voltar para pendente em orçamentos | ✅ Completo |
+| Busca automática de foto de perfil do WhatsApp | ✅ Completo |
+
+### Sistema de Tarefas
+
+- **Hook `useTasks`**: Busca tarefas da clínica, filtra por data e permite marcar como concluída
+- **Categorias**: Atrasadas (overdue), Hoje (todayTasks), Próximas (upcomingTasks), Semana (weekTasks)
+- **Dropdown no Sino**: Mostra tarefas pendentes com badge de contagem
+- **Dashboard**: Cards visuais para cada categoria de tarefa
+- **Navegação**: Clique na tarefa leva direto para o chat relacionado
+
+### Sistema de Follow-ups
+
+- **Botões Rápidos**: 1 dia, 3 dias, 7 dias (antes era 30/60/90)
+- **Seção no Dashboard**: Lista de follow-ups agendados com data/hora
+- **Navegação**: Clique no follow-up leva para o chat
+
+### Cancelamento de Negociações
+
+- **Campo `status`**: Adicionado na tabela `payments` ('active' ou 'cancelled')
+- **Botão Cancelar**: Marca a negociação como cancelada (não exclui)
+- **Visual**: Negociações canceladas aparecem com fundo vermelho, valor riscado e badge "CANCELADO"
+- **Total**: Só conta negociações ativas no total faturado
+
+### Foto de Perfil do WhatsApp
+
+- **Busca Automática**: Ao selecionar um chat sem foto, busca via Evolution API
+- **Endpoint**: `POST /chat/fetchProfilePictureUrl/{instance}`
+- **Armazenamento**: Salva no campo `avatar_url` do chat
+- **Limitações**: Só funciona se o contato permitir visualização da foto
+
+### Novas Tabelas/Campos
+
+| Tabela | Campo | Descrição |
+|--------|-------|-----------|
+| `payments` | `status` | 'active' ou 'cancelled' |
+| `tasks` | - | Tarefas vinculadas a chats |
+
+### Novos Hooks
+
+| Hook | Descrição |
+|------|-----------|
+| `useTasks` | Gerencia tarefas por clínica/usuário |
+
+### Funções Adicionadas
+
+| Arquivo | Função | Descrição |
+|---------|--------|-----------|
+| `useWhatsApp.ts` | `fetchProfilePicture` | Busca foto de perfil via Evolution API |
+| `useChats.ts` | `fetchAndUpdateAvatar` | Busca e salva foto no banco |
+
+---
+
+## Próximos Passos (Fase 9)
 
 | Funcionalidade | Status |
 |----------------|--------|
