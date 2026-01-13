@@ -116,6 +116,26 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [sendingMedia, setSendingMedia] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Estados para gravação de áudio
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Estado para responder mensagem específica
+  const [replyingTo, setReplyingTo] = useState<{
+    id: string;
+    content: string;
+    senderName: string;
+    isFromClient: boolean;
+  } | null>(null);
+  
+  // Estados para reações de mensagens
+  const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
+  const [messageReactions, setMessageReactions] = useState<Record<string, Array<{ emoji: string; user_id: string }>>>({});
+  const reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  
   // Estados para bloqueio de conversa
   const [chatLock, setChatLock] = useState<{ locked_by: string | null; locked_by_name: string | null; isForwardLock?: boolean; locked_at?: string } | null>(null);
   const [isLocking, setIsLocking] = useState(false);
@@ -1261,10 +1281,206 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     scrollToBottom();
   }, [selectedChat?.messages?.length, selectedChatId]);
 
+  // Buscar reações das mensagens
+  const fetchReactions = async (messageIds: string[]) => {
+    if (!messageIds.length) return;
+    
+    const { data } = await (supabase as any)
+      .from('message_reactions')
+      .select('message_id, emoji, user_id')
+      .in('message_id', messageIds);
+    
+    if (data) {
+      const reactionsMap: Record<string, Array<{ emoji: string; user_id: string }>> = {};
+      data.forEach((r: any) => {
+        if (!reactionsMap[r.message_id]) {
+          reactionsMap[r.message_id] = [];
+        }
+        reactionsMap[r.message_id].push({ emoji: r.emoji, user_id: r.user_id });
+      });
+      setMessageReactions(reactionsMap);
+    }
+  };
+
+  // Buscar reações quando mudar de chat
+  useEffect(() => {
+    if (selectedChat?.messages?.length) {
+      const messageIds = selectedChat.messages.map(m => m.id);
+      fetchReactions(messageIds);
+    }
+  }, [selectedChat?.messages]);
+
+  // Adicionar/remover reação
+  const toggleReaction = async (messageId: string, emoji: string) => {
+    if (!user || !selectedChat) return;
+    
+    const existingReactions = messageReactions[messageId] || [];
+    const userReaction = existingReactions.find(r => r.user_id === user.id && r.emoji === emoji);
+    const isRemoving = !!userReaction;
+    
+    if (isRemoving) {
+      // Remover reação do banco
+      await (supabase as any)
+        .from('message_reactions')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('user_id', user.id)
+        .eq('emoji', emoji);
+    } else {
+      // Adicionar reação ao banco
+      await (supabase as any)
+        .from('message_reactions')
+        .insert({
+          message_id: messageId,
+          user_id: user.id,
+          emoji: emoji,
+        });
+    }
+    
+    // Enviar reação para o WhatsApp
+    try {
+      const { data: settings } = await supabase
+        .from('settings')
+        .select('evolution_api_url, evolution_api_key')
+        .single();
+      
+      const { data: instance } = await supabase
+        .from('whatsapp_instances')
+        .select('instance_name, status')
+        .eq('clinic_id', clinicId)
+        .single();
+      
+      // Buscar remote_message_id da mensagem
+      const { data: msgData } = await (supabase as any)
+        .from('messages')
+        .select('remote_message_id, is_from_client')
+        .eq('id', messageId)
+        .single();
+      
+      if (instance?.status === 'connected' && settings?.evolution_api_url && msgData?.remote_message_id && selectedChat.phone_number) {
+        let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
+        if (!formattedPhone.startsWith('55')) {
+          formattedPhone = '55' + formattedPhone;
+        }
+        
+        await fetch(`${settings.evolution_api_url}/message/sendReaction/${instance.instance_name}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': settings.evolution_api_key,
+          },
+          body: JSON.stringify({
+            key: {
+              remoteJid: `${formattedPhone}@s.whatsapp.net`,
+              fromMe: !msgData.is_from_client,
+              id: msgData.remote_message_id,
+            },
+            reaction: isRemoving ? '' : emoji,
+          }),
+        });
+      }
+    } catch (err) {
+      console.error('Error sending reaction to WhatsApp:', err);
+    }
+    
+    // Atualizar reações localmente
+    if (selectedChat?.messages) {
+      const messageIds = selectedChat.messages.map(m => m.id);
+      await fetchReactions(messageIds);
+    }
+    
+    setShowReactionPicker(null);
+  };
+
   const handleSendMessage = async () => {
-    if (!msgInput.trim() || !selectedChatId || !user) return;
-    await sendMessage(selectedChatId, msgInput, user.id);
-    setMsgInput('');
+    if (!msgInput.trim() || !selectedChatId || !user || !selectedChat) return;
+    
+    try {
+      // Buscar configurações da Evolution API
+      const { data: settings } = await supabase
+        .from('settings')
+        .select('evolution_api_url, evolution_api_key')
+        .single();
+      
+      // Buscar instância WhatsApp
+      const { data: instance } = await supabase
+        .from('whatsapp_instances')
+        .select('instance_name, status')
+        .eq('clinic_id', clinicId)
+        .single();
+      
+      // Enviar via WhatsApp se conectado
+      if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
+        let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
+        if (!formattedPhone.startsWith('55')) {
+          formattedPhone = '55' + formattedPhone;
+        }
+        
+        // Preparar body da requisição
+        const messageBody: any = {
+          number: formattedPhone,
+          text: msgInput.trim(),
+        };
+        
+        // Adicionar quote se estiver respondendo uma mensagem
+        if (replyingTo) {
+          // Buscar remote_message_id da mensagem original
+          const { data: originalMsg } = await (supabase as any)
+            .from('messages')
+            .select('remote_message_id')
+            .eq('id', replyingTo.id)
+            .single();
+          
+          if (originalMsg?.remote_message_id) {
+            messageBody.quoted = {
+              key: {
+                remoteJid: `${formattedPhone}@s.whatsapp.net`,
+                fromMe: !replyingTo.isFromClient,
+                id: originalMsg.remote_message_id,
+              },
+              message: {
+                conversation: replyingTo.content,
+              },
+            };
+          }
+        }
+        
+        await fetch(`${settings.evolution_api_url}/message/sendText/${instance.instance_name}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': settings.evolution_api_key,
+          },
+          body: JSON.stringify(messageBody),
+        });
+      }
+      
+      // Salvar mensagem no banco com quote se existir
+      await supabase.from('messages').insert({
+        chat_id: selectedChatId,
+        content: msgInput.trim(),
+        type: 'text',
+        is_from_client: false,
+        sent_by: user.id,
+        quoted_message_id: replyingTo?.id || null,
+        quoted_content: replyingTo?.content || null,
+        quoted_sender_name: replyingTo?.senderName || null,
+      });
+      
+      // Atualizar chat
+      await supabase.from('chats').update({
+        last_message: msgInput.trim(),
+        last_message_time: new Date().toISOString(),
+      }).eq('id', selectedChatId);
+      
+      setMsgInput('');
+      setReplyingTo(null);
+      await refetch();
+      
+    } catch (err) {
+      console.error('Error sending message:', err);
+      alert('Erro ao enviar mensagem');
+    }
   };
 
   // Enviar mídia (imagem/vídeo)
@@ -1371,6 +1587,176 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       handleSendMedia(file);
     }
     e.target.value = '';
+  };
+
+  // Iniciar gravação de áudio
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      audioChunksRef.current = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+      
+      recorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      // Timer para mostrar tempo de gravação
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
+    } catch (err) {
+      console.error('Error starting recording:', err);
+      alert('Erro ao acessar microfone. Verifique as permissões.');
+    }
+  };
+
+  // Cancelar gravação
+  const cancelRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+    }
+    setIsRecording(false);
+    setRecordingTime(0);
+    setMediaRecorder(null);
+    audioChunksRef.current = [];
+  };
+
+  // Parar e enviar áudio
+  const stopAndSendRecording = async () => {
+    if (!mediaRecorder || !selectedChatId || !user || !selectedChat) return;
+    
+    return new Promise<void>((resolve) => {
+      mediaRecorder.onstop = async () => {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        
+        if (recordingIntervalRef.current) {
+          clearInterval(recordingIntervalRef.current);
+        }
+        
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/ogg' });
+        const audioFile = new File([audioBlob], `audio_${Date.now()}.ogg`, { type: 'audio/ogg' });
+        
+        setIsRecording(false);
+        setRecordingTime(0);
+        setMediaRecorder(null);
+        
+        // Enviar o áudio
+        await handleSendAudio(audioFile);
+        resolve();
+      };
+      
+      mediaRecorder.stop();
+    });
+  };
+
+  // Enviar áudio gravado
+  const handleSendAudio = async (audioFile: File) => {
+    if (!selectedChatId || !user || !selectedChat) return;
+    
+    setSendingMedia(true);
+    try {
+      // Upload para Supabase Storage
+      const fileName = `${selectedChatId}/${Date.now()}_${audioFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('chat-media')
+        .upload(fileName, audioFile, { contentType: 'audio/ogg' });
+      
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        alert('Erro ao fazer upload do áudio');
+        return;
+      }
+      
+      // Obter URL pública
+      const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(fileName);
+      const mediaUrl = urlData?.publicUrl;
+      
+      if (!mediaUrl) {
+        alert('Erro ao obter URL do áudio');
+        return;
+      }
+      
+      // Buscar configurações da Evolution API
+      const { data: settings } = await supabase
+        .from('settings')
+        .select('evolution_api_url, evolution_api_key')
+        .single();
+      
+      // Buscar instância WhatsApp
+      const { data: instance } = await supabase
+        .from('whatsapp_instances')
+        .select('instance_name, status')
+        .eq('clinic_id', clinicId)
+        .single();
+      
+      // Enviar via WhatsApp se conectado
+      if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
+        let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
+        if (!formattedPhone.startsWith('55')) {
+          formattedPhone = '55' + formattedPhone;
+        }
+        
+        await fetch(`${settings.evolution_api_url}/message/sendWhatsAppAudio/${instance.instance_name}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': settings.evolution_api_key,
+          },
+          body: JSON.stringify({
+            number: formattedPhone,
+            audio: mediaUrl,
+          }),
+        });
+      }
+      
+      // Salvar mensagem no banco
+      await supabase.from('messages').insert({
+        chat_id: selectedChatId,
+        content: '[Áudio]',
+        type: 'audio',
+        media_url: mediaUrl,
+        is_from_client: false,
+        sent_by: user.id,
+      });
+      
+      // Atualizar chat
+      await supabase.from('chats').update({
+        last_message: '[Áudio]',
+        last_message_time: new Date().toISOString(),
+      }).eq('id', selectedChatId);
+      
+      // Recarregar chats
+      await refetch();
+      
+    } catch (err) {
+      console.error('Error sending audio:', err);
+      alert('Erro ao enviar áudio');
+    } finally {
+      setSendingMedia(false);
+    }
+  };
+
+  // Formatar tempo de gravação (mm:ss)
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const formatTime = (dateStr: string | null) => {
@@ -1514,8 +1900,18 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     {chatLeadId ? 'person' : 'person_add'}
                   </span>
                 </button>
-                <button className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors">
-                  <span className="material-symbols-outlined text-[20px]">check_circle</span>
+                <button 
+                  onClick={() => selectedChatId && markAsRead(selectedChatId)}
+                  className={`p-2 rounded-full transition-colors ${
+                    (selectedChat?.unread_count || 0) === 0
+                      ? 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                      : 'text-slate-400 hover:text-green-600 hover:bg-green-50'
+                  }`}
+                  title={(selectedChat?.unread_count || 0) === 0 ? 'Conversa lida' : 'Marcar como lida'}
+                >
+                  <span className="material-symbols-outlined text-[20px]">
+                    {(selectedChat?.unread_count || 0) === 0 ? 'check_circle' : 'radio_button_unchecked'}
+                  </span>
                 </button>
                 <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
                   <span className="material-symbols-outlined text-[20px]">more_vert</span>
@@ -1529,12 +1925,27 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </div>
               
               {selectedChat.messages.map((m) => (
-                <div key={m.id} className={`flex ${!m.is_from_client ? 'justify-end' : 'justify-start'} w-full`}>
+                <div key={m.id} className={`flex ${!m.is_from_client ? 'justify-end' : 'justify-start'} w-full group`}>
                   <div className={`max-w-[75%] p-3 rounded-2xl shadow-sm relative ${
                     !m.is_from_client 
                       ? 'bg-cyan-600 text-white rounded-tr-none' 
                       : 'bg-white text-slate-800 rounded-tl-none'
                   }`}>
+                    {/* Quote/Reply - mensagem sendo respondida */}
+                    {(m as any).quoted_content && (
+                      <div className={`mb-2 p-2 rounded-lg border-l-4 ${
+                        !m.is_from_client 
+                          ? 'bg-cyan-700/50 border-cyan-300' 
+                          : 'bg-slate-100 border-slate-400'
+                      }`}>
+                        <p className={`text-[10px] font-bold ${!m.is_from_client ? 'text-cyan-200' : 'text-slate-500'}`}>
+                          {(m as any).quoted_sender_name || 'Mensagem'}
+                        </p>
+                        <p className={`text-xs line-clamp-2 ${!m.is_from_client ? 'text-cyan-100' : 'text-slate-600'}`}>
+                          {(m as any).quoted_content}
+                        </p>
+                      </div>
+                    )}
                     {/* Nome do atendente */}
                     {!m.is_from_client && m.sent_by && userNames[m.sent_by] && (
                       <p className="text-[10px] font-bold text-cyan-200 mb-1">{userNames[m.sent_by]}</p>
@@ -1586,10 +1997,79 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         <span className="text-sm">{m.content}</span>
                       </div>
                     )}
+                    {/* Reações exibidas */}
+                    {messageReactions[m.id]?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {Object.entries(
+                          messageReactions[m.id].reduce((acc: Record<string, number>, r) => {
+                            acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                            return acc;
+                          }, {})
+                        ).map(([emoji, count]) => (
+                          <span 
+                            key={emoji} 
+                            className={`text-xs px-1.5 py-0.5 rounded-full cursor-pointer hover:scale-110 transition-transform ${
+                              !m.is_from_client ? 'bg-cyan-500' : 'bg-slate-100'
+                            }`}
+                            onClick={() => toggleReaction(m.id, emoji)}
+                          >
+                            {emoji} {(count as number) > 1 && <span className="text-[10px]">{count as number}</span>}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${!m.is_from_client ? 'text-cyan-100' : 'text-slate-400'}`}>
                       {formatTime(m.created_at)}
-                      {!m.is_from_client && <span className="material-symbols-outlined text-[12px]">done_all</span>}
+                      {!m.is_from_client && (
+                        <span className={`material-symbols-outlined text-[12px] ${
+                          (m as any).delivery_status === 'read' ? 'text-blue-400' : ''
+                        }`}>
+                          {(m as any).delivery_status === 'sent' ? 'check' : 'done_all'}
+                        </span>
+                      )}
                     </div>
+                    {/* Botões de ação - aparecem no hover */}
+                    {canSendMessage && (
+                      <div className={`absolute ${m.is_from_client ? '-right-20' : '-left-20'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 flex gap-1 transition-all`}>
+                        <button
+                          onClick={() => setReplyingTo({
+                            id: m.id,
+                            content: m.content,
+                            senderName: m.is_from_client ? selectedChat.client_name : (userNames[m.sent_by || ''] || 'Você'),
+                            isFromClient: m.is_from_client,
+                          })}
+                          className="p-1.5 rounded-full bg-white shadow-md hover:bg-slate-100 transition-all"
+                          title="Responder"
+                        >
+                          <span className="material-symbols-outlined text-[16px] text-slate-500">reply</span>
+                        </button>
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowReactionPicker(showReactionPicker === m.id ? null : m.id)}
+                            className="p-1.5 rounded-full bg-white shadow-md hover:bg-slate-100 transition-all"
+                            title="Reagir"
+                          >
+                            <span className="material-symbols-outlined text-[16px] text-slate-500">add_reaction</span>
+                          </button>
+                          {showReactionPicker === m.id && (
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={() => setShowReactionPicker(null)} />
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white rounded-full shadow-xl border border-slate-200 p-1 z-50 flex gap-1">
+                                {reactionEmojis.map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    onClick={() => toggleReaction(m.id, emoji)}
+                                    className="text-lg hover:scale-125 transition-transform p-1"
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1617,6 +2097,25 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   Agendar
                 </button>
               </div>
+              
+              {/* Preview da mensagem sendo respondida */}
+              {replyingTo && (
+                <div className="mb-2 p-3 bg-slate-100 rounded-xl border-l-4 border-cyan-500 flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-cyan-600 mb-0.5">
+                      Respondendo a {replyingTo.senderName}
+                    </p>
+                    <p className="text-sm text-slate-600 truncate">{replyingTo.content}</p>
+                  </div>
+                  <button 
+                    onClick={() => setReplyingTo(null)}
+                    className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors ml-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+              )}
+              
               <div className="flex items-end gap-3 bg-slate-50 rounded-2xl border border-slate-200 p-2 focus-within:ring-2 focus-within:ring-cyan-600 focus-within:border-transparent transition-all">
                 <input 
                   type="file" 
@@ -1675,6 +2174,29 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     <span className="material-symbols-outlined text-lg">visibility</span>
                     <span className="text-sm font-medium">Modo visualização - sem permissão para responder</span>
                   </div>
+                ) : isRecording ? (
+                  <div className="flex-1 flex items-center gap-3">
+                    <button 
+                      onClick={cancelRecording}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">close</span>
+                      Cancelar
+                    </button>
+                    <div className="flex-1 flex items-center justify-center gap-3 bg-red-50 rounded-xl py-2 px-4">
+                      <span className="size-3 bg-red-500 rounded-full animate-pulse"></span>
+                      <span className="text-red-600 font-bold text-lg">{formatRecordingTime(recordingTime)}</span>
+                      <span className="text-red-500 text-sm">Gravando...</span>
+                    </div>
+                    <button 
+                      onClick={stopAndSendRecording}
+                      disabled={sendingMedia}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">send</span>
+                      Enviar
+                    </button>
+                  </div>
                 ) : (
                   <>
                     <textarea 
@@ -1686,8 +2208,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                       rows={1}
                     />
                     <button 
-                      onClick={handleSendMessage}
+                      onClick={startRecording}
                       disabled={sendingMedia}
+                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors disabled:opacity-50"
+                      title="Gravar áudio"
+                    >
+                      <span className="material-symbols-outlined">mic</span>
+                    </button>
+                    <button 
+                      onClick={handleSendMessage}
+                      disabled={sendingMedia || !msgInput.trim()}
                       className="bg-cyan-600 hover:bg-cyan-700 text-white size-10 flex items-center justify-center rounded-xl shadow-lg shadow-cyan-500/30 transition-all shrink-0 active:scale-95 disabled:opacity-50"
                     >
                       <span className="material-symbols-outlined">send</span>
