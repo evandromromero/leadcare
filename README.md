@@ -587,7 +587,82 @@ Melhorias implementadas:
 
 ---
 
-## Próximos Passos (Fase 9)
+### Fase 9: Funcionalidades Avançadas de Chat ✅ COMPLETA
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Cadastro/edição de cliente vinculado ao chat | ✅ Completo |
+| Marcar conversa como lida (visual dinâmico) | ✅ Completo |
+| Gravação e envio de áudio | ✅ Completo |
+| Responder mensagem específica (quote/reply) | ✅ Completo |
+| Reações com emoji nas mensagens | ✅ Completo |
+| Status de entrega (enviado/entregue/lido) | ✅ Completo |
+| Envio de quote para WhatsApp via Evolution API | ✅ Completo |
+| Envio de reações para WhatsApp via Evolution API | ✅ Completo |
+
+### Cadastro de Cliente
+
+- **Botão dinâmico**: Ícone `person_add` (novo) ou `person` (existente)
+- **Modal completa**: Nome, Email, CPF, Data Nascimento, Endereço, Observações
+- **Vinculação**: Cliente vinculado à tabela `leads` e ao chat
+- **Sincronização**: Nome do cliente atualiza automaticamente no chat
+
+### Marcar como Lida
+
+- **Visual dinâmico**: Ícone muda de `radio_button_unchecked` para `check_circle`
+- **Cor**: Cinza (não lida) → Verde (lida)
+- **Função**: Zera o `unread_count` do chat
+
+### Gravação de Áudio
+
+- **MediaRecorder API**: Gravação direta do navegador
+- **UI de gravação**: Timer, botão cancelar, botão enviar
+- **Formato**: OGG (compatível com WhatsApp)
+- **Envio**: Via Evolution API `sendWhatsAppAudio`
+
+### Responder Mensagem (Quote/Reply)
+
+- **Botão reply**: Aparece ao passar mouse sobre mensagem
+- **Preview**: Barra acima do input mostrando mensagem sendo respondida
+- **Envio**: Parâmetro `quoted` na Evolution API com `key` e `message`
+- **Exibição**: Quote aparece dentro da mensagem com borda lateral
+
+### Reações com Emoji
+
+- **Emojis disponíveis**: 👍 ❤️ 😂 😮 😢 🙏
+- **Seletor**: Aparece ao clicar no ícone de reação
+- **Toggle**: Clique adiciona, clique novamente remove
+- **WhatsApp**: Reação enviada via `sendReaction` da Evolution API
+- **Exibição**: Emojis aparecem abaixo da mensagem com contador
+
+### Status de Entrega
+
+- **Ícones**:
+  - ✓ (cinza) = Enviado (`sent`)
+  - ✓✓ (cinza) = Entregue (`delivered`)
+  - ✓✓ (azul) = Lido (`read`)
+- **Campo**: `delivery_status` na tabela `messages`
+
+### Novas Tabelas/Campos
+
+| Tabela | Campo | Descrição |
+|--------|-------|-----------|
+| `messages` | `quoted_message_id` | ID da mensagem sendo respondida |
+| `messages` | `quoted_content` | Conteúdo da mensagem citada |
+| `messages` | `quoted_sender_name` | Nome do remetente da mensagem citada |
+| `messages` | `remote_message_id` | ID da mensagem no WhatsApp (para quote/reação) |
+| `messages` | `delivery_status` | Status de entrega (sent/delivered/read) |
+| `message_reactions` | - | Tabela de reações (message_id, user_id, emoji) |
+
+### Edge Function: evolution-webhook (v14)
+
+Melhorias implementadas:
+- Salva `remote_message_id` (key.id) em cada mensagem recebida
+- Permite quote e reações funcionarem corretamente
+
+---
+
+## Próximos Passos (Fase 10)
 
 | Funcionalidade | Status |
 |----------------|--------|
