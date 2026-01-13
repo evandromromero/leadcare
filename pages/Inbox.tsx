@@ -17,14 +17,16 @@ interface InboxProps {
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
 }
 
-type FilterType = 'todos' | 'nao_lidos' | 'aguardando' | 'grupos' | 'followup';
+type FilterType = 'todos' | 'nao_lidos' | 'aguardando' | 'followup';
 
 const PIPELINE_STAGES = [
-  { value: 'Novo Lead', label: 'Novo Lead', color: '#0891b2' },
-  { value: 'Agendado', label: 'Agendado', color: '#8b5cf6' },
-  { value: 'Em Atendimento', label: 'Em Atendimento', color: '#f59e0b' },
-  { value: 'Convertido', label: 'Convertido', color: '#10b981' },
-  { value: 'Perdido', label: 'Perdido', color: '#ef4444' },
+  { value: 'Novo Lead', label: 'Novo Lead', color: '#0891b2', hint: 'Lead que acabou de entrar em contato' },
+  { value: 'Agendado', label: 'Agendado', color: '#8b5cf6', hint: 'Consulta ou procedimento agendado' },
+  { value: 'Em Atendimento', label: 'Em Atendimento', color: '#f59e0b', hint: 'Em negociação ou atendimento ativo' },
+  { value: 'Convertido', label: 'Convertido', color: '#10b981', hint: 'Fechou negócio / realizou procedimento' },
+  { value: 'Recorrente', label: 'Recorrente', color: '#0e7490', hint: 'Paciente que já é da clínica e retornou' },
+  { value: 'Mentoria', label: 'Mentoria', color: '#ca8a04', hint: 'Lead interessado em mentoria/consultoria' },
+  { value: 'Perdido', label: 'Perdido', color: '#ef4444', hint: 'Não fechou / desistiu do atendimento' },
 ];
 
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
@@ -48,6 +50,19 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [loadingTags, setLoadingTags] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   
+  // Estados para criar nova etiqueta
+  const [showCreateTag, setShowCreateTag] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('#3B82F6');
+  const [savingTag, setSavingTag] = useState(false);
+  
+  // Cores expandidas para etiquetas
+  const tagColors = [
+    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16',
+    '#F97316', '#14B8A6', '#6366F1', '#A855F7', '#F43F5E', '#0EA5E9', '#22C55E', '#EAB308',
+    '#DC2626', '#7C3AED', '#DB2777', '#0891B2', '#65A30D', '#CA8A04', '#9333EA', '#E11D48'
+  ];
+  
   // Estados para notas/observações
   const [noteInput, setNoteInput] = useState('');
   const [notes, setNotes] = useState<Array<{ id: string; content: string; created_at: string; user_name: string }>>([]);
@@ -67,11 +82,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [savingQuote, setSavingQuote] = useState(false);
   
   // Estados para origem do lead
-  const [leadSources, setLeadSources] = useState<Array<{ id: string; name: string; code: string | null; color: string }>>([]);
+  const [leadSources, setLeadSources] = useState<Array<{ id: string; name: string; code: string | null; color: string; tag_id: string | null }>>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [showSourceDropdown, setShowSourceDropdown] = useState(false);
   const [showAddSourceModal, setShowAddSourceModal] = useState(false);
-  const [newSourceForm, setNewSourceForm] = useState({ name: '', code: '' });
+  const [newSourceForm, setNewSourceForm] = useState({ name: '', code: '', tag_id: '' });
   const [savingSource, setSavingSource] = useState(false);
   
   // Estados para pagamentos/negociações
@@ -630,6 +645,40 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const openTagsModal = () => {
     fetchAvailableTags();
     setShowTagsModal(true);
+    setShowCreateTag(false);
+    setNewTagName('');
+    setNewTagColor('#3B82F6');
+  };
+
+  // Criar nova etiqueta
+  const handleCreateTag = async () => {
+    if (!newTagName.trim() || !clinicId) return;
+    
+    setSavingTag(true);
+    try {
+      const { data, error } = await supabase
+        .from('tags')
+        .insert({ 
+          clinic_id: clinicId, 
+          name: newTagName.trim(), 
+          color: newTagColor 
+        })
+        .select()
+        .single();
+      
+      if (!error && data) {
+        // Adicionar a nova tag à lista
+        setAvailableTags(prev => [...prev, data]);
+        // Resetar form
+        setNewTagName('');
+        setNewTagColor('#3B82F6');
+        setShowCreateTag(false);
+      }
+    } catch (err) {
+      console.error('Error creating tag:', err);
+    } finally {
+      setSavingTag(false);
+    }
   };
 
   // Buscar notas do chat selecionado
@@ -776,7 +825,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     try {
       const { data, error } = await supabase
         .from('lead_sources' as any)
-        .select('id, name, code, color')
+        .select('id, name, code, color, tag_id')
         .eq('clinic_id', clinicId)
         .order('name');
       
@@ -786,6 +835,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     } catch (err) {
       console.error('Error fetching lead sources:', err);
     }
+  };
+  
+  // Função auxiliar para obter a cor da origem (da etiqueta vinculada ou cor própria)
+  const getSourceColor = (source: { color: string; tag_id: string | null }) => {
+    if (source.tag_id) {
+      const linkedTag = availableTags.find(t => t.id === source.tag_id);
+      if (linkedTag) return linkedTag.color;
+    }
+    return source.color || '#6B7280';
   };
 
   // Buscar origem do chat selecionado
@@ -828,19 +886,25 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     if (!newSourceForm.name.trim() || !clinicId) return;
     setSavingSource(true);
     try {
+      // Obter cor da etiqueta selecionada ou usar cor padrão
+      const selectedTag = availableTags.find(t => t.id === newSourceForm.tag_id);
+      const sourceColor = selectedTag?.color || '#6B7280';
+      
       const { data, error } = await supabase
         .from('lead_sources' as any)
         .insert({
           clinic_id: clinicId,
           name: newSourceForm.name.trim(),
           code: newSourceForm.code.trim() || null,
+          tag_id: newSourceForm.tag_id || null,
+          color: sourceColor,
         })
         .select()
         .single();
       
       if (!error && data) {
         await fetchLeadSources();
-        setNewSourceForm({ name: '', code: '' });
+        setNewSourceForm({ name: '', code: '', tag_id: '' });
         setShowAddSourceModal(false);
       }
     } catch (err) {
@@ -1223,9 +1287,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         return chat.status === 'Aguardando' || chat.status === 'Novo Lead';
       case 'followup':
         return chat.id in followupData;
-      case 'grupos':
-        // Grupos geralmente têm telefone com hífen ou mais de 15 dígitos
-        return chat.phone_number?.includes('-') || (chat.phone_number?.length || 0) > 15;
       case 'todos':
       default:
         return true;
@@ -1815,7 +1876,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               { key: 'nao_lidos' as FilterType, label: 'Não lidos', count: chats.filter(c => (c.unread_count || 0) > 0).length },
               { key: 'aguardando' as FilterType, label: 'Aguardando', count: chats.filter(c => c.status === 'Aguardando' || c.status === 'Novo Lead').length },
               { key: 'followup' as FilterType, label: 'Follow-up', count: Object.keys(followupData).length },
-              { key: 'grupos' as FilterType, label: 'Grupos', count: chats.filter(c => c.phone_number?.includes('-') || (c.phone_number?.length || 0) > 15).length },
             ].map((f) => (
               <button 
                 key={f.key}
@@ -2317,19 +2377,25 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 
                 {/* Dropdown de etapas */}
                 {showStageDropdown && (
-                  <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-20">
+                  <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-20">
                     {PIPELINE_STAGES.map(stage => (
                       <button
                         key={stage.value}
                         onClick={() => handleChangeStage(stage.value)}
-                        className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 ${
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 group ${
                           selectedChat.status === stage.value ? 'bg-slate-50 font-bold' : ''
                         }`}
                       >
-                        <span className="size-3 rounded-full" style={{ backgroundColor: stage.color }}></span>
-                        {stage.label}
+                        <span className="size-3 rounded-full shrink-0" style={{ backgroundColor: stage.color }}></span>
+                        <span className="flex-1">{stage.label}</span>
+                        <span 
+                          className="material-symbols-outlined text-slate-300 text-[16px] cursor-help group-hover:text-slate-400" 
+                          title={stage.hint}
+                        >
+                          info
+                        </span>
                         {selectedChat.status === stage.value && (
-                          <span className="material-symbols-outlined text-cyan-600 text-[16px] ml-auto">check</span>
+                          <span className="material-symbols-outlined text-cyan-600 text-[16px]">check</span>
                         )}
                       </button>
                     ))}
@@ -2417,7 +2483,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Origem do Lead</h3>
                   <button 
-                    onClick={() => setShowAddSourceModal(true)}
+                    onClick={() => { fetchAvailableTags(); setShowAddSourceModal(true); }}
                     className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
                   >
                     <span className="material-symbols-outlined text-[14px]">add</span> Nova
@@ -2428,22 +2494,26 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     onClick={() => setShowSourceDropdown(!showSourceDropdown)}
                     className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between hover:border-cyan-300 transition-colors"
                   >
-                    {selectedSourceId ? (
-                      <div className="flex items-center gap-2">
-                        <span 
-                          className="size-3 rounded-full" 
-                          style={{ backgroundColor: leadSources.find(s => s.id === selectedSourceId)?.color || '#6B7280' }}
-                        ></span>
-                        <span className="text-sm font-bold text-slate-700">
-                          {leadSources.find(s => s.id === selectedSourceId)?.name}
-                        </span>
-                        {leadSources.find(s => s.id === selectedSourceId)?.code && (
-                          <span className="text-[10px] text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded">
-                            {leadSources.find(s => s.id === selectedSourceId)?.code}
+                    {selectedSourceId ? (() => {
+                      const selectedSource = leadSources.find(s => s.id === selectedSourceId);
+                      const sourceColor = selectedSource ? getSourceColor(selectedSource) : '#6B7280';
+                      return (
+                        <div className="flex items-center gap-2">
+                          <span 
+                            className="size-3 rounded-full" 
+                            style={{ backgroundColor: sourceColor }}
+                          ></span>
+                          <span className="text-sm font-bold text-slate-700">
+                            {selectedSource?.name}
                           </span>
-                        )}
-                      </div>
-                    ) : (
+                          {selectedSource?.code && (
+                            <span className="text-[10px] text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded">
+                              {selectedSource.code}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })() : (
                       <span className="text-sm text-slate-400">Selecionar origem...</span>
                     )}
                     <span className="material-symbols-outlined text-slate-400 text-[18px]">expand_more</span>
@@ -2469,11 +2539,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                             selectedSourceId === source.id ? 'bg-slate-50 font-bold' : ''
                           }`}
                         >
-                          <span className="size-3 rounded-full" style={{ backgroundColor: source.color }}></span>
+                          <span className="size-3 rounded-full" style={{ backgroundColor: getSourceColor(source) }}></span>
                           {source.name}
                           {source.code && (
                             <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1">
                               {source.code}
+                            </span>
+                          )}
+                          {source.tag_id && (
+                            <span className="text-[10px] text-slate-400 ml-1">
+                              ({availableTags.find(t => t.id === source.tag_id)?.name})
                             </span>
                           )}
                           {selectedSourceId === source.id && (
@@ -2492,7 +2567,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               {/* Modal Nova Origem */}
               {showAddSourceModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddSourceModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
+                  <div className="bg-white rounded-2xl shadow-xl w-96 overflow-hidden" onClick={e => e.stopPropagation()}>
                     <div className="p-4 border-b border-slate-100 flex justify-between items-center">
                       <h3 className="font-bold text-slate-800">Nova Origem</h3>
                       <button onClick={() => setShowAddSourceModal(false)} className="text-slate-400 hover:text-slate-600">
@@ -2511,7 +2586,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Código (opcional)</label>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Código do Criativo (opcional)</label>
                         <input
                           type="text"
                           value={newSourceForm.code}
@@ -2519,7 +2594,32 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           placeholder="Ex: AV1, AV2, IG01..."
                           className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
                         />
-                        <p className="text-[10px] text-slate-400 mt-1">Use para identificar criativos de anúncios</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Vincular à Dra (cor)</label>
+                        <select
+                          value={newSourceForm.tag_id}
+                          onChange={(e) => setNewSourceForm(prev => ({ ...prev, tag_id: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent bg-white"
+                        >
+                          <option value="">Sem vínculo (cor padrão)</option>
+                          {availableTags.map(tag => (
+                            <option key={tag.id} value={tag.id}>
+                              {tag.name}
+                            </option>
+                          ))}
+                        </select>
+                        {newSourceForm.tag_id && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <span 
+                              className="size-4 rounded-full" 
+                              style={{ backgroundColor: availableTags.find(t => t.id === newSourceForm.tag_id)?.color || '#6B7280' }}
+                            ></span>
+                            <span className="text-xs text-slate-500">
+                              A origem terá esta cor
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <button
                         onClick={handleCreateSource}
@@ -2576,51 +2676,118 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               {/* Modal de Tags */}
               {showTagsModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTagsModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-xl w-80 max-h-96 overflow-hidden" onClick={e => e.stopPropagation()}>
+                  <div className="bg-white rounded-2xl shadow-xl w-96 max-h-[500px] overflow-hidden" onClick={e => e.stopPropagation()}>
                     <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                      <h3 className="font-bold text-slate-800">Adicionar Etiqueta</h3>
+                      <h3 className="font-bold text-slate-800">{showCreateTag ? 'Nova Etiqueta' : 'Etiquetas'}</h3>
                       <button onClick={() => setShowTagsModal(false)} className="text-slate-400 hover:text-slate-600">
                         <span className="material-symbols-outlined">close</span>
                       </button>
                     </div>
-                    <div className="p-4 max-h-64 overflow-y-auto">
-                      {loadingTags ? (
-                        <div className="text-center py-4">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600 mx-auto"></div>
+                    
+                    {/* Formulário para criar nova etiqueta */}
+                    {showCreateTag ? (
+                      <div className="p-4 space-y-4">
+                        <div>
+                          <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nome da Etiqueta</label>
+                          <input
+                            type="text"
+                            value={newTagName}
+                            onChange={(e) => setNewTagName(e.target.value)}
+                            placeholder="Ex: Dra. Maria"
+                            className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                            autoFocus
+                          />
                         </div>
-                      ) : availableTags.length === 0 ? (
-                        <p className="text-sm text-slate-500 text-center py-4">Nenhuma etiqueta disponível</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {availableTags.map(tag => {
-                            const isAdded = selectedChat.tags.some(t => t.id === tag.id);
-                            return (
+                        <div>
+                          <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Cor</label>
+                          <div className="grid grid-cols-8 gap-2">
+                            {tagColors.map(color => (
                               <button
-                                key={tag.id}
-                                onClick={() => {
-                                  if (isAdded) {
-                                    handleRemoveTag(tag.id);
-                                  } else {
-                                    handleAddTag(tag.id);
-                                  }
-                                }}
-                                className={`w-full px-3 py-2 rounded-lg text-left text-sm flex items-center justify-between transition-colors ${
-                                  isAdded ? 'bg-slate-100' : 'hover:bg-slate-50'
-                                }`}
-                              >
-                                <span className="flex items-center gap-2">
-                                  <span className="size-3 rounded-full" style={{ backgroundColor: tag.color }}></span>
-                                  {tag.name}
-                                </span>
-                                {isAdded && (
-                                  <span className="material-symbols-outlined text-cyan-600 text-[18px]">check_circle</span>
-                                )}
-                              </button>
-                            );
-                          })}
+                                key={color}
+                                onClick={() => setNewTagColor(color)}
+                                className={`size-8 rounded-lg transition-all ${newTagColor === color ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
+                                style={{ backgroundColor: color }}
+                              />
+                            ))}
+                          </div>
                         </div>
-                      )}
-                    </div>
+                        <div className="flex gap-2 pt-2">
+                          <button
+                            onClick={() => setShowCreateTag(false)}
+                            className="flex-1 h-10 bg-slate-100 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-200 transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={handleCreateTag}
+                            disabled={!newTagName.trim() || savingTag}
+                            className="flex-1 h-10 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                          >
+                            {savingTag ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                              <>
+                                <span className="material-symbols-outlined text-[18px]">add</span>
+                                Criar
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Botão para criar nova etiqueta */}
+                        <div className="p-3 border-b border-slate-100">
+                          <button
+                            onClick={() => setShowCreateTag(true)}
+                            className="w-full px-3 py-2 rounded-lg text-sm font-medium text-cyan-600 bg-cyan-50 hover:bg-cyan-100 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                            Criar Nova Etiqueta
+                          </button>
+                        </div>
+                        
+                        {/* Lista de etiquetas existentes */}
+                        <div className="p-4 max-h-64 overflow-y-auto">
+                          {loadingTags ? (
+                            <div className="text-center py-4">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600 mx-auto"></div>
+                            </div>
+                          ) : availableTags.length === 0 ? (
+                            <p className="text-sm text-slate-500 text-center py-4">Nenhuma etiqueta criada ainda</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {availableTags.map(tag => {
+                                const isAdded = selectedChat.tags.some(t => t.id === tag.id);
+                                return (
+                                  <button
+                                    key={tag.id}
+                                    onClick={() => {
+                                      if (isAdded) {
+                                        handleRemoveTag(tag.id);
+                                      } else {
+                                        handleAddTag(tag.id);
+                                      }
+                                    }}
+                                    className={`w-full px-3 py-2 rounded-lg text-left text-sm flex items-center justify-between transition-colors ${
+                                      isAdded ? 'bg-slate-100' : 'hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <span className="size-4 rounded-full" style={{ backgroundColor: tag.color }}></span>
+                                      {tag.name}
+                                    </span>
+                                    {isAdded && (
+                                      <span className="material-symbols-outlined text-cyan-600 text-[18px]">check_circle</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

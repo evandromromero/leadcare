@@ -356,11 +356,12 @@ const AdminClinicDetail: React.FC = () => {
       
       if (chatIds.length === 0) return;
       
-      // Buscar todos os pagamentos dos chats
+      // Buscar todos os pagamentos dos chats (excluindo canceladas)
       const { data: paymentsData } = await supabase
         .from('payments' as any)
-        .select('value, payment_date, chat_id, created_by')
-        .in('chat_id', chatIds);
+        .select('value, payment_date, chat_id, created_by, status')
+        .in('chat_id', chatIds)
+        .or('status.is.null,status.eq.active');
 
       const payments = (paymentsData || []) as Array<{ value: number; payment_date: string; chat_id: string; created_by: string | null }>;
       
@@ -475,11 +476,12 @@ const AdminClinicDetail: React.FC = () => {
         return created >= prevStartDate && created <= prevEndDate;
       });
       
-      // Buscar pagamentos
+      // Buscar pagamentos (excluindo canceladas)
       const { data: paymentsData } = await supabase
         .from('payments' as any)
-        .select('value, payment_date, chat_id')
-        .eq('clinic_id', id);
+        .select('value, payment_date, chat_id, status')
+        .eq('clinic_id', id)
+        .or('status.is.null,status.eq.active');
       
       const allPayments = (paymentsData || []) as any[];
       
@@ -700,11 +702,12 @@ const AdminClinicDetail: React.FC = () => {
     setLoadingReceipts(true);
     
     try {
-      // Buscar todos os payments da clínica
+      // Buscar todos os payments da clínica (excluindo canceladas)
       const { data: paymentsData } = await supabase
         .from('payments' as any)
-        .select('id, value, payment_date, chat_id, created_by, chat:chats(id, client_name, source_id)')
+        .select('id, value, payment_date, chat_id, created_by, status, chat:chats(id, client_name, source_id)')
         .eq('clinic_id', id)
+        .or('status.is.null,status.eq.active')
         .order('payment_date', { ascending: false });
 
       // Buscar usuários da clínica

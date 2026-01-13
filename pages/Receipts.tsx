@@ -155,6 +155,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
         .from('payments' as any)
         .select('*, chat:chats(id, client_name, phone_number, source_id), creator:users!payments_created_by_fkey(id, name)')
         .eq('clinic_id', clinicId)
+        .or('status.is.null,status.eq.active')
         .order('payment_date', { ascending: false });
 
       const { data: sourcesData } = await supabase

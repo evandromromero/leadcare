@@ -11,7 +11,7 @@ interface KanbanProps {
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
 }
 
-type ChatStatus = 'Novo Lead' | 'Em Atendimento' | 'Agendado' | 'Convertido' | 'Perdido';
+type ChatStatus = 'Novo Lead' | 'Em Atendimento' | 'Agendado' | 'Convertido' | 'Recorrente' | 'Mentoria' | 'Perdido';
 
 // Labels padrão para as colunas do pipeline
 const DEFAULT_LABELS: Record<ChatStatus, string> = {
@@ -19,14 +19,27 @@ const DEFAULT_LABELS: Record<ChatStatus, string> = {
   'Em Atendimento': 'Atendimento',
   'Agendado': 'Agendados',
   'Convertido': 'Ganhos',
+  'Recorrente': 'Recorrentes',
+  'Mentoria': 'Mentoria',
   'Perdido': 'Perdidos',
+};
+
+// Hints para tooltip de ajuda
+const STAGE_HINTS: Record<ChatStatus, string> = {
+  'Novo Lead': 'Lead que acabou de entrar em contato',
+  'Em Atendimento': 'Em negociação ou atendimento ativo',
+  'Agendado': 'Consulta ou procedimento agendado',
+  'Convertido': 'Fechou negócio / realizou procedimento',
+  'Recorrente': 'Paciente que já é da clínica e retornou',
+  'Mentoria': 'Lead interessado em mentoria/consultoria',
+  'Perdido': 'Não fechou / desistiu do atendimento',
 };
 
 const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
   const { chats, loading, updateChatStatus, refetch } = useChats(clinicId, user?.id);
-  const columns: ChatStatus[] = ['Novo Lead', 'Em Atendimento', 'Agendado', 'Convertido', 'Perdido'];
+  const columns: ChatStatus[] = ['Novo Lead', 'Em Atendimento', 'Agendado', 'Convertido', 'Recorrente', 'Mentoria', 'Perdido'];
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [quotesMap, setQuotesMap] = useState<Record<string, Array<{ service_type: string; value: number; status: string }>>>({});
   
@@ -127,6 +140,8 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     'Em Atendimento': { color: 'orange' },
     'Agendado': { color: 'purple' },
     'Convertido': { color: 'green' },
+    'Recorrente': { color: 'cyan' },
+    'Mentoria': { color: 'yellow' },
     'Perdido': { color: 'red' },
   };
 
@@ -256,6 +271,12 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                   <h3 className="font-black text-slate-700 uppercase text-[11px] tracking-widest">{pipelineLabels[column]}</h3>
                   <span className={`bg-${config.color}-50 text-${config.color}-700 px-2 py-0.5 rounded-full text-[10px] font-black`}>
                     {leadsInCol.length}
+                  </span>
+                  <span 
+                    className="material-symbols-outlined text-slate-300 text-[14px] cursor-help hover:text-slate-400" 
+                    title={STAGE_HINTS[column]}
+                  >
+                    info
                   </span>
                 </div>
                 <button className="text-slate-400 hover:text-slate-600"><span className="material-symbols-outlined text-[20px]">more_horiz</span></button>

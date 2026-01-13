@@ -149,19 +149,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         let paymentsData: any[] | null = null;
         
         if (isComercial && user?.id) {
-          // Comercial vê apenas o que ele criou
+          // Comercial vê apenas o que ele criou (excluindo canceladas)
           const { data } = await supabase
             .from('payments' as any)
-            .select('value, payment_date, chat_id, created_by')
+            .select('value, payment_date, chat_id, created_by, status')
             .eq('clinic_id', clinicId)
-            .eq('created_by', user.id);
+            .eq('created_by', user.id)
+            .or('status.is.null,status.eq.active');
           paymentsData = data as any[];
         } else {
-          // Outros perfis veem baseado nos chats
+          // Outros perfis veem baseado nos chats (excluindo canceladas)
           const { data } = await supabase
             .from('payments' as any)
-            .select('value, payment_date, chat_id, created_by')
-            .in('chat_id', chatIdsForStats);
+            .select('value, payment_date, chat_id, created_by, status')
+            .in('chat_id', chatIdsForStats)
+            .or('status.is.null,status.eq.active');
           paymentsData = data as any[];
         }
         
@@ -241,12 +243,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         // Buscar dados de receita clínica (lançamentos) para o comercial
         // Só mostra se o usuário for Comercial e tiver vendas
         if (user?.id && userRole === 'Comercial') {
-          // Buscar payments criados por este comercial com detalhes do chat
+          // Buscar payments criados por este comercial com detalhes do chat (excluindo canceladas)
           const { data: myPayments } = await supabase
             .from('payments' as any)
-            .select('id, value, payment_date, chat_id, chat:chats(id, client_name, source_id)')
+            .select('id, value, payment_date, chat_id, status, chat:chats(id, client_name, source_id)')
             .eq('clinic_id', clinicId)
             .eq('created_by', user.id)
+            .or('status.is.null,status.eq.active')
             .order('payment_date', { ascending: false });
           
           if (myPayments && myPayments.length > 0) {
