@@ -58,6 +58,11 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const [editingLabels, setEditingLabels] = useState<Record<string, string>>({});
   const [savingLabels, setSavingLabels] = useState(false);
 
+  // Recarregar chats quando o componente é montado
+  useEffect(() => {
+    refetch();
+  }, []);
+
   // Buscar labels personalizados do pipeline
   useEffect(() => {
     const fetchPipelineLabels = async () => {

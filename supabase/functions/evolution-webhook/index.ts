@@ -294,7 +294,8 @@ serve(async (req) => {
       content: message || '[Sem texto]',
       type: mediaType || 'text',
       media_url: finalMediaUrl,
-      is_from_client: !isFromMe
+      is_from_client: !isFromMe,
+      remote_message_id: messageId || null
     })
 
     return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

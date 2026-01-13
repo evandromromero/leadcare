@@ -20,6 +20,8 @@ interface LeadSourceStats {
   total_leads: number;
   converted_leads: number;
   revenue: number;
+  tag_name: string | null;
+  tag_color: string | null;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ state }) => {
@@ -206,7 +208,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         if (chatIdsForStats.length > 0) {
           const { data: sourcesData } = await supabase
             .from('lead_sources' as any)
-            .select('id, name, code, color')
+            .select('id, name, code, color, tag_id, tag:tags(id, name, color)')
             .eq('clinic_id', clinicId);
           
           if (sourcesData && sourcesData.length > 0) {
@@ -223,10 +225,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                 id: source.id,
                 name: source.name,
                 code: source.code,
-                color: source.color,
+                color: source.tag?.color || source.color,
                 total_leads: sourceChats.length,
                 converted_leads: convertedChats.length,
                 revenue,
+                tag_name: source.tag?.name || null,
+                tag_color: source.tag?.color || null,
               };
             });
             
@@ -653,8 +657,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                       <tr key={source.id} className="hover:bg-slate-50 transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
-                            <span className="size-3 rounded-full" style={{ backgroundColor: source.color }}></span>
+                            <span className="size-3 rounded-full" style={{ backgroundColor: source.tag_color || source.color }}></span>
                             <span className="font-medium text-slate-800">{source.name}</span>
+                            {source.tag_name && (
+                              <span 
+                                className="text-[10px] text-white px-1.5 py-0.5 rounded font-medium"
+                                style={{ backgroundColor: source.tag_color || '#6B7280' }}
+                              >
+                                {source.tag_name}
+                              </span>
+                            )}
                             {source.code && (
                               <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{source.code}</span>
                             )}

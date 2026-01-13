@@ -32,7 +32,7 @@ const PIPELINE_STAGES = [
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading, sendMessage, markAsRead, updateChatStatus, refetch, fetchAndUpdateAvatar } = useChats(clinicId, user?.id);
+  const { chats, loading, sendMessage, editMessage, markAsRead, updateChatStatus, refetch, fetchAndUpdateAvatar } = useChats(clinicId, user?.id);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [msgInput, setMsgInput] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('todos');
@@ -145,6 +145,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     senderName: string;
     isFromClient: boolean;
   } | null>(null);
+  
+  // Estados para edição de mensagem
+  const [editingMessage, setEditingMessage] = useState<{ id: string; content: string } | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
   
   // Estados para reações de mensagens
   const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
@@ -902,13 +907,23 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         .select()
         .single();
       
-      if (!error && data) {
+      if (error) {
+        if (error.code === '23505') {
+          alert('Já existe uma origem com esse nome. Escolha outro nome.');
+        } else {
+          alert('Erro ao criar origem: ' + error.message);
+        }
+        return;
+      }
+      
+      if (data) {
         await fetchLeadSources();
         setNewSourceForm({ name: '', code: '', tag_id: '' });
         setShowAddSourceModal(false);
       }
     } catch (err) {
       console.error('Error creating source:', err);
+      alert('Erro ao criar origem');
     } finally {
       setSavingSource(false);
     }
@@ -1474,6 +1489,44 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     setShowReactionPicker(null);
   };
 
+  // Função para salvar edição de mensagem
+  const handleSaveEdit = async () => {
+    if (!editingMessage || !editingContent.trim() || !selectedChat || savingEdit) return;
+    
+    setSavingEdit(true);
+    try {
+      const result = await editMessage(
+        editingMessage.id, 
+        selectedChat.id, 
+        editingContent.trim(), 
+        selectedChat.phone_number || ''
+      );
+      
+      if (result.success) {
+        setEditingMessage(null);
+        setEditingContent('');
+      } else {
+        alert(result.error || 'Erro ao editar mensagem');
+      }
+    } catch (err) {
+      console.error('Error saving edit:', err);
+      alert('Erro ao editar mensagem');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Função para verificar se mensagem pode ser editada (até 15 min)
+  const canEditMessage = (message: any) => {
+    if (message.is_from_client) return false;
+    if (message.type !== 'text') return false;
+    
+    const messageTime = new Date(message.created_at).getTime();
+    const now = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000;
+    return (now - messageTime) <= fifteenMinutes;
+  };
+
   const handleSendMessage = async () => {
     if (!msgInput.trim() || !selectedChatId || !user || !selectedChat) return;
     
@@ -1530,7 +1583,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           }
         }
         
-        await fetch(`${settings.evolution_api_url}/message/sendText/${instance.instance_name}`, {
+        const response = await fetch(`${settings.evolution_api_url}/message/sendText/${instance.instance_name}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1538,19 +1591,40 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           },
           body: JSON.stringify(messageBody),
         });
+        
+        // Capturar remote_message_id da resposta
+        let remoteMessageId = null;
+        if (response.ok) {
+          const responseData = await response.json().catch(() => ({}));
+          remoteMessageId = responseData?.key?.id || null;
+          console.log('WhatsApp message sent, messageId:', remoteMessageId);
+        }
+        
+        // Salvar mensagem no banco com remote_message_id
+        await supabase.from('messages').insert({
+          chat_id: selectedChatId,
+          content: msgInput.trim(),
+          type: 'text',
+          is_from_client: false,
+          sent_by: user.id,
+          quoted_message_id: replyingTo?.id || null,
+          quoted_content: replyingTo?.content || null,
+          quoted_sender_name: replyingTo?.senderName || null,
+          remote_message_id: remoteMessageId,
+        });
+      } else {
+        // WhatsApp não conectado - salvar sem remote_message_id
+        await supabase.from('messages').insert({
+          chat_id: selectedChatId,
+          content: msgInput.trim(),
+          type: 'text',
+          is_from_client: false,
+          sent_by: user.id,
+          quoted_message_id: replyingTo?.id || null,
+          quoted_content: replyingTo?.content || null,
+          quoted_sender_name: replyingTo?.senderName || null,
+        });
       }
-      
-      // Salvar mensagem no banco com quote se existir
-      await supabase.from('messages').insert({
-        chat_id: selectedChatId,
-        content: msgInput.trim(),
-        type: 'text',
-        is_from_client: false,
-        sent_by: user.id,
-        quoted_message_id: replyingTo?.id || null,
-        quoted_content: replyingTo?.content || null,
-        quoted_sender_name: replyingTo?.senderName || null,
-      });
       
       // Atualizar chat
       await supabase.from('chats').update({
@@ -2120,7 +2194,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     </div>
                     {/* Botões de ação - aparecem no hover */}
                     {canSendMessage && (
-                      <div className={`absolute ${m.is_from_client ? '-right-20' : '-left-20'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 flex gap-1 transition-all`}>
+                      <div className={`absolute ${m.is_from_client ? '-right-20' : '-left-28'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 flex gap-1 transition-all`}>
                         <button
                           onClick={() => setReplyingTo({
                             id: m.id,
@@ -2133,6 +2207,19 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         >
                           <span className="material-symbols-outlined text-[16px] text-slate-500">reply</span>
                         </button>
+                        {/* Botão Editar - só para mensagens enviadas até 15 min */}
+                        {canEditMessage(m) && (
+                          <button
+                            onClick={() => {
+                              setEditingMessage({ id: m.id, content: m.content });
+                              setEditingContent(m.content);
+                            }}
+                            className="p-1.5 rounded-full bg-white shadow-md hover:bg-slate-100 transition-all"
+                            title="Editar (até 15 min)"
+                          >
+                            <span className="material-symbols-outlined text-[16px] text-slate-500">edit</span>
+                          </button>
+                        )}
                         <div className="relative">
                           <button
                             onClick={() => setShowReactionPicker(showReactionPicker === m.id ? null : m.id)}
@@ -2672,6 +2759,51 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   )}
                 </div>
               </section>
+
+              {/* Modal de Edição de Mensagem */}
+              {editingMessage && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => { setEditingMessage(null); setEditingContent(''); }}>
+                  <div className="bg-white rounded-2xl shadow-xl w-96 overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-800">Editar Mensagem</h3>
+                      <button onClick={() => { setEditingMessage(null); setEditingContent(''); }} className="text-slate-400 hover:text-slate-600">
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1.5">Nova mensagem</label>
+                        <textarea
+                          value={editingContent}
+                          onChange={(e) => setEditingContent(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent resize-none"
+                          rows={4}
+                          placeholder="Digite a nova mensagem..."
+                          autoFocus
+                        />
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        A mensagem será editada no WhatsApp do cliente.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setEditingMessage(null); setEditingContent(''); }}
+                          className="flex-1 px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={handleSaveEdit}
+                          disabled={!editingContent.trim() || editingContent === editingMessage.content || savingEdit}
+                          className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-xl text-sm font-bold hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {savingEdit ? 'Salvando...' : 'Salvar'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Modal de Tags */}
               {showTagsModal && (

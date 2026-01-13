@@ -691,6 +691,54 @@ O erro 406 (Not Acceptable) ocorria porque o método `.single()` do Supabase ret
 
 ---
 
+### Melhorias - 13/01/2026 (Sessão 2)
+
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| Edição de mensagens WhatsApp | Preparação para editar mensagens enviadas (até 15 min) |
+| Etapas Mentoria/Recorrente | Adicionadas ao CHECK constraint da tabela `chats` |
+| Sincronização Inbox/Kanban | Kanban agora recarrega dados ao ser montado |
+| Origens de Lead com Dr. vinculado | Permite criar mesma origem (ex: Instagram) para diferentes Drs |
+| Dashboard com Dr. na origem | Exibe nome e cor do Dr. vinculado na tabela de leads por origem |
+
+### Detalhes das Implementações
+
+#### Edição de Mensagens WhatsApp
+- **Preparação**: Salvando `remote_message_id` ao enviar mensagens
+- **Função `editMessage`**: Implementada no hook `useChats`
+- **UI**: Botão de editar aparece em mensagens enviadas (até 15 min)
+- **Modal**: Interface para editar o texto da mensagem
+- **Limitação**: Evolution API pode não suportar edição dependendo da versão
+
+#### Etapas do Funil
+- **Novas etapas**: "Mentoria" e "Recorrente" adicionadas
+- **Banco**: CHECK constraint atualizado para aceitar novos valores
+- **Kanban**: Colunas já existiam, agora funcionam corretamente
+
+#### Origens de Lead
+- **Constraint alterada**: De `UNIQUE(clinic_id, name)` para `UNIQUE(clinic_id, name, tag_id)`
+- **Permite**: Criar "Instagram Dra Carol", "Instagram Dra Kamylle", etc.
+- **Dashboard**: Mostra badge colorido com nome do Dr. ao lado da origem
+
+### Arquivos Modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `hooks/useChats.ts` | Função `editMessage`, salvar `remote_message_id` |
+| `pages/Inbox.tsx` | Estados de edição, modal, botão editar, salvar `remote_message_id` |
+| `pages/Kanban.tsx` | `refetch()` ao montar componente |
+| `pages/Dashboard.tsx` | Exibir `tag_name` e `tag_color` na tabela de origens |
+| `supabase/functions/evolution-webhook/index.ts` | Salvar `remote_message_id` em mensagens recebidas |
+
+### Migrações de Banco
+
+| Migração | Descrição |
+|----------|-----------|
+| `add_mentoria_recorrente_to_chats_status` | Adiciona "Mentoria" e "Recorrente" ao CHECK constraint |
+| `change_lead_sources_unique_constraint_to_include_tag` | Permite mesmo nome de origem com diferentes tags |
+
+---
+
 ## Próximos Passos (Fase 10)
 
 | Funcionalidade | Status |

@@ -19,6 +19,7 @@ interface UseChatsReturn {
   refetch: () => Promise<void>;
   updateChatStatus: (chatId: string, status: string) => Promise<void>;
   sendMessage: (chatId: string, content: string, userId: string) => Promise<void>;
+  editMessage: (messageId: string, chatId: string, newContent: string, phoneNumber: string) => Promise<{ success: boolean; error?: string }>;
   markAsRead: (chatId: string) => Promise<void>;
   fetchAndUpdateAvatar: (chatId: string, phoneNumber: string) => Promise<void>;
 }
@@ -186,13 +187,53 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
           const errorData = await response.json().catch(() => ({}));
           console.error('WhatsApp send failed:', response.status, errorData);
         } else {
-          console.log('WhatsApp message sent successfully to:', formattedPhone);
+          const responseData = await response.json().catch(() => ({}));
+          console.log('WhatsApp message sent successfully to:', formattedPhone, 'messageId:', responseData?.key?.id);
+          
+          // Salvar mensagem com remote_message_id para permitir edição
+          const remoteMessageId = responseData?.key?.id || null;
+          const { data: newMessage, error } = await supabase
+            .from('messages')
+            .insert({
+              chat_id: chatId,
+              content,
+              is_from_client: false,
+              sent_by: userId,
+              type: 'text',
+              remote_message_id: remoteMessageId,
+            })
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Error sending message:', error);
+            return;
+          }
+
+          // Atribuir chat ao usuário que está respondendo
+          await supabase
+            .from('chats')
+            .update({ 
+              last_message: content, 
+              last_message_time: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              assigned_to: userId
+            })
+            .eq('id', chatId);
+
+          setChats(prev => prev.map(c => 
+            c.id === chatId 
+              ? { ...c, messages: [...c.messages, newMessage as any], last_message: content, last_message_time: new Date().toISOString() }
+              : c
+          ));
+          return;
         }
       } catch (err) {
         console.error('Error sending WhatsApp message:', err);
       }
     }
 
+    // Fallback: salvar mensagem sem remote_message_id (WhatsApp não conectado)
     const { data: newMessage, error } = await supabase
       .from('messages')
       .insert({
@@ -358,6 +399,98 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     };
   }, [clinicId]);
 
+  // Editar mensagem enviada (até 15 minutos após envio)
+  const editMessage = async (messageId: string, chatId: string, newContent: string, phoneNumber: string): Promise<{ success: boolean; error?: string }> => {
+    if (!whatsappInstance || whatsappInstance.status !== 'connected' || !evolutionSettings) {
+      return { success: false, error: 'WhatsApp não conectado' };
+    }
+
+    try {
+      // Buscar mensagem para obter remote_message_id
+      const { data: messageData } = await supabase
+        .from('messages')
+        .select('remote_message_id, created_at, is_from_client')
+        .eq('id', messageId)
+        .single();
+
+      const message = messageData as unknown as { remote_message_id: string | null; created_at: string; is_from_client: boolean } | null;
+
+      if (!message) {
+        return { success: false, error: 'Mensagem não encontrada' };
+      }
+
+      if (message.is_from_client) {
+        return { success: false, error: 'Só é possível editar mensagens enviadas por você' };
+      }
+
+      if (!message.remote_message_id) {
+        return { success: false, error: 'Mensagem não pode ser editada (sem ID do WhatsApp)' };
+      }
+
+      // Verificar se passou mais de 15 minutos
+      const messageTime = new Date(message.created_at).getTime();
+      const now = Date.now();
+      const fifteenMinutes = 15 * 60 * 1000;
+      if (now - messageTime > fifteenMinutes) {
+        return { success: false, error: 'Só é possível editar mensagens até 15 minutos após o envio' };
+      }
+
+      // Formatar número
+      let formattedPhone = phoneNumber.replace(/\D/g, '');
+      if (!formattedPhone.startsWith('55')) {
+        formattedPhone = '55' + formattedPhone;
+      }
+
+      // Chamar API da Evolution para editar mensagem (POST /chat/updateMessage)
+      const response = await fetch(`${evolutionSettings.apiUrl}/chat/updateMessage/${whatsappInstance.instanceName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': evolutionSettings.apiKey,
+        },
+        body: JSON.stringify({
+          number: formattedPhone,
+          key: {
+            remoteJid: `${formattedPhone}@s.whatsapp.net`,
+            fromMe: true,
+            id: message.remote_message_id,
+            participant: `${formattedPhone}@s.whatsapp.net`,
+          },
+          text: newContent,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Edit message failed:', response.status, errorData);
+        return { success: false, error: errorData.message || 'Erro ao editar mensagem no WhatsApp' };
+      }
+
+      // Atualizar mensagem no banco de dados
+      await supabase
+        .from('messages')
+        .update({ content: newContent })
+        .eq('id', messageId);
+
+      // Atualizar estado local
+      setChats(prev => prev.map(c => 
+        c.id === chatId 
+          ? { 
+              ...c, 
+              messages: c.messages.map(m => 
+                m.id === messageId ? { ...m, content: newContent } : m
+              )
+            }
+          : c
+      ));
+
+      return { success: true };
+    } catch (err) {
+      console.error('Error editing message:', err);
+      return { success: false, error: 'Erro ao editar mensagem' };
+    }
+  };
+
   // Buscar e atualizar foto de perfil do WhatsApp
   const fetchAndUpdateAvatar = async (chatId: string, phoneNumber: string) => {
     if (!whatsappInstance || whatsappInstance.status !== 'connected' || !evolutionSettings) return;
@@ -406,6 +539,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     refetch: fetchChats,
     updateChatStatus,
     sendMessage,
+    editMessage,
     markAsRead,
     fetchAndUpdateAvatar,
   };
