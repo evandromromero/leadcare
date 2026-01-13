@@ -154,14 +154,23 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     const whatsappMessage = userName ? `*${userName}:* ${content}` : content;
     
     // Enviar via WhatsApp se conectado
+    console.log('WhatsApp send check:', { 
+      instance: whatsappInstance?.instanceName, 
+      status: whatsappInstance?.status, 
+      hasSettings: !!evolutionSettings,
+      phone: chat?.phone_number 
+    });
+    
     if (whatsappInstance && whatsappInstance.status === 'connected' && evolutionSettings && chat?.phone_number) {
       try {
         let formattedPhone = chat.phone_number.replace(/\D/g, '');
         if (!formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
         }
+        
+        console.log('Sending WhatsApp message via instance:', whatsappInstance.instanceName, 'to:', formattedPhone);
 
-        await fetch(`${evolutionSettings.apiUrl}/message/sendText/${whatsappInstance.instanceName}`, {
+        const response = await fetch(`${evolutionSettings.apiUrl}/message/sendText/${whatsappInstance.instanceName}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -172,6 +181,13 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
             text: whatsappMessage,
           }),
         });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('WhatsApp send failed:', response.status, errorData);
+        } else {
+          console.log('WhatsApp message sent successfully to:', formattedPhone);
+        }
       } catch (err) {
         console.error('Error sending WhatsApp message:', err);
       }
@@ -225,20 +241,43 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     }
     
     try {
-      const { data } = await supabase
+      // Buscar apenas a instância conectada primeiro
+      const { data: connectedData, error: connectedError } = await supabase
         .from('whatsapp_instances')
         .select('instance_name, status')
         .eq('clinic_id', clinicId)
-        .order('status', { ascending: false });
+        .eq('status', 'connected')
+        .limit(1);
+
+      if (!connectedError && connectedData && connectedData.length > 0) {
+        console.log('WhatsApp connected instance found:', connectedData[0]);
+        setWhatsappInstance({
+          instanceName: connectedData[0].instance_name,
+          status: connectedData[0].status,
+        });
+        return;
+      }
+
+      // Se não encontrou conectada, buscar qualquer uma
+      const { data, error } = await supabase
+        .from('whatsapp_instances')
+        .select('instance_name, status')
+        .eq('clinic_id', clinicId)
+        .limit(1);
+
+      if (error) {
+        console.error('Error fetching WhatsApp instances:', error);
+        return;
+      }
 
       if (data && data.length > 0) {
-        const connectedInstance = data.find(i => i.status === 'connected');
-        const instanceToUse = connectedInstance || data[0];
+        console.log('WhatsApp instance selected:', data[0]);
         setWhatsappInstance({
-          instanceName: instanceToUse.instance_name,
-          status: instanceToUse.status,
+          instanceName: data[0].instance_name,
+          status: data[0].status,
         });
       } else {
+        console.log('No WhatsApp instances found for clinic:', clinicId);
         setWhatsappInstance(null);
       }
     } catch (err) {

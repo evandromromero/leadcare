@@ -20,7 +20,7 @@ serve(async (req) => {
     const event = (webhookData.event || '').toLowerCase()
     const instanceName = webhookData.instance || ''
 
-    console.log('Event:', event, 'Instance:', instanceName)
+    console.log('Event:', event, 'Instance:', instanceName, 'Data:', JSON.stringify(webhookData.data).substring(0, 500))
 
     const { data: instance } = await supabase
       .from('whatsapp_instances')
@@ -47,7 +47,21 @@ serve(async (req) => {
     if (event === 'connection.update') {
       const state = webhookData.data?.state
       if (state === 'open') {
-        await supabase.from('whatsapp_instances').update({ status: 'connected', qr_code: null, connected_at: new Date().toISOString() }).eq('id', instance.id)
+        // Capturar nome do perfil e número de telefone do WhatsApp
+        const profileName = webhookData.data?.profileName || webhookData.data?.pushName || null
+        const phoneNumber = webhookData.data?.phoneNumber || webhookData.data?.wid?.replace('@s.whatsapp.net', '') || null
+        
+        const updateData: Record<string, unknown> = {
+          status: 'connected',
+          qr_code: null,
+          connected_at: new Date().toISOString()
+        }
+        
+        // Só atualiza se tiver valor (não sobrescreve com null)
+        if (profileName) updateData.display_name = profileName
+        if (phoneNumber) updateData.phone_number = phoneNumber
+        
+        await supabase.from('whatsapp_instances').update(updateData).eq('id', instance.id)
       } else if (state === 'close') {
         await supabase.from('whatsapp_instances').update({ status: 'disconnected', connected_at: null }).eq('id', instance.id)
       }
@@ -67,7 +81,11 @@ serve(async (req) => {
 
     const isFromMe = key.fromMe === true
     let phone = (key.remoteJid || '').replace('@s.whatsapp.net', '').replace('@g.us', '')
+    
+    console.log('Message processing - Phone:', phone, 'isFromMe:', isFromMe, 'messageType:', data.messageType)
+    
     if (phone.includes('-') || phone.length > 15) {
+      console.log('Skipping group or invalid phone:', phone)
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 

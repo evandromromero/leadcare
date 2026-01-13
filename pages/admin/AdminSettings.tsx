@@ -23,7 +23,7 @@ const AdminSettings: React.FC = () => {
     evolution_api_url: '',
     evolution_api_key: '',
     // SEO
-    site_title: 'LeadCare',
+    site_title: 'Belitx',
     site_description: 'CRM de WhatsApp completo para clínicas',
     site_keywords: 'crm, whatsapp, clínicas, leads, atendimento',
     favicon_url: '',
@@ -97,7 +97,7 @@ const AdminSettings: React.FC = () => {
           evolution_api_url: d.evolution_api_url || '',
           evolution_api_key: d.evolution_api_key || '',
           // SEO
-          site_title: d.site_title || 'LeadCare',
+          site_title: d.site_title || 'Belitx',
           site_description: d.site_description || 'CRM de WhatsApp completo para clínicas',
           site_keywords: d.site_keywords || 'crm, whatsapp, clínicas, leads, atendimento',
           favicon_url: d.favicon_url || '',
@@ -262,7 +262,7 @@ const AdminSettings: React.FC = () => {
                   type="text"
                   value={settings.site_title}
                   onChange={(e) => setSettings({ ...settings, site_title: e.target.value })}
-                  placeholder="LeadCare"
+                  placeholder="Belitx"
                   className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
                 <p className="text-xs text-slate-400 mt-1">Aparece na aba do navegador</p>

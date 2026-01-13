@@ -662,6 +662,35 @@ Melhorias implementadas:
 
 ---
 
+### Correções de Bug - 13/01/2026
+
+| Correção | Descrição |
+|----------|-----------|
+| Erro 406 no envio de mensagens | Corrigido uso de `.single()` quando havia múltiplas instâncias WhatsApp |
+| Instâncias órfãs | Removidas instâncias desconectadas do banco de dados |
+| Políticas RLS | Simplificadas políticas da tabela `whatsapp_instances` |
+| Logs do webhook | Adicionados logs detalhados para debug de mensagens |
+| Captura de perfil | Webhook agora captura `profileName` e `phoneNumber` na conexão |
+
+### Arquivos Modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `pages/Inbox.tsx` | Substituído `.single()` por `.limit(1)` em 4 locais para busca de instância WhatsApp |
+| `hooks/useChats.ts` | Melhorada busca de instância conectada com logs de debug |
+| `supabase/functions/evolution-webhook/index.ts` | Adicionados logs detalhados e captura de dados de perfil |
+
+### Causa Raiz do Problema
+
+O erro 406 (Not Acceptable) ocorria porque o método `.single()` do Supabase retorna erro quando a query retorna mais de uma linha. Como a clínica tinha múltiplas instâncias WhatsApp (algumas desconectadas), a query falhava.
+
+**Solução**: 
+1. Alterado para `.eq('status', 'connected').limit(1)` para buscar apenas a instância conectada
+2. Removidas instâncias órfãs do banco de dados
+3. Simplificadas políticas RLS para evitar conflitos
+
+---
+
 ## Próximos Passos (Fase 10)
 
 | Funcionalidade | Status |

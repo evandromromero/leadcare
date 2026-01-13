@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 
 const AdminLogin: React.FC = () => {
   const navigate = useNavigate();
@@ -10,6 +11,24 @@ const AdminLogin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string>('');
+  const [logoLoaded, setLogoLoaded] = useState(false);
+
+  // Buscar logo do banco
+  useEffect(() => {
+    const fetchLogo = async () => {
+      const { data } = await supabase
+        .from('settings')
+        .select('login_logo_url')
+        .single();
+      const d = data as any;
+      if (d?.login_logo_url) {
+        setLogoUrl(d.login_logo_url);
+      }
+      setLogoLoaded(true);
+    };
+    fetchLogo();
+  }, []);
 
   useEffect(() => {
     if (user && !authLoading) {
@@ -39,9 +58,13 @@ const AdminLogin: React.FC = () => {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-cyan-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Shield className="w-8 h-8 text-white" />
-            </div>
+            {logoLoaded && logoUrl ? (
+              <img src={logoUrl} alt="Belitx" className="h-16 mx-auto mb-4" />
+            ) : (
+              <div className="w-16 h-16 bg-cyan-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-8 h-8 text-white" />
+              </div>
+            )}
             <h1 className="text-2xl font-bold text-slate-800">Painel Administrativo</h1>
             <p className="text-slate-500 mt-2">Acesso restrito para administradores</p>
           </div>
@@ -55,7 +78,7 @@ const AdminLogin: React.FC = () => {
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@leadcare.com" 
+                placeholder="admin@belitx.com" 
                 className="w-full h-12 rounded-lg border border-slate-200 focus:border-cyan-600 focus:ring-1 focus:ring-cyan-600 transition-all px-4"
                 required
               />
@@ -92,7 +115,7 @@ const AdminLogin: React.FC = () => {
 
           <div className="mt-8 pt-6 border-t border-slate-100 text-center">
             <p className="text-xs text-slate-400">
-              LeadCare Admin Panel • Acesso Restrito
+              Belitx Admin Panel • Acesso Restrito
             </p>
           </div>
         </div>

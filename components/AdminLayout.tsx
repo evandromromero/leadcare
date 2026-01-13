@@ -49,7 +49,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               <Shield className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg">LeadCare</h1>
+              <h1 className="font-bold text-lg">Belitx</h1>
               <p className="text-xs text-slate-400">Painel Admin</p>
             </div>
           </div>

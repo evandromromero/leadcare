@@ -7,6 +7,7 @@ import { useChats } from '../hooks/useChats';
 import { useTasks } from '../hooks/useTasks';
 import ImpersonateBanner from './ImpersonateBanner';
 import { canAccessPage, MenuPage } from '../lib/permissions';
+import { supabase } from '../lib/supabase';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -23,7 +24,25 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const { todayTasks, upcomingTasks, overdueTasks, toggleTask } = useTasks(clinicId, user?.id);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showTasksDropdown, setShowTasksDropdown] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string>('');
+  const [logoLoaded, setLogoLoaded] = useState(false);
   const tasksDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Buscar logo do banco
+  useEffect(() => {
+    const fetchLogo = async () => {
+      const { data } = await supabase
+        .from('settings')
+        .select('login_logo_url')
+        .single();
+      const d = data as any;
+      if (d?.login_logo_url) {
+        setLogoUrl(d.login_logo_url);
+      }
+      setLogoLoaded(true);
+    };
+    fetchLogo();
+  }, []);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -95,7 +114,7 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
       <aside className={`hidden md:flex flex-col ${sidebarCollapsed ? 'w-16' : 'w-64'} bg-white border-r border-slate-200 transition-all duration-300`}>
         <div className={`${sidebarCollapsed ? 'p-3' : 'p-6'} border-b border-slate-100`}>
           <div className="flex items-center justify-between">
-            {!sidebarCollapsed && <img src="/logo.png" alt="LeadCare" className="h-8 w-auto" />}
+            {!sidebarCollapsed && logoLoaded && logoUrl && <img src={logoUrl} alt="Belitx" className="h-8 w-auto" />}
             <button 
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"

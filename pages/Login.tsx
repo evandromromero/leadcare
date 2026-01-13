@@ -28,10 +28,11 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
   const [loginSettings, setLoginSettings] = useState<LoginSettings>({
     login_logo_url: '',
     login_background_url: '',
-    login_title: 'Potencialize suas vendas e gerencie clínicas em um só lugar.',
-    login_subtitle: 'A plataforma completa para gestão de leads, atendimento multicanal e performance de equipe.',
-    login_footer_text: '+2k Clínicas conectadas hoje.',
+    login_title: '',
+    login_subtitle: '',
+    login_footer_text: '',
   });
+  const [settingsLoading, setSettingsLoading] = useState(true);
 
   // Carregar configurações de login do banco
   useEffect(() => {
@@ -47,13 +48,15 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
           setLoginSettings({
             login_logo_url: d.login_logo_url || '',
             login_background_url: d.login_background_url || '',
-            login_title: d.login_title || 'Potencialize suas vendas e gerencie clínicas em um só lugar.',
-            login_subtitle: d.login_subtitle || 'A plataforma completa para gestão de leads, atendimento multicanal e performance de equipe.',
-            login_footer_text: d.login_footer_text || '+2k Clínicas conectadas hoje.',
+            login_title: d.login_title || 'Transforme conversas em vendas',
+            login_subtitle: d.login_subtitle || 'CRM de WhatsApp para clínicas',
+            login_footer_text: d.login_footer_text || '',
           });
         }
       } catch (error) {
         console.error('Error fetching login settings:', error);
+      } finally {
+        setSettingsLoading(false);
       }
     };
 
@@ -86,6 +89,14 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
     // Redirecionamento será feito pelo useEffect quando o user carregar
   };
 
+  if (settingsLoading) {
+    return (
+      <div className="flex min-h-screen bg-white items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-white">
       {/* Left Illustration */}
@@ -98,7 +109,7 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
         <div className="absolute inset-0 bg-gradient-to-br from-cyan-600/90 to-teal-900 opacity-90"></div>
         <div className="relative z-10 flex flex-col justify-between p-16 text-white h-full">
           <div className="flex items-center gap-3">
-            <img src={loginSettings.login_logo_url || "/logo.png"} alt="LeadCare" className="h-12 w-auto brightness-0 invert" />
+            <img src={loginSettings.login_logo_url || "/logo.png"} alt="Belitx" className="h-12 w-auto brightness-0 invert" />
           </div>
           <div>
             <h1 className="text-5xl font-black leading-tight mb-6">{loginSettings.login_title}</h1>

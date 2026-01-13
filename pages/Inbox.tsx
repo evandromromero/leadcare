@@ -1344,11 +1344,14 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         .select('evolution_api_url, evolution_api_key')
         .single();
       
-      const { data: instance } = await supabase
+      const { data: instances } = await supabase
         .from('whatsapp_instances')
         .select('instance_name, status')
         .eq('clinic_id', clinicId)
-        .single();
+        .eq('status', 'connected')
+        .limit(1);
+      
+      const instance = instances?.[0];
       
       // Buscar remote_message_id da mensagem
       const { data: msgData } = await (supabase as any)
@@ -1402,12 +1405,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         .select('evolution_api_url, evolution_api_key')
         .single();
       
-      // Buscar instância WhatsApp
-      const { data: instance } = await supabase
+      // Buscar instância WhatsApp conectada
+      const { data: instances } = await supabase
         .from('whatsapp_instances')
         .select('instance_name, status')
         .eq('clinic_id', clinicId)
-        .single();
+        .eq('status', 'connected')
+        .limit(1);
+      
+      const instance = instances?.[0];
       
       // Enviar via WhatsApp se conectado
       if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
@@ -1521,12 +1527,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         .select('evolution_api_url, evolution_api_key')
         .single();
       
-      // Buscar instância WhatsApp
-      const { data: instance } = await supabase
+      // Buscar instância WhatsApp conectada
+      const { data: instances } = await supabase
         .from('whatsapp_instances')
         .select('instance_name, status')
         .eq('clinic_id', clinicId)
-        .single();
+        .eq('status', 'connected')
+        .limit(1);
+      
+      const instance = instances?.[0];
       
       // Enviar via WhatsApp se conectado
       if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
@@ -1698,12 +1707,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         .select('evolution_api_url, evolution_api_key')
         .single();
       
-      // Buscar instância WhatsApp
-      const { data: instance } = await supabase
+      // Buscar instância WhatsApp conectada
+      const { data: instances } = await supabase
         .from('whatsapp_instances')
         .select('instance_name, status')
         .eq('clinic_id', clinicId)
-        .single();
+        .eq('status', 'connected')
+        .limit(1);
+      
+      const instance = instances?.[0];
       
       // Enviar via WhatsApp se conectado
       if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
