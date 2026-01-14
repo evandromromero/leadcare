@@ -21,6 +21,7 @@ interface UseChatsReturn {
   sendMessage: (chatId: string, content: string, userId: string) => Promise<void>;
   editMessage: (messageId: string, chatId: string, newContent: string, phoneNumber: string) => Promise<{ success: boolean; error?: string }>;
   markAsRead: (chatId: string) => Promise<void>;
+  markAsUnread: (chatId: string) => Promise<void>;
   fetchAndUpdateAvatar: (chatId: string, phoneNumber: string) => Promise<void>;
 }
 
@@ -133,6 +134,25 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
     setChats(prev => prev.map(c => 
       c.id === chatId ? { ...c, unread_count: 0 } : c
+    ));
+  };
+
+  const markAsUnread = async (chatId: string) => {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return;
+
+    const { error } = await supabase
+      .from('chats')
+      .update({ unread_count: 1, updated_at: new Date().toISOString() })
+      .eq('id', chatId);
+
+    if (error) {
+      console.error('Error marking chat as unread:', error);
+      return;
+    }
+
+    setChats(prev => prev.map(c => 
+      c.id === chatId ? { ...c, unread_count: 1 } : c
     ));
   };
 
@@ -362,39 +382,73 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
     if (!clinicId) return;
 
-    const chatsSubscription = supabase
-      .channel(`chats-changes-${clinicId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `clinic_id=eq.${clinicId}` }, () => {
-        fetchChats();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_instances', filter: `clinic_id=eq.${clinicId}` }, (payload) => {
-        if (payload.new && typeof payload.new === 'object' && 'status' in payload.new) {
-          const newData = payload.new as { instance_name: string; status: string };
-          setWhatsappInstance({
-            instanceName: newData.instance_name,
-            status: newData.status,
-          });
-        } else {
-          fetchWhatsAppInstance();
+    // Realtime via Broadcast (webhook envia quando chega mensagem)
+    const subscription = supabase
+      .channel('leadcare-updates')
+      .on('broadcast', { event: 'new_message' }, (payload) => {
+        console.log('[Realtime] Nova mensagem via broadcast:', payload);
+        // Só atualiza se for da clínica atual
+        if (payload.payload?.clinic_id === clinicId) {
+          const chatId = payload.payload?.chat_id;
+          if (chatId) {
+            // Buscar dados atualizados do chat específico
+            supabase
+              .from('chats')
+              .select('id, unread_count, last_message, last_message_time, status')
+              .eq('id', chatId)
+              .single()
+              .then(({ data }) => {
+                if (data) {
+                  setChats(prev => {
+                    // Encontrar o chat e movê-lo para o topo
+                    const chatIndex = prev.findIndex(c => c.id === chatId);
+                    if (chatIndex === -1) return prev;
+                    
+                    const updatedChat = { ...prev[chatIndex], ...data };
+                    const newList = [
+                      updatedChat,
+                      ...prev.slice(0, chatIndex),
+                      ...prev.slice(chatIndex + 1)
+                    ];
+                    return newList;
+                  });
+                }
+              });
+          }
         }
       })
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log('[Realtime] Broadcast status:', status, err ? `Error: ${err.message}` : '');
+      });
 
-    const messagesSubscription = supabase
-      .channel(`messages-changes-${clinicId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
-        fetchChats();
-      })
-      .subscribe();
-
-    // Polling a cada 7 segundos como fallback
+    // Polling de backup a cada 30 segundos (caso broadcast falhe)
     const pollingInterval = setInterval(() => {
-      fetchChats();
-    }, 7000);
+      supabase
+        .from('chats')
+        .select('id, unread_count, last_message, last_message_time, status')
+        .eq('clinic_id', clinicId)
+        .then(({ data: chatsData }) => {
+          if (!chatsData) return;
+          setChats(prev => {
+            let hasChanges = false;
+            const updated = prev.map(chat => {
+              const newData = chatsData.find(c => c.id === chat.id);
+              if (newData && (
+                chat.unread_count !== newData.unread_count ||
+                chat.last_message !== newData.last_message
+              )) {
+                hasChanges = true;
+                return { ...chat, ...newData };
+              }
+              return chat;
+            });
+            return hasChanges ? updated : prev;
+          });
+        });
+    }, 30000);
 
     return () => {
-      supabase.removeChannel(chatsSubscription);
-      supabase.removeChannel(messagesSubscription);
+      supabase.removeChannel(subscription);
       clearInterval(pollingInterval);
     };
   }, [clinicId]);
@@ -541,6 +595,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     sendMessage,
     editMessage,
     markAsRead,
+    markAsUnread,
     fetchAndUpdateAvatar,
   };
 }

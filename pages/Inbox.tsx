@@ -32,7 +32,7 @@ const PIPELINE_STAGES = [
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading, sendMessage, editMessage, markAsRead, updateChatStatus, refetch, fetchAndUpdateAvatar } = useChats(clinicId, user?.id);
+  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar } = useChats(clinicId, user?.id);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [msgInput, setMsgInput] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('todos');
@@ -97,9 +97,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     payment_date: string;
     created_at: string;
     status: 'active' | 'cancelled';
-  }>>([]);
+    payment_method: string | null;
+  }>>([])
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0] });
+  const [paymentForm, setPaymentForm] = useState({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0], payment_method: '' });
   const [savingPayment, setSavingPayment] = useState(false);
   
   // Estados para tarefas
@@ -934,7 +935,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     try {
       const { data, error } = await supabase
         .from('payments' as any)
-        .select('id, value, description, payment_date, created_at, status')
+        .select('id, value, description, payment_date, created_at, status, payment_method')
         .eq('chat_id', chatId)
         .order('payment_date', { ascending: false });
       
@@ -960,11 +961,12 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           value: parseFloat(paymentForm.value.replace(',', '.')),
           description: paymentForm.description.trim() || null,
           payment_date: paymentForm.payment_date,
+          payment_method: paymentForm.payment_method || null,
           created_by: user.id,
         });
       
       if (!error) {
-        setPaymentForm({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0] });
+        setPaymentForm({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0], payment_method: '' });
         setShowPaymentModal(false);
         await fetchPayments(selectedChatId);
       }
@@ -1299,7 +1301,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       case 'nao_lidos':
         return (chat.unread_count || 0) > 0;
       case 'aguardando':
-        return chat.status === 'Aguardando' || chat.status === 'Novo Lead';
+        // Chats onde a última mensagem foi do cliente E já foi lida (aguardando resposta)
+        return (chat as any).last_message_from_client === true && (chat.unread_count || 0) === 0;
       case 'followup':
         return chat.id in followupData;
       case 'todos':
@@ -1630,6 +1633,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       await supabase.from('chats').update({
         last_message: msgInput.trim(),
         last_message_time: new Date().toISOString(),
+        last_message_from_client: false,
       }).eq('id', selectedChatId);
       
       setMsgInput('');
@@ -1730,6 +1734,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       await supabase.from('chats').update({
         last_message: `[${mediaType === 'image' ? 'Imagem' : mediaType === 'video' ? 'Vídeo' : 'Arquivo'}]`,
         last_message_time: new Date().toISOString(),
+        last_message_from_client: false,
       }).eq('id', selectedChatId);
       
       // Recarregar chats
@@ -1904,6 +1909,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       await supabase.from('chats').update({
         last_message: '[Áudio]',
         last_message_time: new Date().toISOString(),
+        last_message_from_client: false,
       }).eq('id', selectedChatId);
       
       // Recarregar chats
@@ -1946,14 +1952,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           </div>
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
             {[
-              { key: 'todos' as FilterType, label: 'Todos', count: chats.length },
-              { key: 'nao_lidos' as FilterType, label: 'Não lidos', count: chats.filter(c => (c.unread_count || 0) > 0).length },
-              { key: 'aguardando' as FilterType, label: 'Aguardando', count: chats.filter(c => c.status === 'Aguardando' || c.status === 'Novo Lead').length },
-              { key: 'followup' as FilterType, label: 'Follow-up', count: Object.keys(followupData).length },
+              { key: 'todos' as FilterType, label: 'Todos', count: chats.length, tooltip: 'Todas as conversas do sistema' },
+              { key: 'nao_lidos' as FilterType, label: 'Não lidos', count: chats.filter(c => (c.unread_count || 0) > 0).length, tooltip: 'Conversas com mensagens não lidas' },
+              { key: 'aguardando' as FilterType, label: 'Aguardando', count: chats.filter(c => (c as any).last_message_from_client === true && (c.unread_count || 0) === 0).length, tooltip: 'Conversas lidas mas não respondidas - cliente aguardando sua resposta' },
+              { key: 'followup' as FilterType, label: 'Follow-up', count: Object.keys(followupData).length, tooltip: 'Conversas com mensagens agendadas para envio futuro' },
             ].map((f) => (
               <button 
                 key={f.key}
                 onClick={() => setActiveFilter(f.key)}
+                title={f.tooltip}
                 className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap border flex items-center gap-1.5 transition-colors ${
                   activeFilter === f.key 
                     ? 'bg-cyan-50 text-cyan-700 border-cyan-200' 
@@ -1975,9 +1982,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
 
         <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
           {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600 mx-auto"></div>
-              <p className="text-sm text-slate-500 mt-2">Carregando conversas...</p>
+            <div className="divide-y divide-slate-50">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="flex items-start gap-3 p-4 animate-pulse">
+                  <div className="size-12 rounded-full bg-slate-200"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-slate-200 rounded w-1/3"></div>
+                    <div className="h-3 bg-slate-100 rounded w-2/3"></div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : filteredChats.length === 0 ? (
             <div className="p-8 text-center">
@@ -2064,19 +2078,28 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     {chatLeadId ? 'person' : 'person_add'}
                   </span>
                 </button>
-                <button 
-                  onClick={() => selectedChatId && markAsRead(selectedChatId)}
-                  className={`p-2 rounded-full transition-colors ${
-                    (selectedChat?.unread_count || 0) === 0
-                      ? 'text-green-600 hover:text-green-700 hover:bg-green-50'
-                      : 'text-slate-400 hover:text-green-600 hover:bg-green-50'
-                  }`}
-                  title={(selectedChat?.unread_count || 0) === 0 ? 'Conversa lida' : 'Marcar como lida'}
-                >
-                  <span className="material-symbols-outlined text-[20px]">
-                    {(selectedChat?.unread_count || 0) === 0 ? 'check_circle' : 'radio_button_unchecked'}
-                  </span>
-                </button>
+                {(selectedChat?.unread_count || 0) > 0 ? (
+                  <button 
+                    onClick={() => selectedChatId && markAsRead(selectedChatId)}
+                    className="p-2 rounded-full transition-colors text-slate-400 hover:text-green-600 hover:bg-green-50"
+                    title="Marcar como lida"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">mark_chat_read</span>
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      if (selectedChatId) {
+                        markAsUnread(selectedChatId);
+                        setSelectedChatId(null);
+                      }
+                    }}
+                    className="p-2 rounded-full transition-colors text-green-600 hover:text-amber-600 hover:bg-amber-50"
+                    title="Marcar como não lida"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">mark_chat_unread</span>
+                  </button>
+                )}
                 <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
                   <span className="material-symbols-outlined text-[20px]">more_vert</span>
                 </button>
@@ -2438,7 +2461,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             <div className="p-6 space-y-8">
               <section className="relative">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Funil de Vendas</h3>
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Etapa do Pipeline</h3>
+                    <div className="relative group/tip">
+                      <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
+                      <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
+                        Etapa atual do lead no funil de vendas. Muda conforme o atendimento avança (Novo Lead → Em Atendimento → Agendado → Convertido)
+                      </div>
+                    </div>
+                  </div>
                   {canMoveLead && (
                   <button 
                     onClick={() => setShowStageDropdown(!showStageDropdown)}
@@ -2493,7 +2524,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               {/* Seção Responsável pelo Atendimento */}
               <section>
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Responsável</h3>
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Responsável</h3>
+                    <div className="relative group/tip">
+                      <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
+                      <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
+                        Atendente responsável por esta conversa. Pode assumir, encaminhar ou liberar o atendimento
+                      </div>
+                    </div>
+                  </div>
                   {canSendMessage && (
                     <button 
                       onClick={() => setShowForwardModal(true)}
@@ -2568,7 +2607,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               {/* Seção Origem do Lead */}
               <section className="relative">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Origem do Lead</h3>
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Origem do Lead</h3>
+                    <div className="relative group/tip">
+                      <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
+                      <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
+                        De onde este lead veio (Instagram, Facebook, Indicação, etc). Usado para medir performance de campanhas
+                      </div>
+                    </div>
+                  </div>
                   <button 
                     onClick={() => { fetchAvailableTags(); setShowAddSourceModal(true); }}
                     className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
@@ -2732,7 +2779,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
 
               <section>
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Etiquetas</h3>
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Etiquetas</h3>
+                    <div className="relative group/tip">
+                      <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
+                      <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
+                        Tags para categorizar e filtrar conversas (ex: VIP, Retorno, Procedimento X)
+                      </div>
+                    </div>
+                  </div>
                   <button 
                     onClick={openTagsModal}
                     className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
@@ -2952,7 +3007,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               {/* Seção de Orçamentos */}
               <section>
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Orçamento</h3>
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Orçamentos</h3>
+                    <div className="relative group/tip">
+                      <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
+                      <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
+                        Propostas de serviços enviadas ao cliente com valores. Podem ser aprovados ou recusados
+                      </div>
+                    </div>
+                  </div>
                   <button 
                     onClick={() => setShowQuoteModal(true)}
                     className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
@@ -3116,7 +3179,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               {/* Seção de Negociações/Pagamentos */}
               <section>
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Negociações</h3>
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Negociações</h3>
+                    <div className="relative group/tip">
+                      <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
+                      <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
+                        Pagamentos registrados deste cliente. Alimenta o Dashboard de Vendas Concluídas e Faturamento
+                      </div>
+                    </div>
+                  </div>
                   <button 
                     onClick={() => setShowPaymentModal(true)}
                     className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
@@ -3166,8 +3237,22 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                             )}
                           </div>
                         </div>
+                        {payment.payment_method && (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            payment.status === 'cancelled' ? 'bg-slate-100 text-slate-400' : 'bg-cyan-100 text-cyan-700'
+                          }`}>
+                            {payment.payment_method === 'pix' ? 'PIX' :
+                             payment.payment_method === 'dinheiro' ? 'Dinheiro' :
+                             payment.payment_method === 'cartao_credito' ? 'Cartão Crédito' :
+                             payment.payment_method === 'cartao_debito' ? 'Cartão Débito' :
+                             payment.payment_method === 'boleto' ? 'Boleto' :
+                             payment.payment_method === 'link' ? 'Link' :
+                             payment.payment_method === 'transferencia' ? 'Transferência' :
+                             'Outro'}
+                          </span>
+                        )}
                         {payment.description && (
-                          <p className={`text-[11px] ${payment.status === 'cancelled' ? 'text-slate-400' : 'text-slate-600'}`}>{payment.description}</p>
+                          <p className={`text-[11px] mt-1 ${payment.status === 'cancelled' ? 'text-slate-400' : 'text-slate-600'}`}>{payment.description}</p>
                         )}
                       </div>
                     ))}
@@ -3219,6 +3304,24 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         />
                       </div>
                       <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento</label>
+                        <select
+                          value={paymentForm.payment_method}
+                          onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_method: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                        >
+                          <option value="">Selecione...</option>
+                          <option value="pix">PIX</option>
+                          <option value="dinheiro">Dinheiro</option>
+                          <option value="cartao_credito">Cartão de Crédito</option>
+                          <option value="cartao_debito">Cartão de Débito</option>
+                          <option value="boleto">Boleto</option>
+                          <option value="link">Link de Pagamento</option>
+                          <option value="transferencia">Transferência</option>
+                          <option value="outro">Outro</option>
+                        </select>
+                      </div>
+                      <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1">Descrição (opcional)</label>
                         <input
                           type="text"
@@ -3253,7 +3356,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               {/* Seção de Tarefas */}
               <section>
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tarefas</h3>
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tarefas</h3>
+                    <div className="relative group/tip">
+                      <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
+                      <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
+                        Lista de tarefas pendentes relacionadas a este cliente (ligar, enviar documento, etc)
+                      </div>
+                    </div>
+                  </div>
                   <button 
                     onClick={() => setShowTaskModal(true)}
                     className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
@@ -3370,7 +3481,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               {/* Seção de Mensagens Agendadas */}
               <section>
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Follow-up</h3>
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Follow-up</h3>
+                    <div className="relative group/tip">
+                      <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
+                      <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
+                        Mensagens programadas para envio automático em data/hora futura
+                      </div>
+                    </div>
+                  </div>
                   <button 
                     onClick={() => setShowScheduleModal(true)}
                     className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
@@ -3504,7 +3623,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               )}
 
               <section className="flex-1 flex flex-col">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Observações</h3>
+                <div className="flex items-center gap-1 mb-4">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Observações</h3>
+                  <div className="relative group/tip">
+                    <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
+                    <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
+                      Notas internas sobre o cliente. Visíveis apenas para a equipe, não são enviadas ao cliente
+                    </div>
+                  </div>
+                </div>
                 
                 {/* Histórico de notas */}
                 <div className="flex-1 space-y-3 max-h-48 overflow-y-auto mb-4">

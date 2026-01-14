@@ -662,6 +662,59 @@ Melhorias implementadas:
 
 ---
 
+### Melhorias - 14/01/2026
+
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| Tooltips customizados na Inbox | Tooltips com cor cyan do tema e quebra de linha automática |
+| Marcar como não lida | Botão para marcar conversa como não lida e sair |
+| Skeleton loading | Lista de chats mostra skeleton em vez de "Carregando..." |
+| Realtime via Broadcast | Webhook envia broadcast quando chega mensagem (mais estável) |
+| Polling inteligente | Backup a cada 30s, não afeta scroll da lista |
+| Chat sobe ao topo | Conversa com nova mensagem sobe automaticamente para o topo |
+| Otimização useAuth | Evita buscas repetidas de perfil do usuário |
+
+### Detalhes das Implementações - 14/01/2026
+
+#### Tooltips Customizados
+- **Antes**: Tooltips nativos pretos do navegador
+- **Depois**: Tooltips com fundo cyan, texto branco, quebra de linha automática
+- **Seções**: Etapa do Pipeline, Responsável, Origem, Etiquetas, Orçamentos, Negociações, Tarefas, Follow-up, Observações
+
+#### Marcar como Não Lida
+- **Função**: `markAsUnread` no hook `useChats`
+- **Comportamento**: Seta `unread_count = 1` e sai da conversa
+- **Ícone**: `mark_chat_unread` (verde) quando conversa está lida
+
+#### Realtime via Broadcast (Solução para bug do Supabase)
+- **Problema**: `postgres_changes` dava erro "mismatch between server and client bindings"
+- **Solução**: Webhook envia broadcast após salvar mensagem
+- **Canal**: `leadcare-updates`
+- **Evento**: `new_message` com `clinic_id` e `chat_id`
+
+#### Polling Inteligente
+- **Intervalo**: 30 segundos (backup caso broadcast falhe)
+- **Otimização**: Só atualiza se houver mudanças reais
+- **Scroll**: Não afeta posição do scroll da lista de chats
+
+### Arquivos Modificados - 14/01/2026
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `pages/Inbox.tsx` | Tooltips customizados, skeleton loading, marcar como não lida |
+| `hooks/useChats.ts` | `markAsUnread`, Realtime via Broadcast, polling inteligente |
+| `hooks/useAuth.tsx` | Evita buscas repetidas de perfil |
+| `supabase/functions/evolution-webhook/index.ts` | Envia broadcast após salvar mensagem |
+
+### Edge Function: evolution-webhook (v19)
+
+Melhorias implementadas:
+- Envia broadcast para canal `leadcare-updates` após salvar mensagem
+- Payload inclui `clinic_id`, `chat_id` e `from_client`
+- Cliente recebe notificação instantânea de nova mensagem
+
+---
+
 ### Correções de Bug - 13/01/2026
 
 | Correção | Descrição |

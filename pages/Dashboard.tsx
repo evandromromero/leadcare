@@ -77,8 +77,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
   const novosLeads = chats.filter(c => c.status === 'Novo Lead').length;
   const emAtendimento = chats.filter(c => c.status === 'Em Atendimento').length;
-  const fechados = chats.filter(c => c.status === 'Convertido').length;
   const totalChats = chats.length;
+  
+  // Estado para contar pagamentos ativos (vendas concluídas)
+  const [activePaymentsCount, setActivePaymentsCount] = useState(0);
 
   // Calcular métricas baseado no view_mode do usuário
   // view_mode 'shared' = vê faturamento de todos
@@ -173,6 +175,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           const total = (paymentsData as any[]).reduce((sum, p) => sum + Number(p.value), 0);
           setTotalRevenue(total);
           
+          // Contar pagamentos ativos (vendas concluídas)
+          setActivePaymentsCount(paymentsData.length);
+          
           // Faturamento do mês atual
           const now = new Date();
           const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -202,6 +207,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           setTotalRevenue(0);
           setMonthlyRevenue(0);
           setUserGoalData(null);
+          setActivePaymentsCount(0);
         }
         
         // Buscar origens de leads apenas se houver chats visíveis
@@ -357,10 +363,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   }, [clinicId]);
 
   const stats = [
-    { label: 'Novos Leads', value: String(novosLeads), change: '+12%', color: 'blue', icon: 'person_add' },
-    { label: 'Em Atendimento', value: String(emAtendimento), change: '+4%', color: 'orange', icon: 'forum' },
-    { label: 'Vendas Concluídas', value: String(fechados), change: '+10%', color: 'green', icon: 'check_circle' },
-    { label: 'Total Conversas', value: String(totalChats), change: '', color: 'purple', icon: 'chat' },
+    { label: 'Novos Leads', value: String(novosLeads), change: '+12%', color: 'blue', icon: 'person_add', tooltip: 'Conversas com status "Novo Lead" - leads que ainda não foram atendidos' },
+    { label: 'Em Atendimento', value: String(emAtendimento), change: '+4%', color: 'orange', icon: 'forum', tooltip: 'Conversas com status "Em Atendimento" - leads sendo trabalhados ativamente' },
+    { label: 'Vendas Concluídas', value: String(activePaymentsCount), change: '+10%', color: 'green', icon: 'check_circle', tooltip: 'Total de negociações registradas (não canceladas) - vem da aba Negociações no chat' },
+    { label: 'Total Conversas', value: String(totalChats), change: '', color: 'purple', icon: 'chat', tooltip: 'Quantidade total de conversas/leads no sistema' },
   ];
 
   return (
@@ -376,7 +382,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           {stats.map(stat => (
             <div key={stat.label} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</span>
+                  <div className="relative group">
+                    <span className="material-symbols-outlined text-[14px] text-slate-400 cursor-help hover:text-slate-600">info</span>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-48 text-center z-50 shadow-lg">
+                      {stat.tooltip}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                    </div>
+                  </div>
+                </div>
                 <span className={`material-symbols-outlined text-${stat.color}-600`}>{stat.icon}</span>
               </div>
               <div className="flex items-baseline gap-2">

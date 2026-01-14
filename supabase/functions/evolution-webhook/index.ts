@@ -133,8 +133,10 @@ serve(async (req) => {
     } else if (messageType === 'documentMessage') {
       message = messageObj?.documentMessage?.fileName || '[Documento]'
       mediaType = 'document'
+      // Capturar mimetype do documento para usar na extensão correta
+      const docMimetype = messageObj?.documentMessage?.mimetype || mediaMimetype
       if (base64Media) {
-        tempMediaUrl = `data:${mediaMimetype || 'application/octet-stream'};base64,${base64Media}`
+        tempMediaUrl = `data:${docMimetype || 'application/octet-stream'};base64,${base64Media}`
       } else {
         tempMediaUrl = data.mediaUrl || messageObj?.documentMessage?.url || data.media?.url
       }
@@ -228,7 +230,8 @@ serve(async (req) => {
         .update({
           unread_count: isFromMe ? (chat.unread_count || 0) : (chat.unread_count || 0) + 1,
           last_message: message,
-          last_message_time: new Date().toISOString()
+          last_message_time: new Date().toISOString(),
+          last_message_from_client: !isFromMe // true se mensagem do cliente, false se do atendente
         })
         .eq('id', chat.id)
     }
@@ -237,8 +240,27 @@ serve(async (req) => {
     let finalMediaUrl: string | null = null
     if (tempMediaUrl && mediaType && chat) {
       try {
-        const ext = mediaType === 'image' ? 'jpg' : mediaType === 'video' ? 'mp4' : mediaType === 'audio' ? 'ogg' : 'bin'
-        const fileName = `${chat.id}/${Date.now()}.${ext}`
+        // Determinar extensão baseada no mimetype ou tipo de mídia
+        let ext = 'bin'
+        if (mediaType === 'image') ext = 'jpg'
+        else if (mediaType === 'video') ext = 'mp4'
+        else if (mediaType === 'audio') ext = 'ogg'
+        else if (mediaType === 'document') {
+          // Extrair extensão do nome do arquivo ou mimetype
+          const fileName = messageObj?.documentMessage?.fileName || ''
+          const fileExt = fileName.split('.').pop()?.toLowerCase()
+          if (fileExt && fileExt.length <= 5) {
+            ext = fileExt
+          } else {
+            // Fallback baseado no mimetype
+            const docMime = messageObj?.documentMessage?.mimetype || ''
+            if (docMime.includes('pdf')) ext = 'pdf'
+            else if (docMime.includes('word') || docMime.includes('document')) ext = 'docx'
+            else if (docMime.includes('excel') || docMime.includes('spreadsheet')) ext = 'xlsx'
+            else if (docMime.includes('text')) ext = 'txt'
+          }
+        }
+        const uploadFileName = `${chat.id}/${Date.now()}.${ext}`
         
         // Verificar se é base64
         if (tempMediaUrl.startsWith('data:')) {
@@ -256,10 +278,10 @@ serve(async (req) => {
             
             const { error: uploadError } = await supabase.storage
               .from('chat-media')
-              .upload(fileName, bytes, { contentType: mimeType })
+              .upload(uploadFileName, bytes, { contentType: mimeType })
             
             if (!uploadError) {
-              const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(fileName)
+              const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(uploadFileName)
               finalMediaUrl = urlData?.publicUrl || null
             } else {
               console.error('Upload error (base64):', uploadError)
@@ -273,10 +295,10 @@ serve(async (req) => {
             
             const { error: uploadError } = await supabase.storage
               .from('chat-media')
-              .upload(fileName, blob, { contentType: blob.type })
+              .upload(uploadFileName, blob, { contentType: blob.type })
             
             if (!uploadError) {
-              const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(fileName)
+              const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(uploadFileName)
               finalMediaUrl = urlData?.publicUrl || null
             } else {
               console.error('Upload error (url):', uploadError)
@@ -296,6 +318,18 @@ serve(async (req) => {
       media_url: finalMediaUrl,
       is_from_client: !isFromMe,
       remote_message_id: messageId || null
+    })
+
+    // Enviar Broadcast para notificar o cliente em tempo real
+    const channel = supabase.channel('leadcare-updates')
+    await channel.send({
+      type: 'broadcast',
+      event: 'new_message',
+      payload: {
+        clinic_id: instance.clinic_id,
+        chat_id: chat!.id,
+        from_client: !isFromMe
+      }
     })
 
     return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

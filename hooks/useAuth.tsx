@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [impersonatedClinic, setImpersonatedClinic] = useState<Clinic | null>(null);
+  const [lastFetchedUserId, setLastFetchedUserId] = useState<string | null>(null);
 
   // Verificar se há impersonate ativo ao carregar
   useEffect(() => {
@@ -132,14 +133,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         setSession(session);
         if (session?.user && session.access_token) {
-          console.log('[useAuth] Buscando perfil...');
-          // Pequeno delay para garantir que o token está sincronizado
-          await new Promise(resolve => setTimeout(resolve, 100));
-          await fetchUserProfile(session.user, session.access_token);
-          console.log('[useAuth] Perfil carregado');
+          // Evitar buscar perfil repetidamente para o mesmo usuário
+          if (lastFetchedUserId === session.user.id) {
+            console.log('[useAuth] Perfil já carregado, ignorando');
+          } else {
+            console.log('[useAuth] Buscando perfil...');
+            setLastFetchedUserId(session.user.id);
+            // Pequeno delay para garantir que o token está sincronizado
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await fetchUserProfile(session.user, session.access_token);
+            console.log('[useAuth] Perfil carregado');
+          }
         } else {
           setUser(null);
           setClinic(null);
+          setLastFetchedUserId(null);
         }
         
         if (isMounted) {
