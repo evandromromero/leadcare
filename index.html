@@ -3,7 +3,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Belitx</title>
     
     <!-- SEO Meta Tags -->
@@ -17,8 +17,30 @@
     <meta property="og:image" content="https://opuepzfqizmamdegdhbs.supabase.co/storage/v1/object/public/site-assets/login_logo_url_1768275433220.png">
     <meta property="og:url" content="https://belitx.com">
     
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0891b2">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Belitx">
+    
+    <!-- PWA Manifest - Detecta se é admin para usar manifest correto -->
+    <script>
+      if (window.location.pathname.startsWith('/admin')) {
+        document.write('<link rel="manifest" href="/manifest-admin.json">');
+      } else {
+        document.write('<link rel="manifest" href="/manifest.json">');
+      }
+    </script>
+    <noscript><link rel="manifest" href="/manifest.json"></noscript>
+    
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="https://opuepzfqizmamdegdhbs.supabase.co/storage/v1/object/public/site-assets/favicon_url_1768275514483.png">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="https://opuepzfqizmamdegdhbs.supabase.co/storage/v1/object/public/site-assets/favicon_url_1768275514483.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="https://opuepzfqizmamdegdhbs.supabase.co/storage/v1/object/public/site-assets/favicon_url_1768275514483.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="https://opuepzfqizmamdegdhbs.supabase.co/storage/v1/object/public/site-assets/favicon_url_1768275514483.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="https://opuepzfqizmamdegdhbs.supabase.co/storage/v1/object/public/site-assets/favicon_url_1768275514483.png">
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
@@ -44,5 +66,19 @@
 <body class="bg-[#f8fafc] text-slate-900">
     <div id="root"></div>
 <script type="module" src="/index.tsx"></script>
+<script>
+  // Register Service Worker for PWA
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('SW registered:', registration.scope);
+        })
+        .catch((error) => {
+          console.log('SW registration failed:', error);
+        });
+    });
+  }
+</script>
 </body>
 </html>

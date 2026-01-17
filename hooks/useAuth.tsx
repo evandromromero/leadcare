@@ -211,13 +211,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // Limpar estado local primeiro
     setUser(null);
     setClinic(null);
     setSession(null);
+    setLastFetchedUserId(null);
     setIsImpersonating(false);
     setImpersonatedClinic(null);
     sessionStorage.removeItem('impersonateClinic');
+    
+    // Tentar logout no Supabase (pode falhar com 403, mas já limpamos local)
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (err) {
+      console.log('[useAuth] signOut error (ignorado):', err);
+    }
+    
+    // Forçar limpeza do localStorage do Supabase
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const storageKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
+    localStorage.removeItem(storageKey);
   };
 
   const startImpersonate = (clinicId: string, clinicName: string) => {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -6,7 +6,9 @@ import {
   Settings,
   LogOut,
   Shield,
-  Users
+  Users,
+  Menu,
+  X
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -18,10 +20,24 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Trocar manifest para admin (PWA)
+  useEffect(() => {
+    const manifestLink = document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+      manifestLink.setAttribute('href', '/manifest-admin.json');
+    }
+    return () => {
+      if (manifestLink) {
+        manifestLink.setAttribute('href', '/manifest.json');
+      }
+    };
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/login');
+    navigate('/admin/login');
   };
 
   const menuItems = [
@@ -38,10 +54,43 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     return location.pathname.startsWith(path);
   };
 
+  const handleNavClick = () => {
+    setSidebarOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex">
+      {/* Mobile Header */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-slate-900 flex items-center justify-between px-4 z-40">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-cyan-600 rounded-lg flex items-center justify-center">
+            <Shield className="w-5 h-5 text-white" />
+          </div>
+          <span className="font-bold text-white">Belitx Admin</span>
+        </div>
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="w-10 h-10 flex items-center justify-center text-white"
+        >
+          {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
+
+      {/* Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col">
+      <aside className={`
+        fixed lg:static inset-y-0 left-0 z-50
+        w-64 bg-slate-900 text-white flex flex-col
+        transform transition-transform duration-300 ease-in-out
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
         {/* Logo */}
         <div className="p-6 border-b border-slate-700">
           <div className="flex items-center gap-3">
@@ -62,6 +111,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               <li key={item.path}>
                 <Link
                   to={item.path}
+                  onClick={handleNavClick}
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                     isActive(item.path)
                       ? 'bg-cyan-600 text-white'
@@ -100,7 +150,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto pt-14 lg:pt-0">
         {children}
       </main>
     </div>

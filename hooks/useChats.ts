@@ -385,35 +385,66 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     // Realtime via Broadcast (webhook envia quando chega mensagem)
     const subscription = supabase
       .channel('leadcare-updates')
-      .on('broadcast', { event: 'new_message' }, (payload) => {
+      .on('broadcast', { event: 'new_message' }, async (payload) => {
         console.log('[Realtime] Nova mensagem via broadcast:', payload);
         // Só atualiza se for da clínica atual
         if (payload.payload?.clinic_id === clinicId) {
           const chatId = payload.payload?.chat_id;
           if (chatId) {
-            // Buscar dados atualizados do chat específico
-            supabase
+            // Buscar chat atualizado COM a última mensagem
+            const { data: chatData } = await supabase
               .from('chats')
               .select('id, unread_count, last_message, last_message_time, status')
               .eq('id', chatId)
-              .single()
-              .then(({ data }) => {
-                if (data) {
-                  setChats(prev => {
-                    // Encontrar o chat e movê-lo para o topo
-                    const chatIndex = prev.findIndex(c => c.id === chatId);
-                    if (chatIndex === -1) return prev;
-                    
-                    const updatedChat = { ...prev[chatIndex], ...data };
-                    const newList = [
-                      updatedChat,
-                      ...prev.slice(0, chatIndex),
-                      ...prev.slice(chatIndex + 1)
-                    ];
-                    return newList;
-                  });
+              .single();
+            
+            // Buscar a última mensagem do chat
+            const { data: newMessage } = await supabase
+              .from('messages')
+              .select('*')
+              .eq('chat_id', chatId)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+            
+            if (chatData) {
+              setChats(prev => {
+                const chatIndex = prev.findIndex(c => c.id === chatId);
+                
+                // Se chat não existe na lista, fazer refetch completo
+                if (chatIndex === -1) {
+                  fetchChats();
+                  return prev;
                 }
+                
+                // Atualizar chat com novos dados e adicionar mensagem
+                const existingChat = prev[chatIndex];
+                const existingMessages = existingChat.messages || [];
+                
+                // Verificar se a mensagem já existe
+                const messageExists = newMessage && existingMessages.some(m => m.id === newMessage.id);
+                
+                const updatedMessages = messageExists 
+                  ? existingMessages 
+                  : newMessage 
+                    ? [...existingMessages, newMessage]
+                    : existingMessages;
+                
+                const updatedChat = { 
+                  ...existingChat, 
+                  ...chatData,
+                  messages: updatedMessages
+                };
+                
+                // Mover chat para o topo
+                const newList = [
+                  updatedChat,
+                  ...prev.slice(0, chatIndex),
+                  ...prev.slice(chatIndex + 1)
+                ];
+                return newList;
               });
+            }
           }
         }
       })
@@ -527,16 +558,35 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
         .eq('id', messageId);
 
       // Atualizar estado local
-      setChats(prev => prev.map(c => 
-        c.id === chatId 
-          ? { 
-              ...c, 
-              messages: c.messages.map(m => 
-                m.id === messageId ? { ...m, content: newContent } : m
-              )
-            }
-          : c
-      ));
+      setChats(prev => prev.map(c => {
+        if (c.id !== chatId) return c;
+        
+        const updatedMessages = c.messages.map(m => 
+          m.id === messageId ? { ...m, content: newContent } : m
+        );
+        
+        // Verificar se a mensagem editada é a última (para atualizar last_message na lateral)
+        const lastMessage = updatedMessages[updatedMessages.length - 1];
+        const isLastMessage = lastMessage?.id === messageId;
+        
+        return { 
+          ...c, 
+          messages: updatedMessages,
+          last_message: isLastMessage ? newContent : c.last_message
+        };
+      }));
+
+      // Atualizar last_message no banco se for a última mensagem
+      const chat = chats.find(c => c.id === chatId);
+      if (chat) {
+        const lastMsg = chat.messages[chat.messages.length - 1];
+        if (lastMsg?.id === messageId) {
+          await supabase
+            .from('chats')
+            .update({ last_message: newContent })
+            .eq('id', chatId);
+        }
+      }
 
       return { success: true };
     } catch (err) {

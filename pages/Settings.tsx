@@ -120,7 +120,6 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Card: Etiquetas */}
-        {canEditTags && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center gap-3 mb-2">
             <div className="size-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
@@ -208,10 +207,8 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
             )}
           </div>
         </div>
-        )}
 
         {/* Card: Mensagens Rápidas */}
-        {canEditQuickReplies && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex items-center gap-3 mb-2">
             <div className="size-10 bg-cyan-50 text-cyan-600 rounded-xl flex items-center justify-center">
@@ -286,7 +283,6 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
             )}
           </div>
         </div>
-        )}
 
         {/* Card: Perfil da Clínica */}
         {canEditClinicProfile && (

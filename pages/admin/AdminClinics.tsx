@@ -172,18 +172,19 @@ const AdminClinics: React.FC = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="p-4 sm:p-6">
+      <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Clínicas</h1>
-          <p className="text-slate-500 mt-1">Gerencie todas as clínicas cadastradas no sistema</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Clínicas</h1>
+          <p className="text-sm sm:text-base text-slate-500 mt-1">Gerencie todas as clínicas cadastradas</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors text-sm sm:text-base"
         >
           <Plus className="w-5 h-5" />
-          Nova Clínica
+          <span className="hidden sm:inline">Nova Clínica</span>
+          <span className="sm:hidden">Nova</span>
         </button>
       </div>
 
@@ -213,9 +214,10 @@ const AdminClinics: React.FC = () => {
         </div>
       </div>
 
-      {/* Clinics Table */}
+      {/* Clinics - Cards for mobile, Table for desktop */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -350,6 +352,108 @@ const AdminClinics: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Cards */}
+        <div className="md:hidden divide-y divide-slate-200">
+          {filteredClinics.length === 0 ? (
+            <div className="px-4 py-12 text-center text-slate-500">
+              Nenhuma clínica encontrada
+            </div>
+          ) : (
+            filteredClinics.map((clinic) => (
+              <div key={clinic.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+                      <Building2 className="w-5 h-5 text-slate-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-800 truncate">{clinic.name}</div>
+                      <div className="text-sm text-slate-500 truncate">{clinic.email || clinic.slug}</div>
+                    </div>
+                  </div>
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setActionMenuOpen(actionMenuOpen === clinic.id ? null : clinic.id)}
+                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      <MoreVertical className="w-5 h-5 text-slate-500" />
+                    </button>
+                    
+                    {actionMenuOpen === clinic.id && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-10">
+                        <Link
+                          to={`/admin/clinics/${clinic.id}`}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Ver detalhes
+                        </Link>
+                        <button
+                          onClick={() => {
+                            setSelectedClinicForPassword(clinic);
+                            setShowPasswordModal(true);
+                            setActionMenuOpen(null);
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 w-full text-left"
+                        >
+                          <Key className="w-4 h-4" />
+                          Alterar Senha
+                        </button>
+                        {clinic.status === 'pending' && (
+                          <button
+                            onClick={() => updateClinicStatus(clinic.id, 'active')}
+                            className="flex items-center gap-2 px-4 py-2 text-sm text-green-700 hover:bg-green-50 w-full text-left"
+                          >
+                            <UserCheck className="w-4 h-4" />
+                            Aprovar
+                          </button>
+                        )}
+                        {clinic.status === 'active' && (
+                          <button
+                            onClick={() => updateClinicStatus(clinic.id, 'suspended')}
+                            className="flex items-center gap-2 px-4 py-2 text-sm text-red-700 hover:bg-red-50 w-full text-left"
+                          >
+                            <Ban className="w-4 h-4" />
+                            Suspender
+                          </button>
+                        )}
+                        {clinic.status === 'suspended' && (
+                          <button
+                            onClick={() => updateClinicStatus(clinic.id, 'active')}
+                            className="flex items-center gap-2 px-4 py-2 text-sm text-green-700 hover:bg-green-50 w-full text-left"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Reativar
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {getStatusBadge(clinic.status)}
+                  {getPlanBadge(clinic.plan)}
+                </div>
+                
+                <div className="mt-3 flex items-center gap-4 text-sm text-slate-500">
+                  <div className="flex items-center gap-1">
+                    <Users className="w-4 h-4" />
+                    {clinic.users_count}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <MessageSquare className="w-4 h-4" />
+                    {clinic.chats_count}
+                  </div>
+                  <div className="text-slate-400">
+                    {formatDate(clinic.created_at)}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {/* Create Modal - Simplified for now */}
@@ -469,14 +573,14 @@ const CreateClinicModal: React.FC<CreateClinicModalProps> = ({ onClose, onCreate
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-        <div className="p-6 border-b border-slate-200">
-          <h2 className="text-xl font-semibold text-slate-800">Nova Clínica</h2>
-          <p className="text-sm text-slate-500 mt-1">Cadastre uma nova clínica no sistema</p>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+        <div className="p-4 sm:p-6 border-b border-slate-200 flex-shrink-0">
+          <h2 className="text-lg sm:text-xl font-semibold text-slate-800">Nova Clínica</h2>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">Cadastre uma nova clínica no sistema</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
@@ -498,7 +602,7 @@ const CreateClinicModal: React.FC<CreateClinicModalProps> = ({ onClose, onCreate
                   slug: generateSlug(e.target.value),
                 });
               }}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
               placeholder="Ex: Clínica Odontológica Silva"
             />
           </div>
@@ -512,35 +616,37 @@ const CreateClinicModal: React.FC<CreateClinicModalProps> = ({ onClose, onCreate
               required
               value={formData.slug}
               onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
               placeholder="clinica-silva"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              placeholder="contato@clinica.com"
-            />
-          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
+                placeholder="contato@clinica.com"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Telefone
-            </label>
-            <input
-              type="text"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              placeholder="(00) 00000-0000"
-            />
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Telefone
+              </label>
+              <input
+                type="text"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
+                placeholder="(00) 00000-0000"
+              />
+            </div>
           </div>
 
           <div className="border-t border-slate-200 pt-4 mt-4">
@@ -556,54 +662,56 @@ const CreateClinicModal: React.FC<CreateClinicModalProps> = ({ onClose, onCreate
                   required
                   value={formData.adminName}
                   onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
                   placeholder="Nome completo"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Email do Admin *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={formData.adminEmail}
-                  onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  placeholder="admin@clinica.com"
-                />
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Email do Admin *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.adminEmail}
+                    onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
+                    className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
+                    placeholder="admin@clinica.com"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Senha *
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={formData.adminPassword}
-                  onChange={(e) => setFormData({ ...formData, adminPassword: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  placeholder="Mínimo 6 caracteres"
-                  minLength={6}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Senha *
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={formData.adminPassword}
+                    onChange={(e) => setFormData({ ...formData, adminPassword: e.target.value })}
+                    className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
+                    placeholder="Mínimo 6 caracteres"
+                    minLength={6}
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+              className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm order-2 sm:order-1"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 text-sm order-1 sm:order-2"
             >
               {loading ? 'Criando...' : 'Criar Clínica'}
             </button>

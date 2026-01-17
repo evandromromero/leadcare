@@ -1352,115 +1352,117 @@ const AdminClinicDetail: React.FC = () => {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <Link 
           to="/admin/clinics" 
-          className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-700 mb-4"
+          className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-700 mb-4 text-sm"
         >
           <ArrowLeft className="w-4 h-4" />
-          Voltar para clínicas
+          Voltar
         </Link>
         
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center">
-              <Building2 className="w-8 h-8 text-slate-600" />
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-slate-100 rounded-xl flex items-center justify-center shrink-0">
+              <Building2 className="w-6 h-6 sm:w-8 sm:h-8 text-slate-600" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800">{clinic.name}</h1>
-              <p className="text-slate-500">{clinic.slug}</p>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-800 truncate">{clinic.name}</h1>
+              <p className="text-sm text-slate-500 truncate">{clinic.slug}</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {getStatusBadge(clinic.status)}
             
             <button
               onClick={handleImpersonate}
               disabled={impersonating || clinic.status !== 'active'}
-              className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
-              <LogIn className="w-5 h-5" />
-              {impersonating ? 'Entrando...' : 'Logar como cliente'}
+              <LogIn className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">{impersonating ? 'Entrando...' : 'Logar como cliente'}</span>
+              <span className="sm:hidden">{impersonating ? '...' : 'Logar'}</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-purple-600" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-100 rounded-lg flex items-center justify-center shrink-0">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{stats.users_count}</p>
-              <p className="text-sm text-slate-500">Usuários</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-800">{stats.users_count}</p>
+              <p className="text-xs sm:text-sm text-slate-500">Usuários</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <MessageSquare className="w-5 h-5 text-blue-600" />
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{stats.chats_count}</p>
-              <p className="text-sm text-slate-500">Conversas</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-800">{stats.chats_count}</p>
+              <p className="text-xs sm:text-sm text-slate-500">Conversas</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <MessageSquare className="w-5 h-5 text-green-600" />
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-100 rounded-lg flex items-center justify-center shrink-0">
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{stats.messages_count}</p>
-              <p className="text-sm text-slate-500">Mensagens</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-800">{stats.messages_count}</p>
+              <p className="text-xs sm:text-sm text-slate-500">Mensagens</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-cyan-100 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-cyan-600" />
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-cyan-100 rounded-lg flex items-center justify-center shrink-0">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{stats.leads_count}</p>
-              <p className="text-sm text-slate-500">Leads</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-800">{stats.leads_count}</p>
+              <p className="text-xs sm:text-sm text-slate-500">Leads</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Tabs Navigation */}
-      <div className="mb-6 border-b border-slate-200">
-        <nav className="flex gap-1">
+      <div className="mb-6 border-b border-slate-200 overflow-x-auto">
+        <nav className="flex gap-1 min-w-max">
           {[
-            { id: 'overview', label: 'Visão Geral', icon: 'dashboard' },
-            { id: 'users', label: 'Usuários', icon: 'group' },
-            { id: 'whatsapp', label: 'WhatsApp', icon: 'chat' },
-            { id: 'metrics', label: 'Métricas', icon: 'analytics' },
-            { id: 'receipts', label: 'Lançamentos', icon: 'receipt_long' },
+            { id: 'overview', label: 'Geral', labelFull: 'Visão Geral', icon: 'dashboard' },
+            { id: 'users', label: 'Usuários', labelFull: 'Usuários', icon: 'group' },
+            { id: 'whatsapp', label: 'WhatsApp', labelFull: 'WhatsApp', icon: 'chat' },
+            { id: 'metrics', label: 'Métricas', labelFull: 'Métricas', icon: 'analytics' },
+            { id: 'receipts', label: 'Lanç.', labelFull: 'Lançamentos', icon: 'receipt_long' },
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-cyan-600 text-cyan-600'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
-              <span className="material-symbols-outlined text-[20px]">{tab.icon}</span>
-              {tab.label}
+              <span className="material-symbols-outlined text-[18px] sm:text-[20px]">{tab.icon}</span>
+              <span className="hidden sm:inline">{tab.labelFull}</span>
+              <span className="sm:hidden">{tab.label}</span>
             </button>
           ))}
         </nav>
@@ -1468,51 +1470,51 @@ const AdminClinicDetail: React.FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'overview' && (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Clinic Info */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
           {/* Details Card */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-800">Informações</h2>
+            <div className="p-4 sm:p-6 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-800">Informações</h2>
               <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                <Edit className="w-5 h-5 text-slate-500" />
+                <Edit className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-slate-500 mb-1">Email</p>
+                  <p className="text-xs sm:text-sm text-slate-500 mb-1">Email</p>
                   <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-slate-400" />
-                    <span className="text-slate-800">{clinic.email || '-'}</span>
+                    <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="text-sm sm:text-base text-slate-800 truncate">{clinic.email || '-'}</span>
                   </div>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500 mb-1">Telefone</p>
+                  <p className="text-xs sm:text-sm text-slate-500 mb-1">Telefone</p>
                   <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-slate-400" />
-                    <span className="text-slate-800">{clinic.phone || '-'}</span>
+                    <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="text-sm sm:text-base text-slate-800">{clinic.phone || '-'}</span>
                   </div>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500 mb-1">Plano</p>
-                  <span className="text-slate-800 capitalize">{clinic.plan || 'Free'}</span>
+                  <p className="text-xs sm:text-sm text-slate-500 mb-1">Plano</p>
+                  <span className="text-sm sm:text-base text-slate-800 capitalize">{clinic.plan || 'Free'}</span>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500 mb-1">Máx. Usuários</p>
-                  <span className="text-slate-800">{clinic.max_users}</span>
+                  <p className="text-xs sm:text-sm text-slate-500 mb-1">Máx. Usuários</p>
+                  <span className="text-sm sm:text-base text-slate-800">{clinic.max_users}</span>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500 mb-1">Criada em</p>
+                  <p className="text-xs sm:text-sm text-slate-500 mb-1">Criada em</p>
                   <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-slate-400" />
-                    <span className="text-slate-800">{formatDate(clinic.created_at)}</span>
+                    <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="text-sm sm:text-base text-slate-800">{formatDate(clinic.created_at)}</span>
                   </div>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500 mb-1">Última atualização</p>
-                  <span className="text-slate-800">{formatDate(clinic.updated_at)}</span>
+                  <p className="text-xs sm:text-sm text-slate-500 mb-1">Última atualização</p>
+                  <span className="text-sm sm:text-base text-slate-800">{formatDate(clinic.updated_at)}</span>
                 </div>
               </div>
             </div>
@@ -1520,50 +1522,50 @@ const AdminClinicDetail: React.FC = () => {
 
           {/* Billing Stats */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                <span className="material-symbols-outlined text-emerald-600">payments</span>
-                Faturamento da Clínica
+            <div className="p-4 sm:p-6 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-800 flex items-center gap-2">
+                <span className="material-symbols-outlined text-emerald-600 text-[20px] sm:text-[24px]">payments</span>
+                Faturamento
               </h2>
             </div>
             
             {/* Totais Gerais */}
-            <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4 border-b border-slate-200">
-              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 text-white">
-                <p className="text-emerald-100 text-sm mb-1">Faturamento Total</p>
-                <p className="text-2xl font-bold">
+            <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 border-b border-slate-200">
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-3 sm:p-4 text-white">
+                <p className="text-emerald-100 text-xs sm:text-sm mb-1">Faturamento Total</p>
+                <p className="text-xl sm:text-2xl font-bold">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.totalRevenue)}
                 </p>
-                <p className="text-emerald-200 text-xs mt-1">Acumulado geral</p>
+                <p className="text-emerald-200 text-[10px] sm:text-xs mt-1">Acumulado geral</p>
               </div>
-              <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-4 text-white">
-                <p className="text-cyan-100 text-sm mb-1">Faturamento do Mês</p>
-                <p className="text-2xl font-bold">
+              <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-3 sm:p-4 text-white">
+                <p className="text-cyan-100 text-xs sm:text-sm mb-1">Faturamento do Mês</p>
+                <p className="text-xl sm:text-2xl font-bold">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(billingStats.monthlyRevenue)}
                 </p>
-                <p className="text-cyan-200 text-xs mt-1">{new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+                <p className="text-cyan-200 text-[10px] sm:text-xs mt-1">{new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
               </div>
-              <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-4 text-white">
-                <p className="text-violet-100 text-sm mb-1">Total Conversões</p>
-                <p className="text-2xl font-bold">{billingStats.totalConversions}</p>
-                <p className="text-violet-200 text-xs mt-1">Leads convertidos</p>
+              <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-3 sm:p-4 text-white">
+                <p className="text-violet-100 text-xs sm:text-sm mb-1">Total Conversões</p>
+                <p className="text-xl sm:text-2xl font-bold">{billingStats.totalConversions}</p>
+                <p className="text-violet-200 text-[10px] sm:text-xs mt-1">Leads convertidos</p>
               </div>
             </div>
 
             {/* Por Atendente */}
-            <div className="p-6">
-              <h3 className="text-sm font-semibold text-slate-600 mb-4 flex items-center gap-2">
+            <div className="p-4 sm:p-6">
+              <h3 className="text-xs sm:text-sm font-semibold text-slate-600 mb-4 flex items-center gap-2">
                 <Users className="w-4 h-4" />
-                Faturamento por Atendente
+                Por Atendente
               </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+                <table className="w-full min-w-[400px]">
                   <thead>
-                    <tr className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <tr className="text-left text-[10px] sm:text-xs font-medium text-slate-500 uppercase tracking-wider">
                       <th className="pb-3">Atendente</th>
                       <th className="pb-3 text-right">Total</th>
-                      <th className="pb-3 text-right">Mês Atual</th>
-                      <th className="pb-3 text-right">Conversões</th>
+                      <th className="pb-3 text-right hidden sm:table-cell">Mês</th>
+                      <th className="pb-3 text-right">Conv.</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1806,14 +1808,15 @@ const AdminClinicDetail: React.FC = () => {
       {/* Tab: Usuários */}
       {activeTab === 'users' && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-          <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-800">Usuários ({users.length}/{clinic.max_users})</h2>
+          <div className="p-4 sm:p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-800">Usuários ({users.length}/{clinic.max_users})</h2>
             <button
               onClick={() => setShowCreateUserModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 transition-colors"
+              className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 transition-colors"
             >
               <Users className="w-4 h-4" />
-              Criar Usuário
+              <span className="hidden sm:inline">Criar Usuário</span>
+              <span className="sm:hidden">Criar</span>
             </button>
           </div>
           <div className="divide-y divide-slate-200">
@@ -1823,50 +1826,54 @@ const AdminClinicDetail: React.FC = () => {
               </div>
             ) : (
               users.map((u) => (
-                <div key={u.id} className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
-                      <span className="text-slate-600 font-medium">
-                        {u.name.charAt(0).toUpperCase()}
+                <div key={u.id} className="p-3 sm:p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 bg-slate-100 rounded-full flex items-center justify-center shrink-0">
+                        <span className="text-slate-600 font-medium text-sm">
+                          {u.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-800 text-sm sm:text-base truncate">{u.name}</p>
+                        <p className="text-xs sm:text-sm text-slate-500 truncate">{u.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 ml-12 sm:ml-0 flex-wrap">
+                      <span className={`px-2 py-1 rounded text-[10px] sm:text-xs font-medium ${
+                        u.role === 'Admin' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-800'
+                      }`}>
+                        {u.role}
                       </span>
+                      <span className={`px-2 py-1 rounded text-[10px] sm:text-xs font-medium ${
+                        u.status === 'Ativo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {u.status}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { setPermissionsUser(u); setShowPermissionsModal(true); }}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                          title="Ver Permissões"
+                        >
+                          <Shield className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEditUser(u)}
+                          className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded transition-colors"
+                          title="Editar"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">edit</span>
+                        </button>
+                        <button
+                          onClick={() => { setUserToDelete(u); setShowDeleteConfirm(true); }}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Excluir"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-slate-800">{u.name}</p>
-                      <p className="text-sm text-slate-500">{u.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      u.role === 'Admin' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-800'
-                    }`}>
-                      {u.role}
-                    </span>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      u.status === 'Ativo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {u.status}
-                    </span>
-                    <button
-                      onClick={() => { setPermissionsUser(u); setShowPermissionsModal(true); }}
-                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                      title="Ver Permissões"
-                    >
-                      <Shield className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleEditUser(u)}
-                      className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded transition-colors"
-                      title="Editar"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">edit</span>
-                    </button>
-                    <button
-                      onClick={() => { setUserToDelete(u); setShowDeleteConfirm(true); }}
-                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                      title="Excluir"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">delete</span>
-                    </button>
                   </div>
                 </div>
               ))
@@ -2505,14 +2512,16 @@ const AdminClinicDetail: React.FC = () => {
 
           {/* Ranking de Atendentes */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-500">emoji_events</span>
+            <div className="p-4 sm:p-6 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-800 flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-500 text-[20px] sm:text-[24px]">emoji_events</span>
                 Ranking de Atendentes
               </h2>
-              <p className="text-sm text-slate-500 mt-1">Performance de vendas e tempo de resposta por atendente</p>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Performance de vendas por atendente</p>
             </div>
-            <div className="overflow-x-auto">
+            
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50">
                   <tr>
@@ -2623,6 +2632,100 @@ const AdminClinicDetail: React.FC = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {billingStats.byAttendant.length === 0 ? (
+                <div className="py-8 text-center text-slate-500">
+                  Nenhum dado de faturamento disponível
+                </div>
+              ) : (
+                billingStats.byAttendant.map((att, index) => {
+                  const responseData = metricsData.responseTimeByAttendant.get(att.id);
+                  const avgResponseTime = responseData ? Math.round((responseData.total / responseData.count) / (1000 * 60)) : null;
+                  const userInfo = users.find(u => u.id === att.id);
+                  const userGoal = userInfo?.monthly_goal || 0;
+                  const goalProgress = userGoal > 0 ? (att.monthlyRevenue / userGoal) * 100 : null;
+                  return (
+                    <div key={att.id} className="p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0 ${
+                          index === 0 ? 'bg-amber-100 text-amber-700' :
+                          index === 1 ? 'bg-slate-200 text-slate-700' :
+                          index === 2 ? 'bg-orange-100 text-orange-700' :
+                          'bg-slate-100 text-slate-500'
+                        }`}>
+                          {index + 1}
+                        </span>
+                        <div className="w-8 h-8 bg-cyan-100 rounded-full flex items-center justify-center shrink-0">
+                          <span className="text-cyan-700 font-medium text-sm">
+                            {att.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <span className="font-medium text-slate-800 truncate">{att.name}</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-slate-500">Faturamento</p>
+                          <p className="font-semibold text-emerald-600">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(att.monthlyRevenue)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Conversões</p>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                            {att.conversions}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Meta</p>
+                          {goalProgress !== null ? (
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                                <div 
+                                  className={`h-2 rounded-full ${
+                                    goalProgress >= 100 ? 'bg-emerald-500' :
+                                    goalProgress >= 70 ? 'bg-amber-500' :
+                                    'bg-violet-500'
+                                  }`}
+                                  style={{ width: `${Math.min(goalProgress, 100)}%` }}
+                                ></div>
+                              </div>
+                              <span className={`text-xs font-medium ${
+                                goalProgress >= 100 ? 'text-emerald-600' :
+                                goalProgress >= 70 ? 'text-amber-600' :
+                                'text-violet-600'
+                              }`}>
+                                {goalProgress.toFixed(0)}%
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-xs">Sem meta</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Tempo Resposta</p>
+                          {avgResponseTime !== null ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              avgResponseTime <= 5 ? 'bg-emerald-100 text-emerald-700' :
+                              avgResponseTime <= 15 ? 'bg-amber-100 text-amber-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {avgResponseTime > 60 
+                                ? `${Math.floor(avgResponseTime / 60)}h ${avgResponseTime % 60}min`
+                                : `${avgResponseTime} min`}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs">-</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
           </>
@@ -2940,7 +3043,7 @@ const AdminClinicDetail: React.FC = () => {
 
       {/* Tab: Lançamentos */}
       {activeTab === 'receipts' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {loadingReceipts ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
@@ -2948,33 +3051,35 @@ const AdminClinicDetail: React.FC = () => {
           ) : (
             <>
               {/* Cards de Resumo */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-5 rounded-2xl shadow-lg text-white">
-                  <p className="text-amber-100 text-xs font-medium uppercase tracking-wider">Valor Comercial</p>
-                  <p className="text-2xl font-black mt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-4 sm:p-5 rounded-2xl shadow-lg text-white">
+                  <p className="text-amber-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Valor Comercial</p>
+                  <p className="text-xl sm:text-2xl font-black mt-1">
                     R$ {receiptsData.totalComercial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-amber-100 text-xs mt-2">Total fechado pelos comerciais</p>
+                  <p className="text-amber-100 text-[10px] sm:text-xs mt-2 hidden sm:block">Total fechado pelos comerciais</p>
                 </div>
-                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-2xl shadow-lg text-white">
-                  <p className="text-emerald-100 text-xs font-medium uppercase tracking-wider">Receita Clinica</p>
-                  <p className="text-2xl font-black mt-1">
+                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-4 sm:p-5 rounded-2xl shadow-lg text-white">
+                  <p className="text-emerald-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Receita Clinica</p>
+                  <p className="text-xl sm:text-2xl font-black mt-1">
                     R$ {receiptsData.totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-emerald-100 text-xs mt-2">Total recebido pela clinica</p>
+                  <p className="text-emerald-100 text-[10px] sm:text-xs mt-2 hidden sm:block">Total recebido pela clinica</p>
                 </div>
-                <div className="bg-gradient-to-br from-violet-500 to-purple-600 p-5 rounded-2xl shadow-lg text-white">
-                  <p className="text-violet-100 text-xs font-medium uppercase tracking-wider">ROI</p>
-                  <p className="text-2xl font-black mt-1">{receiptsData.roi}%</p>
-                  <p className="text-violet-100 text-xs mt-2">Retorno sobre vendas</p>
+                <div className="bg-gradient-to-br from-violet-500 to-purple-600 p-4 sm:p-5 rounded-2xl shadow-lg text-white">
+                  <p className="text-violet-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider">ROI</p>
+                  <p className="text-xl sm:text-2xl font-black mt-1">{receiptsData.roi}%</p>
+                  <p className="text-violet-100 text-[10px] sm:text-xs mt-2 hidden sm:block">Retorno sobre vendas</p>
                 </div>
               </div>
 
-              {/* Tabela por Comercial */}
+              {/* Por Comercial */}
               {receiptsData.byAttendant.length > 0 && (
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <h3 className="text-lg font-bold text-slate-900 mb-4">Por Comercial</h3>
-                  <div className="overflow-x-auto">
+                <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-4">Por Comercial</h3>
+                  
+                  {/* Desktop Table */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-slate-200">
@@ -3006,14 +3111,49 @@ const AdminClinicDetail: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Mobile Cards */}
+                  <div className="md:hidden divide-y divide-slate-100 -mx-4">
+                    {receiptsData.byAttendant.map(att => (
+                      <div key={att.id} className="p-4">
+                        <p className="font-medium text-slate-800 mb-2">{att.name}</p>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-slate-500">Vendas</p>
+                            <p className="font-medium">{att.salesCount}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">ROI</p>
+                            <span className={`font-bold ${Number(att.roi) >= 100 ? 'text-emerald-600' : 'text-slate-600'}`}>
+                              {att.roi}%
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Comercial</p>
+                            <p className="font-bold text-amber-600">
+                              R$ {att.commercialValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Recebido</p>
+                            <p className="font-bold text-emerald-600">
+                              R$ {att.receivedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {/* Tabela Detalhada */}
+              {/* Detalhamento */}
               {receiptsData.details.length > 0 && (
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <h3 className="text-lg font-bold text-slate-900 mb-4">Detalhamento</h3>
-                  <div className="overflow-x-auto">
+                <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-4">Detalhamento</h3>
+                  
+                  {/* Desktop Table */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-slate-200">
@@ -3078,11 +3218,68 @@ const AdminClinicDetail: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Mobile Cards */}
+                  <div className="md:hidden divide-y divide-slate-100 -mx-4">
+                    {receiptsData.details.map(sale => (
+                      <div key={sale.id} className="p-4">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-800 truncate">{sale.clientName}</p>
+                            <p className="text-xs text-slate-500">{sale.attendantName} • {new Date(sale.paymentDate).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                          {sale.status === 'received' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700 shrink-0">
+                              <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                              Recebido
+                            </span>
+                          )}
+                          {sale.status === 'partial' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 shrink-0">
+                              <span className="material-symbols-outlined text-[12px]">hourglass_top</span>
+                              Parcial
+                            </span>
+                          )}
+                          {sale.status === 'pending' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 shrink-0">
+                              <span className="material-symbols-outlined text-[12px]">schedule</span>
+                              Pendente
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span 
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium"
+                            style={{ backgroundColor: `${sale.sourceColor}20`, color: sale.sourceColor }}
+                          >
+                            {sale.sourceName}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-slate-500">Valor</p>
+                            <p className="font-bold text-amber-600">
+                              R$ {sale.commercialValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500">Recebido</p>
+                            <p className={`font-bold ${sale.receivedValue > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {sale.receivedValue > 0 
+                                ? `R$ ${sale.receivedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                : '-'
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
               {receiptsData.details.length === 0 && (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center text-slate-500">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 sm:p-12 text-center text-slate-500">
                   Nenhum lancamento encontrado para esta clinica
                 </div>
               )}

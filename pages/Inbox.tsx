@@ -1534,6 +1534,21 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     if (!msgInput.trim() || !selectedChatId || !user || !selectedChat) return;
     
     try {
+      // Buscar nome do usuário para prefixar a mensagem
+      let userName = '';
+      const { data: userData } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .single();
+      
+      if (userData) {
+        userName = (userData as any).name || '';
+      }
+      
+      // Mensagem com nome do atendente para o WhatsApp
+      const whatsappMessage = userName ? `*${userName}:* ${msgInput.trim()}` : msgInput.trim();
+      
       // Buscar configurações da Evolution API
       const { data: settings } = await supabase
         .from('settings')
@@ -1560,7 +1575,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         // Preparar body da requisição
         const messageBody: any = {
           number: formattedPhone,
-          text: msgInput.trim(),
+          text: whatsappMessage,
         };
         
         // Adicionar quote se estiver respondendo uma mensagem
@@ -1604,7 +1619,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         }
         
         // Salvar mensagem no banco com remote_message_id
-        await supabase.from('messages').insert({
+        const { data: newMsg } = await supabase.from('messages').insert({
           chat_id: selectedChatId,
           content: msgInput.trim(),
           type: 'text',
@@ -1614,10 +1629,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           quoted_content: replyingTo?.content || null,
           quoted_sender_name: replyingTo?.senderName || null,
           remote_message_id: remoteMessageId,
-        });
+        }).select().single();
+        
+        if (newMsg) {
+          // Atualizar estado local imediatamente
+          await refetch();
+        }
       } else {
         // WhatsApp não conectado - salvar sem remote_message_id
-        await supabase.from('messages').insert({
+        const { data: newMsg } = await supabase.from('messages').insert({
           chat_id: selectedChatId,
           content: msgInput.trim(),
           type: 'text',
@@ -1626,7 +1646,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           quoted_message_id: replyingTo?.id || null,
           quoted_content: replyingTo?.content || null,
           quoted_sender_name: replyingTo?.senderName || null,
-        });
+        }).select().single();
+        
+        if (newMsg) {
+          await refetch();
+        }
       }
       
       // Atualizar chat
@@ -1638,7 +1662,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       
       setMsgInput('');
       setReplyingTo(null);
-      await refetch();
       
     } catch (err) {
       console.error('Error sending message:', err);
@@ -1652,6 +1675,18 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     
     setSendingMedia(true);
     try {
+      // Buscar nome do usuário para prefixar a legenda
+      let userName = '';
+      const { data: userData } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .single();
+      
+      if (userData) {
+        userName = (userData as any).name || '';
+      }
+      
       // Upload para Supabase Storage
       const fileName = `${selectedChatId}/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage
@@ -1677,6 +1712,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       const mediaType = file.type.startsWith('image/') ? 'image' : 
                         file.type.startsWith('video/') ? 'video' : 
                         file.type.startsWith('audio/') ? 'audio' : 'document';
+      
+      // Legenda com nome do atendente
+      const mediaCaption = userName ? `*${userName}*` : '';
       
       // Buscar configurações da Evolution API
       const { data: settings } = await supabase
@@ -1715,7 +1753,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             number: formattedPhone,
             mediatype: mediaType,
             media: mediaUrl,
-            caption: '',
+            caption: mediaCaption,
           }),
         });
       }

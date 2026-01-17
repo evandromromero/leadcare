@@ -70,7 +70,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     description: 'Gerencia equipe. Vê relatórios e faturamento de todos.',
   },
   Supervisor: {
-    menu: ['dashboard', 'inbox', 'kanban', 'users'],
+    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings'],
     actions: [
       'send_message', 'move_lead', 'create_lead'
     ],
@@ -78,7 +78,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     description: 'Monitora equipe. Vê métricas sem acesso a configurações.',
   },
   Comercial: {
-    menu: ['dashboard', 'inbox', 'kanban'],
+    menu: ['dashboard', 'inbox', 'kanban', 'settings'],
     actions: [
       'send_message', 'move_lead', 'create_lead', 'add_quote'
     ],
@@ -86,7 +86,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     description: 'Atende conversas. Vê apenas próprio faturamento no Dashboard.',
   },
   Recepcionista: {
-    menu: ['dashboard', 'inbox', 'kanban'],
+    menu: ['dashboard', 'inbox', 'kanban', 'settings'],
     actions: [
       'send_message', 'move_lead'
     ],
@@ -94,7 +94,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     description: 'Foco em agendamentos. Acesso limitado ao Inbox e Kanban.',
   },
   Financeiro: {
-    menu: ['dashboard', 'inbox', 'receipts'],
+    menu: ['dashboard', 'inbox', 'receipts', 'settings'],
     actions: [
       'add_payment', 'add_quote',
       'view_receipts', 'add_receipt', 'edit_receipt'
@@ -103,7 +103,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     description: 'Acesso ao faturamento, pagamentos e lançamentos. Não responde mensagens.',
   },
   Visualizador: {
-    menu: ['dashboard', 'inbox'],
+    menu: ['dashboard', 'inbox', 'settings'],
     actions: [],
     data: 'no_billing',
     description: 'Apenas leitura. Visualiza sem interagir.',

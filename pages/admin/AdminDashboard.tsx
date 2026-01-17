@@ -168,80 +168,80 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-800">Painel Administrativo</h1>
-        <p className="text-slate-500 mt-1">Visão geral de todas as clínicas e métricas do sistema</p>
+    <div className="p-4 sm:p-6">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Painel Administrativo</h1>
+        <p className="text-sm sm:text-base text-slate-500 mt-1">Visão geral de todas as clínicas e métricas do sistema</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500">Total de Clínicas</p>
-              <p className="text-3xl font-bold text-slate-800 mt-1">{stats.totalClinics}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-6">
+          <div className="flex items-start sm:items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-slate-500 truncate">Total de Clínicas</p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{stats.totalClinics}</p>
             </div>
-            <div className="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-cyan-600" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-cyan-100 rounded-lg flex items-center justify-center shrink-0">
+              <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-600" />
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-4 text-sm">
+          <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs sm:text-sm">
             <span className="text-green-600">{stats.activeClinics} ativas</span>
             <span className="text-yellow-600">{stats.pendingClinics} pendentes</span>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500">Total de Usuários</p>
-              <p className="text-3xl font-bold text-slate-800 mt-1">{stats.totalUsers}</p>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-6">
+          <div className="flex items-start sm:items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-slate-500 truncate">Total de Usuários</p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{stats.totalUsers}</p>
             </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-purple-600" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
             </div>
           </div>
-          <p className="mt-4 text-sm text-slate-500">Usuários cadastrados nas clínicas</p>
+          <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-slate-500 hidden sm:block">Usuários cadastrados nas clínicas</p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500">Total de Conversas</p>
-              <p className="text-3xl font-bold text-slate-800 mt-1">{stats.totalChats}</p>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-6">
+          <div className="flex items-start sm:items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-slate-500 truncate">Total de Conversas</p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{stats.totalChats}</p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <MessageSquare className="w-6 h-6 text-blue-600" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+              <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
             </div>
           </div>
-          <p className="mt-4 text-sm text-slate-500">Conversas em todas as clínicas</p>
+          <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-slate-500 hidden sm:block">Conversas em todas as clínicas</p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500">Total de Mensagens</p>
-              <p className="text-3xl font-bold text-slate-800 mt-1">{stats.totalMessages}</p>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-6">
+          <div className="flex items-start sm:items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-slate-500 truncate">Total de Mensagens</p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-800 mt-1">{stats.totalMessages}</p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-green-600" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center shrink-0">
+              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
             </div>
           </div>
-          <p className="mt-4 text-sm text-slate-500">Mensagens trocadas no sistema</p>
+          <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-slate-500 hidden sm:block">Mensagens trocadas no sistema</p>
         </div>
       </div>
 
       {/* Recent Clinics */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+        <div className="p-4 sm:p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold text-slate-800">Clínicas Recentes</h2>
             <p className="text-sm text-slate-500 mt-1">Últimas clínicas cadastradas no sistema</p>
           </div>
           <Link 
             to="/admin/clinics" 
-            className="text-cyan-600 hover:text-cyan-700 text-sm font-medium flex items-center gap-1"
+            className="text-cyan-600 hover:text-cyan-700 text-sm font-medium flex items-center gap-1 self-start sm:self-auto"
           >
             Ver todas
             <ArrowRight className="w-4 h-4" />
@@ -256,24 +256,24 @@ const AdminDashboard: React.FC = () => {
           ) : (
             recentClinics.map((clinic) => (
               <div key={clinic.id} className="p-4 hover:bg-slate-50 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
                       <Building2 className="w-5 h-5 text-slate-600" />
                     </div>
-                    <div>
-                      <h3 className="font-medium text-slate-800">{clinic.name}</h3>
+                    <div className="min-w-0">
+                      <h3 className="font-medium text-slate-800 truncate">{clinic.name}</h3>
                       <p className="text-sm text-slate-500">
                         {clinic.users_count} usuário{clinic.users_count !== 1 ? 's' : ''} • 
                         Criada em {formatDate(clinic.created_at)}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 sm:gap-4 ml-13 sm:ml-0">
                     {getStatusBadge(clinic.status)}
                     <Link
                       to={`/admin/clinics/${clinic.id}`}
-                      className="text-cyan-600 hover:text-cyan-700 text-sm font-medium"
+                      className="text-cyan-600 hover:text-cyan-700 text-sm font-medium whitespace-nowrap"
                     >
                       Detalhes
                     </Link>

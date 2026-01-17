@@ -14,6 +14,20 @@ const AdminLogin: React.FC = () => {
   const [logoUrl, setLogoUrl] = useState<string>('');
   const [logoLoaded, setLogoLoaded] = useState(false);
 
+  // Trocar manifest para admin (PWA)
+  useEffect(() => {
+    const manifestLink = document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+      manifestLink.setAttribute('href', '/manifest-admin.json');
+    }
+    // Restaurar manifest original ao sair
+    return () => {
+      if (manifestLink) {
+        manifestLink.setAttribute('href', '/manifest.json');
+      }
+    };
+  }, []);
+
   // Buscar logo do banco
   useEffect(() => {
     const fetchLogo = async () => {

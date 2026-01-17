@@ -805,6 +805,93 @@ O erro 406 (Not Acceptable) ocorria porque o método `.single()` do Supabase ret
 
 ---
 
+## Atualizações - 14/01/2026 (Noite)
+
+### O que foi feito hoje à noite? 🌙
+
+Fizemos várias melhorias importantes no sistema, focando em **deixar tudo bonito no celular** e preparar o app para ser **instalado como aplicativo**.
+
+---
+
+### 1. Telas Responsivas (Funcionam bem no celular) 📱
+
+Todas essas telas agora se adaptam automaticamente ao tamanho da tela do celular:
+
+| Tela | O que melhorou |
+|------|----------------|
+| **Detalhes da Clínica (Admin)** | Header, cards, abas, tabelas - tudo se ajusta no celular |
+| **Aba Usuários** | Lista vira cards empilhados no celular |
+| **Aba Métricas** | Ranking de atendentes vira cards no celular |
+| **Aba Lançamentos** | Tabelas viram cards com informações organizadas |
+| **Lista de SuperAdmins** | Tabela vira cards com avatar, nome e botões |
+| **Configurações (Admin)** | Abas com scroll horizontal, campos menores |
+| **Aba SEO** | Campos de upload empilhados no celular |
+| **Aba Login** | Campos de imagem empilhados no celular |
+| **Modal Criar SuperAdmin** | Botões empilhados, scroll interno |
+| **Modal Criar Clínica** | Campos em grid, scroll interno |
+| **Modal Criar Usuário** | Já estava responsivo |
+
+**O que significa "responsivo"?**
+- No computador: tabelas normais com várias colunas
+- No celular: cards empilhados verticalmente, fáceis de ler e tocar
+
+---
+
+### 2. App Instalável no iPhone (PWA) 📲
+
+Agora o Belitx pode ser **instalado no iPhone** como se fosse um aplicativo da App Store!
+
+**Como instalar no iPhone:**
+1. Abra o site no **Safari** (tem que ser Safari!)
+2. Toque no botão de **Compartilhar** (quadrado com seta pra cima)
+3. Role para baixo e toque em **"Adicionar à Tela de Início"**
+4. Confirme o nome e toque em **"Adicionar"**
+
+**O que acontece:**
+- Ícone do Belitx aparece na tela inicial do iPhone
+- Abre em tela cheia (sem barra do Safari)
+- Funciona offline para páginas já visitadas
+
+**Arquivos criados:**
+- `public/manifest.json` - Configurações do app (nome, ícone, cores)
+- `public/sw.js` - Service Worker (permite funcionar offline)
+- `index.html` - Adicionadas tags especiais para iOS
+
+---
+
+### 3. Resumo Técnico (Para desenvolvedores)
+
+**Arquivos modificados:**
+| Arquivo | Alteração |
+|---------|-----------|
+| `pages/admin/AdminClinicDetail.tsx` | Responsividade completa de todas as abas |
+| `pages/admin/AdminUsers.tsx` | Header, tabela e modais responsivos |
+| `pages/admin/AdminSettings.tsx` | Tabs e cards responsivos |
+| `pages/admin/AdminClinics.tsx` | Modal de criar clínica responsivo |
+| `index.html` | Meta tags PWA, manifest, service worker |
+| `public/manifest.json` | Novo arquivo - configuração PWA |
+| `public/sw.js` | Novo arquivo - cache offline |
+
+**Técnicas usadas:**
+- Tailwind CSS com breakpoints (`sm:`, `md:`)
+- `hidden md:block` para mostrar tabela só no desktop
+- `md:hidden` para mostrar cards só no mobile
+- `flex-col sm:flex-row` para empilhar/alinhar elementos
+- `overflow-x-auto` para scroll horizontal em tabelas
+- `max-h-[90vh]` para modais não passarem da tela
+
+---
+
+### Próximos Passos (Futuro)
+
+**Opção para App na App Store (Capacitor):**
+- Transforma o React em app nativo iOS
+- Precisa de Mac + conta Apple Developer ($99/ano)
+- Permite notificações push e acesso a recursos nativos
+- Será feito em outro momento
+
+---
+
 ## Licença
 
 Este projeto é privado e de uso exclusivo.

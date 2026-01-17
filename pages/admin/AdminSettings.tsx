@@ -160,46 +160,46 @@ const AdminSettings: React.FC = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-800">Configurações</h1>
-        <p className="text-slate-500 mt-1">Configurações globais do sistema</p>
+    <div className="p-4 sm:p-6">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Configurações</h1>
+        <p className="text-sm sm:text-base text-slate-500 mt-1">Configurações globais do sistema</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
         <button
           onClick={() => setActiveTab('api')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm whitespace-nowrap ${
             activeTab === 'api'
               ? 'bg-cyan-600 text-white'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          <Globe className="w-4 h-4 inline mr-2" />
-          Evolution API
+          <Globe className="w-4 h-4 inline mr-1 sm:mr-2" />
+          <span className="hidden sm:inline">Evolution </span>API
         </button>
         <button
           onClick={() => setActiveTab('seo')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm whitespace-nowrap ${
             activeTab === 'seo'
               ? 'bg-cyan-600 text-white'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          <Search className="w-4 h-4 inline mr-2" />
+          <Search className="w-4 h-4 inline mr-1 sm:mr-2" />
           SEO
         </button>
         <button
           onClick={() => setActiveTab('login')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm whitespace-nowrap ${
             activeTab === 'login'
               ? 'bg-cyan-600 text-white'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          <Image className="w-4 h-4 inline mr-2" />
-          Página de Login
+          <Image className="w-4 h-4 inline mr-1 sm:mr-2" />
+          <span className="hidden sm:inline">Página de </span>Login
         </button>
       </div>
 
@@ -207,12 +207,12 @@ const AdminSettings: React.FC = () => {
         {/* Evolution API Tab */}
         {activeTab === 'api' && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800">Evolution API</h2>
-              <p className="text-sm text-slate-500 mt-1">Configurações de integração com WhatsApp</p>
+            <div className="p-4 sm:p-6 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-800">Evolution API</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Configurações de integração com WhatsApp</p>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   <Globe className="w-4 h-4 inline mr-2" />
@@ -247,15 +247,15 @@ const AdminSettings: React.FC = () => {
         {/* SEO Tab */}
         {activeTab === 'seo' && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800">Configurações SEO</h2>
-              <p className="text-sm text-slate-500 mt-1">Meta tags e otimização para buscadores</p>
+            <div className="p-4 sm:p-6 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-800">Configurações SEO</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Meta tags e otimização para buscadores</p>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  <Type className="w-4 h-4 inline mr-2" />
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
+                  <Type className="w-4 h-4 inline mr-1 sm:mr-2" />
                   Título do Site
                 </label>
                 <input
@@ -263,29 +263,29 @@ const AdminSettings: React.FC = () => {
                   value={settings.site_title}
                   onChange={(e) => setSettings({ ...settings, site_title: e.target.value })}
                   placeholder="Belitx"
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
                 />
-                <p className="text-xs text-slate-400 mt-1">Aparece na aba do navegador</p>
+                <p className="text-[10px] sm:text-xs text-slate-400 mt-1">Aparece na aba do navegador</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  <FileText className="w-4 h-4 inline mr-2" />
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
+                  <FileText className="w-4 h-4 inline mr-1 sm:mr-2" />
                   Descrição do Site
                 </label>
                 <textarea
                   value={settings.site_description}
                   onChange={(e) => setSettings({ ...settings, site_description: e.target.value })}
                   placeholder="CRM de WhatsApp completo para clínicas"
-                  rows={3}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  rows={2}
+                  className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
                 />
-                <p className="text-xs text-slate-400 mt-1">Meta description para SEO (máx. 160 caracteres)</p>
+                <p className="text-[10px] sm:text-xs text-slate-400 mt-1">Meta description (máx. 160 caracteres)</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  <Search className="w-4 h-4 inline mr-2" />
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
+                  <Search className="w-4 h-4 inline mr-1 sm:mr-2" />
                   Palavras-chave
                 </label>
                 <input
@@ -293,25 +293,25 @@ const AdminSettings: React.FC = () => {
                   value={settings.site_keywords}
                   onChange={(e) => setSettings({ ...settings, site_keywords: e.target.value })}
                   placeholder="crm, whatsapp, clínicas, leads"
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
                 />
-                <p className="text-xs text-slate-400 mt-1">Separadas por vírgula</p>
+                <p className="text-[10px] sm:text-xs text-slate-400 mt-1">Separadas por vírgula</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  <Image className="w-4 h-4 inline mr-2" />
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
+                  <Image className="w-4 h-4 inline mr-1 sm:mr-2" />
                   Favicon
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="url"
                     value={settings.favicon_url}
                     onChange={(e) => setSettings({ ...settings, favicon_url: e.target.value })}
                     placeholder="https://exemplo.com/favicon.ico"
-                    className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="flex-1 px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
                   />
-                  <label className={`flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer transition-colors ${uploading === 'favicon_url' ? 'opacity-50' : ''}`}>
+                  <label className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer transition-colors text-sm ${uploading === 'favicon_url' ? 'opacity-50' : ''}`}>
                     <Upload className="w-4 h-4" />
                     {uploading === 'favicon_url' ? 'Enviando...' : 'Upload'}
                     <input
@@ -336,26 +336,26 @@ const AdminSettings: React.FC = () => {
         {/* Login Page Tab */}
         {activeTab === 'login' && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800">Página de Login</h2>
-              <p className="text-sm text-slate-500 mt-1">Personalize a aparência da tela de login</p>
+            <div className="p-4 sm:p-6 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-800">Página de Login</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Personalize a aparência da tela de login</p>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  <Upload className="w-4 h-4 inline mr-2" />
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
+                  <Upload className="w-4 h-4 inline mr-1 sm:mr-2" />
                   Logomarca
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="url"
                     value={settings.login_logo_url}
                     onChange={(e) => setSettings({ ...settings, login_logo_url: e.target.value })}
                     placeholder="https://exemplo.com/logo.png"
-                    className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="flex-1 px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
                   />
-                  <label className={`flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer transition-colors ${uploading === 'login_logo_url' ? 'opacity-50' : ''}`}>
+                  <label className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer transition-colors text-sm ${uploading === 'login_logo_url' ? 'opacity-50' : ''}`}>
                     <Upload className="w-4 h-4" />
                     {uploading === 'login_logo_url' ? 'Enviando...' : 'Upload'}
                     <input
@@ -368,26 +368,26 @@ const AdminSettings: React.FC = () => {
                   </label>
                 </div>
                 {settings.login_logo_url && (
-                  <div className="mt-2 p-4 bg-slate-100 rounded-lg">
-                    <img src={settings.login_logo_url} alt="Preview" className="h-12 object-contain" />
+                  <div className="mt-2 p-3 sm:p-4 bg-slate-100 rounded-lg">
+                    <img src={settings.login_logo_url} alt="Preview" className="h-10 sm:h-12 object-contain" />
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  <Image className="w-4 h-4 inline mr-2" />
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
+                  <Image className="w-4 h-4 inline mr-1 sm:mr-2" />
                   Imagem de Fundo
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="url"
                     value={settings.login_background_url}
                     onChange={(e) => setSettings({ ...settings, login_background_url: e.target.value })}
                     placeholder="https://exemplo.com/background.jpg"
-                    className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="flex-1 px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
                   />
-                  <label className={`flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer transition-colors ${uploading === 'login_background_url' ? 'opacity-50' : ''}`}>
+                  <label className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer transition-colors text-sm ${uploading === 'login_background_url' ? 'opacity-50' : ''}`}>
                     <Upload className="w-4 h-4" />
                     {uploading === 'login_background_url' ? 'Enviando...' : 'Upload'}
                     <input
@@ -401,14 +401,14 @@ const AdminSettings: React.FC = () => {
                 </div>
                 {settings.login_background_url && (
                   <div className="mt-2 p-2 bg-slate-100 rounded-lg">
-                    <img src={settings.login_background_url} alt="Preview" className="h-24 w-full object-cover rounded" />
+                    <img src={settings.login_background_url} alt="Preview" className="h-20 sm:h-24 w-full object-cover rounded" />
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  <Type className="w-4 h-4 inline mr-2" />
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
+                  <Type className="w-4 h-4 inline mr-1 sm:mr-2" />
                   Título Principal
                 </label>
                 <textarea
@@ -416,13 +416,13 @@ const AdminSettings: React.FC = () => {
                   onChange={(e) => setSettings({ ...settings, login_title: e.target.value })}
                   placeholder="Potencialize suas vendas..."
                   rows={2}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  <FileText className="w-4 h-4 inline mr-2" />
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
+                  <FileText className="w-4 h-4 inline mr-1 sm:mr-2" />
                   Subtítulo
                 </label>
                 <textarea
@@ -430,13 +430,13 @@ const AdminSettings: React.FC = () => {
                   onChange={(e) => setSettings({ ...settings, login_subtitle: e.target.value })}
                   placeholder="A plataforma completa..."
                   rows={2}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  <Type className="w-4 h-4 inline mr-2" />
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
+                  <Type className="w-4 h-4 inline mr-1 sm:mr-2" />
                   Texto do Rodapé
                 </label>
                 <input
@@ -444,7 +444,7 @@ const AdminSettings: React.FC = () => {
                   value={settings.login_footer_text}
                   onChange={(e) => setSettings({ ...settings, login_footer_text: e.target.value })}
                   placeholder="+2k Clínicas conectadas hoje."
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full px-3 sm:px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
                 />
               </div>
             </div>
