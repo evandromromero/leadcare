@@ -5,6 +5,7 @@ import { useChats, ChatWithMessages, DbTag } from '../hooks/useChats';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { hasPermission } from '../lib/permissions';
+import { canSendMessage as checkRateLimit, recordMessageSent, waitForRateLimit } from '../lib/rateLimiter';
 
 const DEFAULT_QUICK_REPLIES = [
   { id: '1', text: 'Olá! Como posso ajudar você hoje?' },
@@ -1567,6 +1568,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       
       // Enviar via WhatsApp se conectado
       if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
+        // Verificar rate limit antes de enviar
+        const rateLimitCheck = checkRateLimit(instance.instance_name);
+        if (!rateLimitCheck.allowed) {
+          alert(rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.');
+          return;
+        }
+
+        // Aguardar delay mínimo entre mensagens
+        await waitForRateLimit(instance.instance_name);
+
         let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
         if (!formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
@@ -1616,6 +1627,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           const responseData = await response.json().catch(() => ({}));
           remoteMessageId = responseData?.key?.id || null;
           console.log('WhatsApp message sent, messageId:', remoteMessageId);
+          
+          // Registrar envio no rate limiter
+          recordMessageSent(instance.instance_name);
         }
         
         // Salvar mensagem no banco com remote_message_id
@@ -1734,6 +1748,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       
       // Enviar via WhatsApp se conectado
       if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
+        // Verificar rate limit antes de enviar
+        const rateLimitCheck = checkRateLimit(instance.instance_name);
+        if (!rateLimitCheck.allowed) {
+          alert(rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.');
+          return;
+        }
+
+        // Aguardar delay mínimo entre mensagens
+        await waitForRateLimit(instance.instance_name);
+
         let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
         if (!formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
@@ -1756,6 +1780,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             caption: mediaCaption,
           }),
         });
+        
+        // Registrar envio no rate limiter
+        recordMessageSent(instance.instance_name);
       }
       
       // Salvar mensagem no banco
@@ -1915,6 +1942,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       
       // Enviar via WhatsApp se conectado
       if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
+        // Verificar rate limit antes de enviar
+        const rateLimitCheck = checkRateLimit(instance.instance_name);
+        if (!rateLimitCheck.allowed) {
+          alert(rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.');
+          return;
+        }
+
+        // Aguardar delay mínimo entre mensagens
+        await waitForRateLimit(instance.instance_name);
+
         let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
         if (!formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
@@ -1931,6 +1968,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             audio: mediaUrl,
           }),
         });
+        
+        // Registrar envio no rate limiter
+        recordMessageSent(instance.instance_name);
       }
       
       // Salvar mensagem no banco

@@ -212,6 +212,21 @@ const AdminClinicDetail: React.FC = () => {
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [permissionsUser, setPermissionsUser] = useState<ClinicUser | null>(null);
   
+  // Estados para edição de limite de usuários
+  const [editingMaxUsers, setEditingMaxUsers] = useState(false);
+  const [tempMaxUsers, setTempMaxUsers] = useState<number>(5);
+  
+  // Estados para modal de edição da clínica
+  const [showEditClinicModal, setShowEditClinicModal] = useState(false);
+  const [editClinicForm, setEditClinicForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    plan: '',
+    max_users: 5
+  });
+  const [savingClinic, setSavingClinic] = useState(false);
+  
   // Estados para modal de metas
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [clinicGoal, setClinicGoal] = useState<number>(50000);
@@ -1205,12 +1220,20 @@ const AdminClinicDetail: React.FC = () => {
   };
 
   const handleSaveUser = async () => {
-    if (!editingUser) return;
+    if (!editingUser || !clinic) return;
     
     setSavingUser(true);
     setEditUserError(null);
 
     try {
+      // Validar limite ao reativar usuário
+      if (editingUser.status === 'Inativo' && editUserForm.status === 'Ativo') {
+        const activeUsersCount = users.filter(u => u.status === 'Ativo').length;
+        if (activeUsersCount >= clinic.max_users) {
+          throw new Error(`Limite de ${clinic.max_users} usuários ativos atingido. Inative outro usuário antes de reativar este.`);
+        }
+      }
+
       // Atualizar dados do usuário
       const { error } = await supabase
         .from('users')
@@ -1327,6 +1350,104 @@ const AdminClinicDetail: React.FC = () => {
       setClinic({ ...clinic, can_create_users: newValue });
     } catch (error) {
       console.error('Error updating can_create_users:', error);
+    }
+  };
+
+  const updateMaxUsers = async (newLimit: number) => {
+    if (!clinic || !user) return;
+
+    const activeUsersCount = users.filter(u => u.status === 'Ativo').length;
+    if (newLimit < activeUsersCount) {
+      alert(`Não é possível definir limite menor que o número de usuários ativos (${activeUsersCount})`);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('clinics')
+        .update({ max_users: newLimit, updated_at: new Date().toISOString() })
+        .eq('id', clinic.id);
+
+      if (error) throw error;
+
+      await supabase.from('admin_access_logs').insert({
+        super_admin_id: user.id,
+        clinic_id: clinic.id,
+        action: 'edit',
+        details: { field: 'max_users', old_value: clinic.max_users, new_value: newLimit },
+      });
+
+      setClinic({ ...clinic, max_users: newLimit });
+    } catch (error) {
+      console.error('Error updating max_users:', error);
+    }
+  };
+
+  const openEditClinicModal = () => {
+    if (!clinic) return;
+    setEditClinicForm({
+      name: clinic.name,
+      email: clinic.email || '',
+      phone: clinic.phone || '',
+      plan: clinic.plan || 'free',
+      max_users: clinic.max_users
+    });
+    setShowEditClinicModal(true);
+  };
+
+  const handleSaveClinic = async () => {
+    if (!clinic || !user) return;
+    
+    const activeUsersCount = users.filter(u => u.status === 'Ativo').length;
+    if (editClinicForm.max_users < activeUsersCount) {
+      alert(`Não é possível definir limite menor que o número de usuários ativos (${activeUsersCount})`);
+      return;
+    }
+
+    setSavingClinic(true);
+    try {
+      const { error } = await supabase
+        .from('clinics')
+        .update({
+          name: editClinicForm.name,
+          email: editClinicForm.email || null,
+          phone: editClinicForm.phone || null,
+          plan: editClinicForm.plan,
+          max_users: editClinicForm.max_users,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', clinic.id);
+
+      if (error) throw error;
+
+      await supabase.from('admin_access_logs').insert({
+        super_admin_id: user.id,
+        clinic_id: clinic.id,
+        action: 'edit',
+        details: { 
+          changes: {
+            name: { old: clinic.name, new: editClinicForm.name },
+            email: { old: clinic.email, new: editClinicForm.email },
+            phone: { old: clinic.phone, new: editClinicForm.phone },
+            plan: { old: clinic.plan, new: editClinicForm.plan },
+            max_users: { old: clinic.max_users, new: editClinicForm.max_users }
+          }
+        },
+      });
+
+      setClinic({ 
+        ...clinic, 
+        name: editClinicForm.name,
+        email: editClinicForm.email || null,
+        phone: editClinicForm.phone || null,
+        plan: editClinicForm.plan,
+        max_users: editClinicForm.max_users
+      });
+      setShowEditClinicModal(false);
+    } catch (error) {
+      console.error('Error updating clinic:', error);
+    } finally {
+      setSavingClinic(false);
     }
   };
 
@@ -1477,7 +1598,11 @@ const AdminClinicDetail: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
             <div className="p-4 sm:p-6 border-b border-slate-200 flex items-center justify-between">
               <h2 className="text-base sm:text-lg font-semibold text-slate-800">Informações</h2>
-              <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+              <button 
+                onClick={openEditClinicModal}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Editar informações"
+              >
                 <Edit className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
               </button>
             </div>
@@ -1502,8 +1627,59 @@ const AdminClinicDetail: React.FC = () => {
                   <span className="text-sm sm:text-base text-slate-800 capitalize">{clinic.plan || 'Free'}</span>
                 </div>
                 <div>
-                  <p className="text-xs sm:text-sm text-slate-500 mb-1">Máx. Usuários</p>
-                  <span className="text-sm sm:text-base text-slate-800">{clinic.max_users}</span>
+                  <p className="text-xs sm:text-sm text-slate-500 mb-1">Usuários Ativos / Limite</p>
+                  <div className="flex items-center gap-2">
+                    {editingMaxUsers ? (
+                      <>
+                        <span className="text-sm sm:text-base text-slate-800">
+                          {users.filter(u => u.status === 'Ativo').length} /
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={tempMaxUsers}
+                          onChange={(e) => setTempMaxUsers(Number(e.target.value))}
+                          className="w-16 px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => {
+                            if (tempMaxUsers > 0) {
+                              updateMaxUsers(tempMaxUsers);
+                            }
+                            setEditingMaxUsers(false);
+                          }}
+                          className="p-1 text-green-600 hover:text-green-700"
+                          title="Salvar"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingMaxUsers(false)}
+                          className="p-1 text-red-500 hover:text-red-600"
+                          title="Cancelar"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm sm:text-base text-slate-800">
+                          {users.filter(u => u.status === 'Ativo').length} / {clinic.max_users}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setTempMaxUsers(clinic.max_users);
+                            setEditingMaxUsers(true);
+                          }}
+                          className="p-1 text-slate-400 hover:text-cyan-600 transition-colors"
+                          title="Editar limite"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <p className="text-xs sm:text-sm text-slate-500 mb-1">Criada em</p>
@@ -1628,7 +1804,7 @@ const AdminClinicDetail: React.FC = () => {
           {/* Users List */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
             <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-800">Usuários ({users.length}/{clinic.max_users})</h2>
+              <h2 className="text-lg font-semibold text-slate-800">Usuários Ativos ({users.filter(u => u.status === 'Ativo').length}/{clinic.max_users})</h2>
               <button
                 onClick={() => setShowCreateUserModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 transition-colors"
@@ -1809,7 +1985,7 @@ const AdminClinicDetail: React.FC = () => {
       {activeTab === 'users' && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
           <div className="p-4 sm:p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-800">Usuários ({users.length}/{clinic.max_users})</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-slate-800">Usuários Ativos ({users.filter(u => u.status === 'Ativo').length}/{clinic.max_users})</h2>
             <button
               onClick={() => setShowCreateUserModal(true)}
               className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-700 transition-colors"
@@ -2730,6 +2906,104 @@ const AdminClinicDetail: React.FC = () => {
           </div>
           </>
           )}
+        </div>
+      )}
+
+      {/* Modal Editar Clínica */}
+      {showEditClinicModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowEditClinicModal(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-slate-900">Editar Clínica</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Alterar informações da clínica</p>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nome da Clínica</label>
+                <input 
+                  type="text"
+                  value={editClinicForm.name}
+                  onChange={(e) => setEditClinicForm({ ...editClinicForm, name: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Email</label>
+                  <input 
+                    type="email"
+                    value={editClinicForm.email}
+                    onChange={(e) => setEditClinicForm({ ...editClinicForm, email: e.target.value })}
+                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Telefone</label>
+                  <input 
+                    type="text"
+                    value={editClinicForm.phone}
+                    onChange={(e) => setEditClinicForm({ ...editClinicForm, phone: e.target.value })}
+                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Plano</label>
+                  <select
+                    value={editClinicForm.plan}
+                    onChange={(e) => setEditClinicForm({ ...editClinicForm, plan: e.target.value })}
+                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  >
+                    <option value="free">Free</option>
+                    <option value="basic">Basic</option>
+                    <option value="pro">Pro</option>
+                    <option value="enterprise">Enterprise</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Limite de Usuários</label>
+                  <input 
+                    type="number"
+                    min="1"
+                    value={editClinicForm.max_users}
+                    onChange={(e) => setEditClinicForm({ ...editClinicForm, max_users: Number(e.target.value) })}
+                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Ativos: {users.filter(u => u.status === 'Ativo').length}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 flex gap-3">
+              <button 
+                onClick={handleSaveClinic}
+                disabled={savingClinic}
+                className="flex-1 h-11 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingClinic ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar'
+                )}
+              </button>
+              <button 
+                onClick={() => setShowEditClinicModal(false)}
+                className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

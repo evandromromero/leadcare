@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Tables } from '../lib/database.types';
+import { canSendMessage, recordMessageSent, waitForRateLimit } from '../lib/rateLimiter';
 
 export type DbChat = Tables<'chats'>;
 export type DbMessage = Tables<'messages'>;
@@ -18,7 +19,7 @@ interface UseChatsReturn {
   whatsappConnected: boolean;
   refetch: () => Promise<void>;
   updateChatStatus: (chatId: string, status: string) => Promise<void>;
-  sendMessage: (chatId: string, content: string, userId: string) => Promise<void>;
+  sendMessage: (chatId: string, content: string, userId: string) => Promise<{ success: boolean; error?: string } | void>;
   editMessage: (messageId: string, chatId: string, newContent: string, phoneNumber: string) => Promise<{ success: boolean; error?: string }>;
   markAsRead: (chatId: string) => Promise<void>;
   markAsUnread: (chatId: string) => Promise<void>;
@@ -156,7 +157,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     ));
   };
 
-  const sendMessage = async (chatId: string, content: string, userId: string) => {
+  const sendMessage = async (chatId: string, content: string, userId: string): Promise<{ success: boolean; error?: string }> => {
     const chat = chats.find(c => c.id === chatId);
     
     // Buscar nome do usuário para prefixar a mensagem
@@ -183,11 +184,21 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     });
     
     if (whatsappInstance && whatsappInstance.status === 'connected' && evolutionSettings && chat?.phone_number) {
+      // Verificar rate limit antes de enviar
+      const rateLimitCheck = canSendMessage(whatsappInstance.instanceName);
+      if (!rateLimitCheck.allowed) {
+        console.warn('Rate limit atingido:', rateLimitCheck.reason);
+        return { success: false, error: rateLimitCheck.reason };
+      }
+
       try {
         let formattedPhone = chat.phone_number.replace(/\D/g, '');
         if (!formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
         }
+        
+        // Aguardar delay mínimo entre mensagens
+        await waitForRateLimit(whatsappInstance.instanceName);
         
         console.log('Sending WhatsApp message via instance:', whatsappInstance.instanceName, 'to:', formattedPhone);
 
@@ -209,6 +220,9 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
         } else {
           const responseData = await response.json().catch(() => ({}));
           console.log('WhatsApp message sent successfully to:', formattedPhone, 'messageId:', responseData?.key?.id);
+          
+          // Registrar envio no rate limiter
+          recordMessageSent(whatsappInstance.instanceName);
           
           // Salvar mensagem com remote_message_id para permitir edição
           const remoteMessageId = responseData?.key?.id || null;
@@ -246,10 +260,11 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
               ? { ...c, messages: [...c.messages, newMessage as any], last_message: content, last_message_time: new Date().toISOString() }
               : c
           ));
-          return;
+          return { success: true };
         }
       } catch (err) {
         console.error('Error sending WhatsApp message:', err);
+        return { success: false, error: 'Erro ao enviar mensagem' };
       }
     }
 
