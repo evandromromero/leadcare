@@ -205,20 +205,18 @@ serve(async (req) => {
       .single()
 
     if (!chat) {
-      // Só cria novo chat se for mensagem do cliente
-      if (isFromMe) {
-        return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
+      // Criar chat mesmo se for mensagem do atendente (iniciou conversa pelo celular)
       const { data: newChat } = await supabase
         .from('chats')
         .insert({
           clinic_id: clinicId,
-          client_name: pushName,
+          client_name: pushName || 'Cliente',
           phone_number: phone,
-          status: 'Novo Lead',
-          unread_count: 1,
+          status: isFromMe ? 'Em Atendimento' : 'Novo Lead',
+          unread_count: isFromMe ? 0 : 1,
           last_message: message,
-          last_message_time: new Date().toISOString()
+          last_message_time: new Date().toISOString(),
+          instance_id: instance.id
         })
         .select('id, unread_count')
         .single()

@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Key, Globe, Search, Image, Type, FileText, Upload } from 'lucide-react';
+import { Save, Key, Globe, Search, Image, Type, FileText, Upload, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Settings {
   evolution_api_url: string;
   evolution_api_key: string;
+  // Proxy
+  proxy_host: string;
+  proxy_port: string;
+  proxy_protocol: string;
+  proxy_username: string;
+  proxy_password: string;
   // SEO
   site_title: string;
   site_description: string;
@@ -22,6 +28,12 @@ const AdminSettings: React.FC = () => {
   const [settings, setSettings] = useState<Settings>({
     evolution_api_url: '',
     evolution_api_key: '',
+    // Proxy
+    proxy_host: '',
+    proxy_port: '12321',
+    proxy_protocol: 'http',
+    proxy_username: '',
+    proxy_password: '',
     // SEO
     site_title: 'Belitx',
     site_description: 'CRM de WhatsApp completo para clínicas',
@@ -96,6 +108,12 @@ const AdminSettings: React.FC = () => {
         setSettings({
           evolution_api_url: d.evolution_api_url || '',
           evolution_api_key: d.evolution_api_key || '',
+          // Proxy
+          proxy_host: d.proxy_host || '',
+          proxy_port: d.proxy_port || '12321',
+          proxy_protocol: d.proxy_protocol || 'http',
+          proxy_username: d.proxy_username || '',
+          proxy_password: d.proxy_password || '',
           // SEO
           site_title: d.site_title || 'Belitx',
           site_description: d.site_description || 'CRM de WhatsApp completo para clínicas',
@@ -127,6 +145,12 @@ const AdminSettings: React.FC = () => {
           id: 1,
           evolution_api_url: settings.evolution_api_url,
           evolution_api_key: settings.evolution_api_key,
+          // Proxy
+          proxy_host: settings.proxy_host,
+          proxy_port: settings.proxy_port,
+          proxy_protocol: settings.proxy_protocol,
+          proxy_username: settings.proxy_username,
+          proxy_password: settings.proxy_password,
           // SEO
           site_title: settings.site_title,
           site_description: settings.site_description,
@@ -240,6 +264,104 @@ const AdminSettings: React.FC = () => {
                   className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Proxy Config - Shown when API tab is active */}
+        {activeTab === 'api' && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 mt-6">
+            <div className="p-4 sm:p-6 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-800">
+                <Shield className="w-5 h-5 inline mr-2 text-green-600" />
+                Configuração de Proxy
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Proxy residencial para proteção contra banimento</p>
+            </div>
+
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Host
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.proxy_host}
+                    onChange={(e) => setSettings({ ...settings, proxy_host: e.target.value })}
+                    placeholder="geo.iproyal.com"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Porta
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.proxy_port}
+                    onChange={(e) => setSettings({ ...settings, proxy_port: e.target.value })}
+                    placeholder="12321"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Protocolo
+                </label>
+                <select
+                  value={settings.proxy_protocol}
+                  onChange={(e) => setSettings({ ...settings, proxy_protocol: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                >
+                  <option value="http">HTTP</option>
+                  <option value="https">HTTPS</option>
+                  <option value="socks5">SOCKS5</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Usuário
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.proxy_username}
+                    onChange={(e) => setSettings({ ...settings, proxy_username: e.target.value })}
+                    placeholder="username"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Senha
+                  </label>
+                  <input
+                    type="password"
+                    value={settings.proxy_password}
+                    onChange={(e) => setSettings({ ...settings, proxy_password: e.target.value })}
+                    placeholder="••••••••••••••••"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+              </div>
+
+              {settings.proxy_host && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-green-700">
+                    <span className="font-medium">Proxy configurado:</span> {settings.proxy_protocol}://{settings.proxy_host}:{settings.proxy_port}
+                  </p>
+                </div>
+              )}
+
+              {settings.proxy_host && (
+                <p className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg">
+                  <strong>Nota:</strong> O proxy será aplicado automaticamente em novas instâncias. Instâncias existentes precisam ser recriadas para usar o proxy.
+                </p>
+              )}
             </div>
           </div>
         )}

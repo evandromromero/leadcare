@@ -1,6 +1,6 @@
 export type UserRole = 'SuperAdmin' | 'Admin' | 'Gerente' | 'Supervisor' | 'Comercial' | 'Recepcionista' | 'Financeiro' | 'Visualizador';
 
-export type MenuPage = 'dashboard' | 'inbox' | 'kanban' | 'users' | 'settings' | 'connect' | 'receipts';
+export type MenuPage = 'dashboard' | 'inbox' | 'kanban' | 'users' | 'settings' | 'connect' | 'receipts' | 'reports';
 
 export type Action = 
   | 'create_user' 
@@ -34,7 +34,7 @@ interface RolePermissions {
 
 export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
   SuperAdmin: {
-    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings', 'connect', 'receipts'],
+    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings', 'connect', 'receipts', 'reports'],
     actions: [
       'create_user', 'edit_user', 'delete_user', 'change_role', 'change_status',
       'send_message', 'move_lead', 'create_lead',
@@ -47,7 +47,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     description: 'Acesso total ao sistema',
   },
   Admin: {
-    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings', 'connect', 'receipts'],
+    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings', 'connect', 'receipts', 'reports'],
     actions: [
       'create_user', 'edit_user', 'delete_user', 'change_role', 'change_status',
       'send_message', 'move_lead', 'create_lead',
@@ -60,7 +60,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     description: 'Acesso total. Pode criar usuários e configurar a clínica.',
   },
   Gerente: {
-    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings'],
+    menu: ['dashboard', 'inbox', 'kanban', 'users', 'settings', 'reports'],
     actions: [
       'send_message', 'move_lead', 'create_lead',
       'add_payment', 'add_quote',
@@ -94,7 +94,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     description: 'Foco em agendamentos. Acesso limitado ao Inbox e Kanban.',
   },
   Financeiro: {
-    menu: ['dashboard', 'inbox', 'receipts', 'settings'],
+    menu: ['dashboard', 'inbox', 'receipts', 'reports', 'settings'],
     actions: [
       'add_payment', 'add_quote',
       'view_receipts', 'add_receipt', 'edit_receipt'

@@ -34,7 +34,15 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<{ apiUrl: string; apiKey: string } | null>(null);
+  const [settings, setSettings] = useState<{ 
+    apiUrl: string; 
+    apiKey: string;
+    proxyHost?: string;
+    proxyPort?: string;
+    proxyProtocol?: string;
+    proxyUsername?: string;
+    proxyPassword?: string;
+  } | null>(null);
 
   const selectedInstance = instances.find(i => i.id === selectedInstanceId) || null;
 
@@ -56,7 +64,7 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
     try {
       const { data, error } = await supabase
         .from('settings')
-        .select('evolution_api_url, evolution_api_key')
+        .select('evolution_api_url, evolution_api_key, proxy_host, proxy_port, proxy_protocol, proxy_username, proxy_password')
         .single();
 
       if (error) {
@@ -64,10 +72,16 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
         return;
       }
 
-      if (data && data.evolution_api_url && data.evolution_api_key) {
+      const d = data as any;
+      if (d && d.evolution_api_url && d.evolution_api_key) {
         setSettings({
-          apiUrl: data.evolution_api_url,
-          apiKey: data.evolution_api_key,
+          apiUrl: d.evolution_api_url,
+          apiKey: d.evolution_api_key,
+          proxyHost: d.proxy_host || undefined,
+          proxyPort: d.proxy_port || undefined,
+          proxyProtocol: d.proxy_protocol || undefined,
+          proxyUsername: d.proxy_username || undefined,
+          proxyPassword: d.proxy_password || undefined,
         });
       }
     } catch (err) {
@@ -170,17 +184,29 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
       const timestamp = Date.now().toString(36);
       const instanceName = `leadcare_${clinicId.replace(/-/g, '').substring(0, 8)}_${timestamp}`;
       
+      const createBody: Record<string, unknown> = {
+        instanceName: instanceName,
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+      };
+
+      if (settings.proxyHost && settings.proxyPort) {
+        createBody.proxy = {
+          host: settings.proxyHost,
+          port: settings.proxyPort,
+          protocol: settings.proxyProtocol || 'http',
+          username: settings.proxyUsername || '',
+          password: settings.proxyPassword || '',
+        };
+      }
+
       const createResponse = await fetch(`${settings.apiUrl}/instance/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': settings.apiKey,
         },
-        body: JSON.stringify({
-          instanceName: instanceName,
-          qrcode: true,
-          integration: 'WHATSAPP-BAILEYS',
-        }),
+        body: JSON.stringify(createBody),
       });
 
       if (!createResponse.ok) {

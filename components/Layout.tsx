@@ -81,6 +81,7 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
     { path: '/inbox', label: 'Caixa de Entrada', icon: 'inbox', badge: state.chats.reduce((acc, c) => acc + c.unreadCount, 0), page: 'inbox' as MenuPage },
     { path: '/kanban', label: 'Leads (Kanban)', icon: 'view_kanban', page: 'kanban' as MenuPage },
     { path: '/receipts', label: 'Lançamentos', icon: 'payments', page: 'receipts' as MenuPage },
+    { path: '/reports', label: 'Relatórios', icon: 'analytics', page: 'reports' as MenuPage },
     { path: '/users', label: 'Usuários', icon: 'group', page: 'users' as MenuPage },
     { path: '/settings', label: 'Configurações', icon: 'settings', page: 'settings' as MenuPage },
   ];

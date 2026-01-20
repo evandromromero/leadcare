@@ -10,8 +10,8 @@ const rateLimitStore: Map<string, RateLimitEntry> = new Map();
 
 // Configurações de proteção
 const CONFIG = {
-  MAX_MESSAGES_PER_MINUTE: 15,  // Máximo de mensagens por minuto por instância
-  MIN_DELAY_MS: 3000,           // Delay mínimo entre mensagens (3 segundos)
+  MAX_MESSAGES_PER_MINUTE: 10,  // Máximo de mensagens por minuto por instância
+  MIN_DELAY_MS: 5000,           // Delay mínimo entre mensagens (3 segundos)
   WINDOW_MS: 60000,             // Janela de tempo para contagem (1 minuto)
 };
 

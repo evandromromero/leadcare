@@ -13,6 +13,7 @@ import Kanban from './pages/Kanban';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
 import Receipts from './pages/Receipts';
+import Reports from './pages/Reports';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminClinics from './pages/admin/AdminClinics';
 import AdminClinicDetail from './pages/admin/AdminClinicDetail';
@@ -197,6 +198,12 @@ const AppRoutes: React.FC = () => {
         <Route path="/receipts" element={
           <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
             <Receipts state={state} />
+          </PrivateRoute>
+        } />
+
+        <Route path="/reports" element={
+          <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
+            <Reports state={state} />
           </PrivateRoute>
         } />
 

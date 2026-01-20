@@ -162,6 +162,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [chatLock, setChatLock] = useState<{ locked_by: string | null; locked_by_name: string | null; isForwardLock?: boolean; locked_at?: string } | null>(null);
   const [isLocking, setIsLocking] = useState(false);
   
+  // Estado para modal de rate limit
+  const [rateLimitModal, setRateLimitModal] = useState<{ show: boolean; message: string; waitSeconds: number }>({ show: false, message: '', waitSeconds: 0 });
+  
   // Estados para encaminhamento de atendimento
   const [clinicUsers, setClinicUsers] = useState<Array<{ id: string; name: string; role: string; status: string }>>([]);
   const [showForwardModal, setShowForwardModal] = useState(false);
@@ -1571,7 +1574,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         // Verificar rate limit antes de enviar
         const rateLimitCheck = checkRateLimit(instance.instance_name);
         if (!rateLimitCheck.allowed) {
-          alert(rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.');
+          setRateLimitModal({
+            show: true,
+            message: rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.',
+            waitSeconds: Math.ceil(rateLimitCheck.waitMs / 1000)
+          });
           return;
         }
 
@@ -1751,7 +1758,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         // Verificar rate limit antes de enviar
         const rateLimitCheck = checkRateLimit(instance.instance_name);
         if (!rateLimitCheck.allowed) {
-          alert(rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.');
+          setRateLimitModal({
+            show: true,
+            message: rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.',
+            waitSeconds: Math.ceil(rateLimitCheck.waitMs / 1000)
+          });
           return;
         }
 
@@ -1945,7 +1956,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         // Verificar rate limit antes de enviar
         const rateLimitCheck = checkRateLimit(instance.instance_name);
         if (!rateLimitCheck.allowed) {
-          alert(rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.');
+          setRateLimitModal({
+            show: true,
+            message: rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.',
+            waitSeconds: Math.ceil(rateLimitCheck.waitMs / 1000)
+          });
           return;
         }
 
@@ -3764,6 +3779,36 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           </div>
         )}
       </aside>
+
+      {/* Modal de Rate Limit */}
+      {rateLimitModal.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setRateLimitModal({ show: false, message: '', waitSeconds: 0 })}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6 text-center">
+              <div className="size-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="material-symbols-outlined text-amber-600 text-3xl">schedule</span>
+              </div>
+              <h3 className="font-bold text-lg text-slate-800 mb-2">Aguarde um momento</h3>
+              <p className="text-slate-600 text-sm mb-4">
+                Para proteger sua conta do WhatsApp, aguarde antes de enviar outra mensagem.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                <div className="flex items-center justify-center gap-2 text-amber-700">
+                  <span className="material-symbols-outlined">timer</span>
+                  <span className="font-bold text-2xl">{rateLimitModal.waitSeconds}s</span>
+                </div>
+                <p className="text-amber-600 text-xs mt-1">tempo restante</p>
+              </div>
+              <button
+                onClick={() => setRateLimitModal({ show: false, message: '', waitSeconds: 0 })}
+                className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 px-4 rounded-xl transition-colors"
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Encaminhamento */}
       {showForwardModal && (
