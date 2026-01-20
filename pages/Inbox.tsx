@@ -1445,6 +1445,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         .select('evolution_api_url, evolution_api_key')
         .single();
       
+      // Buscar configuração de provider da clínica
+      const { data: clinicConfig } = await supabase
+        .from('clinics')
+        .select('whatsapp_provider, cloud_api_phone_number_id')
+        .eq('id', clinicId)
+        .single();
+      
+      const isCloudApi = (clinicConfig as any)?.whatsapp_provider === 'cloud_api' && (clinicConfig as any)?.cloud_api_phone_number_id;
+      
       const { data: instances } = await supabase
         .from('whatsapp_instances')
         .select('instance_name, status')
@@ -1461,7 +1470,28 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         .eq('id', messageId)
         .single();
       
-      if (instance?.status === 'connected' && settings?.evolution_api_url && msgData?.remote_message_id && selectedChat.phone_number) {
+      // Enviar via Cloud API se configurado
+      if (isCloudApi && msgData?.remote_message_id && selectedChat.phone_number) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        
+        await fetch(`${supabaseUrl}/functions/v1/cloud-api-send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({
+            clinic_id: clinicId,
+            action: 'send_reaction',
+            phone: selectedChat.phone_number,
+            message_id: msgData.remote_message_id,
+            emoji: isRemoving ? '' : emoji,
+          }),
+        });
+      }
+      // Enviar via Evolution API se conectado
+      else if (instance?.status === 'connected' && settings?.evolution_api_url && msgData?.remote_message_id && selectedChat.phone_number) {
         let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
         if (!formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
@@ -1559,7 +1589,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         .select('evolution_api_url, evolution_api_key')
         .single();
       
-      // Buscar instância WhatsApp conectada
+      // Buscar configuração de provider da clínica
+      const { data: clinicConfig } = await supabase
+        .from('clinics')
+        .select('whatsapp_provider, cloud_api_phone_number_id, cloud_api_access_token')
+        .eq('id', clinicId)
+        .single();
+      
+      const isCloudApi = clinicConfig?.whatsapp_provider === 'cloud_api' && clinicConfig?.cloud_api_phone_number_id;
+      
+      // Buscar instância WhatsApp conectada (para Evolution API)
       const { data: instances } = await supabase
         .from('whatsapp_instances')
         .select('instance_name, status')
@@ -1569,8 +1608,38 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       
       const instance = instances?.[0];
       
-      // Enviar via WhatsApp se conectado
-      if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
+      let remoteMessageId = null;
+      
+      // Enviar via Cloud API se configurado
+      if (isCloudApi && selectedChat.phone_number) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        
+        const response = await fetch(`${supabaseUrl}/functions/v1/cloud-api-send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({
+            clinic_id: clinicId,
+            action: 'send_text',
+            phone: selectedChat.phone_number,
+            message: whatsappMessage,
+          }),
+        });
+        
+        if (response.ok) {
+          const responseData = await response.json().catch(() => ({}));
+          remoteMessageId = responseData?.message_id || null;
+          console.log('Cloud API message sent, messageId:', remoteMessageId);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Cloud API error:', errorData);
+        }
+      }
+      // Enviar via Evolution API se conectado
+      else if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
         // Verificar rate limit antes de enviar
         const rateLimitCheck = checkRateLimit(instance.instance_name);
         if (!rateLimitCheck.allowed) {
@@ -1629,7 +1698,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         });
         
         // Capturar remote_message_id da resposta
-        let remoteMessageId = null;
         if (response.ok) {
           const responseData = await response.json().catch(() => ({}));
           remoteMessageId = responseData?.key?.id || null;
@@ -1638,40 +1706,24 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           // Registrar envio no rate limiter
           recordMessageSent(instance.instance_name);
         }
+      }
         
-        // Salvar mensagem no banco com remote_message_id
-        const { data: newMsg } = await supabase.from('messages').insert({
-          chat_id: selectedChatId,
-          content: msgInput.trim(),
-          type: 'text',
-          is_from_client: false,
-          sent_by: user.id,
-          quoted_message_id: replyingTo?.id || null,
-          quoted_content: replyingTo?.content || null,
-          quoted_sender_name: replyingTo?.senderName || null,
-          remote_message_id: remoteMessageId,
-        }).select().single();
-        
-        if (newMsg) {
-          // Atualizar estado local imediatamente
-          await refetch();
-        }
-      } else {
-        // WhatsApp não conectado - salvar sem remote_message_id
-        const { data: newMsg } = await supabase.from('messages').insert({
-          chat_id: selectedChatId,
-          content: msgInput.trim(),
-          type: 'text',
-          is_from_client: false,
-          sent_by: user.id,
-          quoted_message_id: replyingTo?.id || null,
-          quoted_content: replyingTo?.content || null,
-          quoted_sender_name: replyingTo?.senderName || null,
-        }).select().single();
-        
-        if (newMsg) {
-          await refetch();
-        }
+      // Salvar mensagem no banco com remote_message_id
+      const { data: newMsg } = await supabase.from('messages').insert({
+        chat_id: selectedChatId,
+        content: msgInput.trim(),
+        type: 'text',
+        is_from_client: false,
+        sent_by: user.id,
+        quoted_message_id: replyingTo?.id || null,
+        quoted_content: replyingTo?.content || null,
+        quoted_sender_name: replyingTo?.senderName || null,
+        remote_message_id: remoteMessageId,
+      }).select().single();
+      
+      if (newMsg) {
+        // Atualizar estado local imediatamente
+        await refetch();
       }
       
       // Atualizar chat
@@ -1743,7 +1795,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         .select('evolution_api_url, evolution_api_key')
         .single();
       
-      // Buscar instância WhatsApp conectada
+      // Buscar configuração de provider da clínica
+      const { data: clinicConfig } = await supabase
+        .from('clinics')
+        .select('whatsapp_provider, cloud_api_phone_number_id')
+        .eq('id', clinicId)
+        .single();
+      
+      const isCloudApi = (clinicConfig as any)?.whatsapp_provider === 'cloud_api' && (clinicConfig as any)?.cloud_api_phone_number_id;
+      
+      // Buscar instância WhatsApp conectada (para Evolution API)
       const { data: instances } = await supabase
         .from('whatsapp_instances')
         .select('instance_name, status')
@@ -1753,8 +1814,35 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       
       const instance = instances?.[0];
       
-      // Enviar via WhatsApp se conectado
-      if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
+      // Enviar via Cloud API se configurado
+      if (isCloudApi && selectedChat.phone_number) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        
+        const actionMap: Record<string, string> = {
+          'image': 'send_image',
+          'video': 'send_video',
+          'audio': 'send_audio',
+          'document': 'send_document',
+        };
+        
+        await fetch(`${supabaseUrl}/functions/v1/cloud-api-send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({
+            clinic_id: clinicId,
+            action: actionMap[mediaType] || 'send_document',
+            phone: selectedChat.phone_number,
+            media_url: mediaUrl,
+            caption: mediaCaption,
+          }),
+        });
+      }
+      // Enviar via Evolution API se conectado
+      else if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
         // Verificar rate limit antes de enviar
         const rateLimitCheck = checkRateLimit(instance.instance_name);
         if (!rateLimitCheck.allowed) {
@@ -1941,7 +2029,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         .select('evolution_api_url, evolution_api_key')
         .single();
       
-      // Buscar instância WhatsApp conectada
+      // Buscar configuração de provider da clínica
+      const { data: clinicConfig } = await supabase
+        .from('clinics')
+        .select('whatsapp_provider, cloud_api_phone_number_id')
+        .eq('id', clinicId)
+        .single();
+      
+      const isCloudApi = (clinicConfig as any)?.whatsapp_provider === 'cloud_api' && (clinicConfig as any)?.cloud_api_phone_number_id;
+      
+      // Buscar instância WhatsApp conectada (para Evolution API)
       const { data: instances } = await supabase
         .from('whatsapp_instances')
         .select('instance_name, status')
@@ -1951,8 +2048,27 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       
       const instance = instances?.[0];
       
-      // Enviar via WhatsApp se conectado
-      if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
+      // Enviar via Cloud API se configurado
+      if (isCloudApi && selectedChat.phone_number) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        
+        await fetch(`${supabaseUrl}/functions/v1/cloud-api-send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({
+            clinic_id: clinicId,
+            action: 'send_audio',
+            phone: selectedChat.phone_number,
+            media_url: mediaUrl,
+          }),
+        });
+      }
+      // Enviar via Evolution API se conectado
+      else if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
         // Verificar rate limit antes de enviar
         const rateLimitCheck = checkRateLimit(instance.instance_name);
         if (!rateLimitCheck.allowed) {

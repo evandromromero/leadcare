@@ -36,6 +36,13 @@ interface ClinicDetail {
   created_at: string;
   updated_at: string;
   monthly_goal?: number;
+  whatsapp_provider?: 'evolution' | 'cloud_api';
+  cloud_api_enabled?: boolean;
+  cloud_api_access_token?: string | null;
+  cloud_api_phone_number_id?: string | null;
+  cloud_api_waba_id?: string | null;
+  cloud_api_app_id?: string | null;
+  cloud_api_verify_token?: string | null;
 }
 
 interface ClinicUser {
@@ -66,6 +73,29 @@ interface WhatsAppInstance {
   connected_at: string | null;
   is_shared: boolean;
   user_id: string | null;
+}
+
+interface WhatsAppTemplate {
+  id: string;
+  template_id: string;
+  name: string;
+  language: string;
+  category: string;
+  status: string;
+  components: any;
+}
+
+interface MassMessageCampaign {
+  id: string;
+  name: string;
+  template_id: string | null;
+  status: string;
+  scheduled_for: string | null;
+  total_recipients: number;
+  sent_count: number;
+  delivered_count: number;
+  failed_count: number;
+  created_at: string;
 }
 
 interface BillingStats {
@@ -181,6 +211,13 @@ const AdminClinicDetail: React.FC = () => {
   const [users, setUsers] = useState<ClinicUser[]>([]);
   const [stats, setStats] = useState<ClinicStats>({ users_count: 0, chats_count: 0, messages_count: 0, leads_count: 0 });
   const [whatsappInstances, setWhatsappInstances] = useState<WhatsAppInstance[]>([]);
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [campaigns, setCampaigns] = useState<MassMessageCampaign[]>([]);
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
+  const [showMassMessageModal, setShowMassMessageModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplate | null>(null);
+  const [massMessageForm, setMassMessageForm] = useState({ name: '', phones: '' });
+  const [sendingMassMessage, setSendingMassMessage] = useState(false);
   const [billingStats, setBillingStats] = useState<BillingStats>({ totalRevenue: 0, monthlyRevenue: 0, totalConversions: 0, byAttendant: [] });
   const [loading, setLoading] = useState(true);
   const [impersonating, setImpersonating] = useState(false);
@@ -1353,6 +1390,192 @@ const AdminClinicDetail: React.FC = () => {
     }
   };
 
+  const updateWhatsAppProvider = async (provider: 'evolution' | 'cloud_api') => {
+    if (!clinic || !user) return;
+
+    try {
+      const { error } = await supabase
+        .from('clinics')
+        .update({ whatsapp_provider: provider, updated_at: new Date().toISOString() })
+        .eq('id', clinic.id);
+
+      if (error) throw error;
+
+      await supabase.from('admin_access_logs').insert({
+        super_admin_id: user.id,
+        clinic_id: clinic.id,
+        action: 'edit',
+        details: { field: 'whatsapp_provider', old_value: clinic.whatsapp_provider, new_value: provider },
+      });
+
+      setClinic({ ...clinic, whatsapp_provider: provider });
+    } catch (error) {
+      console.error('Error updating whatsapp_provider:', error);
+    }
+  };
+
+  const updateCloudApiField = async (field: string, value: string) => {
+    if (!clinic || !user) return;
+
+    try {
+      const { error } = await supabase
+        .from('clinics')
+        .update({ [field]: value || null, updated_at: new Date().toISOString() })
+        .eq('id', clinic.id);
+
+      if (error) throw error;
+
+      setClinic({ ...clinic, [field]: value || null } as ClinicDetail);
+    } catch (error) {
+      console.error(`Error updating ${field}:`, error);
+    }
+  };
+
+  const toggleCloudApiEnabled = async () => {
+    if (!clinic || !user) return;
+
+    try {
+      const newValue = !clinic.cloud_api_enabled;
+      
+      const { error } = await supabase
+        .from('clinics')
+        .update({ cloud_api_enabled: newValue, updated_at: new Date().toISOString() })
+        .eq('id', clinic.id);
+
+      if (error) throw error;
+
+      await supabase.from('admin_access_logs').insert({
+        super_admin_id: user.id,
+        clinic_id: clinic.id,
+        action: 'edit',
+        details: { field: 'cloud_api_enabled', old_value: clinic.cloud_api_enabled, new_value: newValue },
+      });
+
+      setClinic({ ...clinic, cloud_api_enabled: newValue });
+    } catch (error) {
+      console.error('Error updating cloud_api_enabled:', error);
+    }
+  };
+
+  const fetchTemplates = async () => {
+    if (!clinic) return;
+    
+    const { data } = await (supabase as any)
+      .from('whatsapp_templates')
+      .select('*')
+      .eq('clinic_id', clinic.id)
+      .order('name');
+    
+    if (data) setTemplates(data as WhatsAppTemplate[]);
+  };
+
+  const fetchCampaigns = async () => {
+    if (!clinic) return;
+    
+    const { data } = await (supabase as any)
+      .from('mass_message_campaigns')
+      .select('*')
+      .eq('clinic_id', clinic.id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    
+    if (data) setCampaigns(data as MassMessageCampaign[]);
+  };
+
+  const syncTemplates = async () => {
+    if (!clinic) return;
+    
+    setSyncingTemplates(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/cloud-api-templates`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          clinic_id: clinic.id,
+          action: 'sync_templates',
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.error) {
+        alert(`Erro ao sincronizar: ${result.error}`);
+      } else {
+        alert(`${result.count} templates sincronizados!`);
+        await fetchTemplates();
+      }
+    } catch (error) {
+      console.error('Error syncing templates:', error);
+      alert('Erro ao sincronizar templates');
+    } finally {
+      setSyncingTemplates(false);
+    }
+  };
+
+  const sendMassMessage = async () => {
+    if (!clinic || !selectedTemplate || !massMessageForm.phones.trim()) return;
+    
+    setSendingMassMessage(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const phones = massMessageForm.phones
+        .split('\n')
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+      
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const phone of phones) {
+        try {
+          const response = await fetch(`${supabaseUrl}/functions/v1/cloud-api-templates`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({
+              clinic_id: clinic.id,
+              action: 'send_template',
+              phone: phone,
+              template_name: selectedTemplate.name,
+              template_language: selectedTemplate.language,
+            }),
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            successCount++;
+          } else {
+            failCount++;
+            console.error(`Failed to send to ${phone}:`, result.error);
+          }
+        } catch (err) {
+          failCount++;
+          console.error(`Error sending to ${phone}:`, err);
+        }
+      }
+      
+      alert(`Envio concluído!\n✅ Sucesso: ${successCount}\n❌ Falha: ${failCount}`);
+      setShowMassMessageModal(false);
+      setMassMessageForm({ name: '', phones: '' });
+      setSelectedTemplate(null);
+    } catch (error) {
+      console.error('Error sending mass message:', error);
+      alert('Erro ao enviar mensagens');
+    } finally {
+      setSendingMassMessage(false);
+    }
+  };
+
   const updateMaxUsers = async (newLimit: number) => {
     if (!clinic || !user) return;
 
@@ -2060,6 +2283,7 @@ const AdminClinicDetail: React.FC = () => {
 
       {/* Tab: WhatsApp */}
       {activeTab === 'whatsapp' && (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-lg font-semibold text-slate-800 mb-4">
@@ -2131,9 +2355,314 @@ const AdminClinicDetail: React.FC = () => {
                   />
                 </button>
               </div>
+
+              {/* Permitir Cloud API para a clínica */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-slate-800">Permitir Cloud API</p>
+                  <p className="text-sm text-slate-500">Permite que Admin/Gerente da clínica configure a Cloud API no painel deles</p>
+                </div>
+                <button
+                  onClick={toggleCloudApiEnabled}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    clinic.cloud_api_enabled ? 'bg-emerald-600' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      clinic.cloud_api_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* WhatsApp Provider Selection */}
+              <div className="p-4 bg-slate-50 rounded-lg">
+                <p className="font-medium text-slate-800 mb-2">Provedor WhatsApp</p>
+                <p className="text-sm text-slate-500 mb-3">Escolha como esta clínica vai se conectar ao WhatsApp</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => updateWhatsAppProvider('evolution')}
+                    className={`flex-1 p-3 rounded-lg border-2 transition-all ${
+                      (clinic.whatsapp_provider || 'evolution') === 'evolution'
+                        ? 'border-cyan-500 bg-cyan-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="material-symbols-outlined text-cyan-600">qr_code_2</span>
+                      <span className="font-medium text-slate-800">Evolution API</span>
+                    </div>
+                    <p className="text-xs text-slate-500 text-left">Conexão via QR Code (Baileys)</p>
+                  </button>
+                  <button
+                    onClick={() => updateWhatsAppProvider('cloud_api')}
+                    className={`flex-1 p-3 rounded-lg border-2 transition-all ${
+                      clinic.whatsapp_provider === 'cloud_api'
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="material-symbols-outlined text-emerald-600">verified</span>
+                      <span className="font-medium text-slate-800">Cloud API</span>
+                    </div>
+                    <p className="text-xs text-slate-500 text-left">API Oficial do Meta</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Cloud API Configuration */}
+              {clinic.whatsapp_provider === 'cloud_api' && (
+                <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="material-symbols-outlined text-emerald-600">settings</span>
+                    <p className="font-medium text-emerald-800">Configuração Cloud API</p>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Phone Number ID *</label>
+                      <input
+                        type="text"
+                        value={clinic.cloud_api_phone_number_id || ''}
+                        onChange={(e) => updateCloudApiField('cloud_api_phone_number_id', e.target.value)}
+                        placeholder="Ex: 123456789012345"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Access Token *</label>
+                      <input
+                        type="password"
+                        value={clinic.cloud_api_access_token || ''}
+                        onChange={(e) => updateCloudApiField('cloud_api_access_token', e.target.value)}
+                        placeholder="Token do System User"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">WABA ID</label>
+                      <input
+                        type="text"
+                        value={clinic.cloud_api_waba_id || ''}
+                        onChange={(e) => updateCloudApiField('cloud_api_waba_id', e.target.value)}
+                        placeholder="WhatsApp Business Account ID"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">App ID</label>
+                      <input
+                        type="text"
+                        value={clinic.cloud_api_app_id || ''}
+                        onChange={(e) => updateCloudApiField('cloud_api_app_id', e.target.value)}
+                        placeholder="ID do App no Meta for Developers"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Verify Token (Webhook)</label>
+                      <input
+                        type="text"
+                        value={clinic.cloud_api_verify_token || ''}
+                        onChange={(e) => updateCloudApiField('cloud_api_verify_token', e.target.value)}
+                        placeholder="Token para verificação do webhook"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div className="pt-2 border-t border-emerald-200">
+                      <p className="text-xs text-emerald-700 mb-2">
+                        <span className="font-medium">Webhook URL:</span>
+                      </p>
+                      <code className="block p-2 bg-white rounded text-xs text-slate-600 break-all">
+                        {`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-cloud-webhook`}
+                      </code>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Templates e Envio em Massa */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          {/* Aviso se Cloud API não configurada */}
+          {(clinic.whatsapp_provider !== 'cloud_api' || !clinic.cloud_api_waba_id) && (
+            <div className="lg:col-span-2 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-amber-600">warning</span>
+                <div>
+                  <p className="font-medium text-amber-800">Cloud API não configurada</p>
+                  <p className="text-sm text-amber-700 mt-1">
+                    Para usar Templates e Envio em Massa, configure a <strong>Cloud API</strong> acima com Phone Number ID, Access Token e WABA ID.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Templates */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-800">Templates</h2>
+              <button
+                onClick={() => { syncTemplates(); fetchTemplates(); }}
+                disabled={syncingTemplates || clinic.whatsapp_provider !== 'cloud_api' || !clinic.cloud_api_waba_id}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className={`material-symbols-outlined text-[16px] ${syncingTemplates ? 'animate-spin' : ''}`}>
+                  {syncingTemplates ? 'progress_activity' : 'sync'}
+                </span>
+                Sincronizar
+              </button>
+            </div>
+            
+            {templates.length > 0 ? (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {templates.map((template) => (
+                  <div 
+                    key={template.id} 
+                    className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="font-medium text-slate-800">{template.name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          template.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
+                          template.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {template.status}
+                        </span>
+                        <span className="text-xs text-slate-500">{template.category}</span>
+                      </div>
+                    </div>
+                    {template.status === 'APPROVED' && (
+                      <button
+                        onClick={() => { setSelectedTemplate(template); setShowMassMessageModal(true); }}
+                        disabled={clinic.whatsapp_provider !== 'cloud_api' || !clinic.cloud_api_waba_id}
+                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Enviar em massa"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">send</span>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">description</span>
+                <p className="text-slate-500 text-sm">
+                  {clinic.whatsapp_provider === 'cloud_api' && clinic.cloud_api_waba_id
+                    ? 'Nenhum template encontrado. Clique em "Sincronizar" para buscar do Meta.'
+                    : 'Configure a Cloud API para sincronizar templates.'}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Histórico de Campanhas */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-lg font-semibold text-slate-800 mb-4">Histórico de Envios</h2>
+            
+            {campaigns.length > 0 ? (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {campaigns.map((campaign) => (
+                  <div key={campaign.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium text-slate-800">{campaign.name}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        campaign.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                        campaign.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        {campaign.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                      <span>Enviados: {campaign.sent_count}/{campaign.total_recipients}</span>
+                      <span>Entregues: {campaign.delivered_count}</span>
+                      <span>Falhas: {campaign.failed_count}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">campaign</span>
+                <p className="text-slate-500 text-sm">Nenhum envio em massa realizado ainda.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Modal de Envio em Massa */}
+        {showMassMessageModal && selectedTemplate && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-800">Envio em Massa</h3>
+                <button 
+                  onClick={() => { setShowMassMessageModal(false); setSelectedTemplate(null); }}
+                  className="p-1 hover:bg-slate-100 rounded"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                  <p className="text-sm font-medium text-emerald-800">Template: {selectedTemplate.name}</p>
+                  <p className="text-xs text-emerald-600 mt-1">{selectedTemplate.category} • {selectedTemplate.language}</p>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Números de telefone</label>
+                  <p className="text-xs text-slate-500 mb-2">Um número por linha (com DDD)</p>
+                  <textarea
+                    value={massMessageForm.phones}
+                    onChange={(e) => setMassMessageForm({ ...massMessageForm, phones: e.target.value })}
+                    placeholder="11999999999&#10;21988888888&#10;31977777777"
+                    rows={6}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    {massMessageForm.phones.split('\n').filter(p => p.trim()).length} números
+                  </p>
+                </div>
+                
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => { setShowMassMessageModal(false); setSelectedTemplate(null); }}
+                    className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={sendMassMessage}
+                    disabled={sendingMassMessage || !massMessageForm.phones.trim()}
+                    className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {sendingMassMessage ? (
+                      <>
+                        <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[16px]">send</span>
+                        Enviar
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {/* Tab: Métricas */}

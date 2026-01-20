@@ -16,6 +16,22 @@ interface QuickReply {
   text: string;
 }
 
+interface CloudApiConfig {
+  cloud_api_enabled: boolean;
+  cloud_api_phone_number_id: string | null;
+  cloud_api_access_token: string | null;
+  cloud_api_waba_id: string | null;
+  cloud_api_verify_token: string | null;
+}
+
+interface WhatsAppTemplate {
+  id: string;
+  name: string;
+  status: string;
+  category: string;
+  language: string;
+}
+
 interface SettingsProps {
   state: GlobalState;
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
@@ -28,6 +44,7 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
   const canEditTags = hasPermission(user?.role, 'edit_tags');
   const canEditQuickReplies = hasPermission(user?.role, 'edit_quick_replies');
   const canEditClinicProfile = hasPermission(user?.role, 'edit_clinic_profile');
+  const canConfigureCloudApi = user?.role === 'Admin' || user?.role === 'Gerente';
   
   // Estados para etiquetas
   const [tags, setTags] = useState<Tag[]>([]);
@@ -41,6 +58,16 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
   const [newQuickReply, setNewQuickReply] = useState('');
   const [editingReply, setEditingReply] = useState<QuickReply | null>(null);
   const [loadingReplies, setLoadingReplies] = useState(false);
+
+  // Estados para Cloud API
+  const [cloudApiConfig, setCloudApiConfig] = useState<CloudApiConfig | null>(null);
+  const [savingCloudApi, setSavingCloudApi] = useState(false);
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
+  const [showMassMessageModal, setShowMassMessageModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplate | null>(null);
+  const [massMessagePhones, setMassMessagePhones] = useState('');
+  const [sendingMassMessage, setSendingMassMessage] = useState(false);
 
   // Cores predefinidas para etiquetas
   const tagColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
@@ -63,9 +90,142 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
     setLoadingReplies(false);
   };
 
+  // Buscar configuração Cloud API
+  const fetchCloudApiConfig = async () => {
+    if (!clinicId) return;
+    const { data } = await supabase
+      .from('clinics')
+      .select('cloud_api_enabled, cloud_api_phone_number_id, cloud_api_access_token, cloud_api_waba_id, cloud_api_verify_token')
+      .eq('id', clinicId)
+      .single();
+    if (data) setCloudApiConfig(data as CloudApiConfig);
+  };
+
+  // Salvar configuração Cloud API
+  const saveCloudApiConfig = async () => {
+    if (!clinicId || !cloudApiConfig) return;
+    setSavingCloudApi(true);
+    try {
+      await supabase
+        .from('clinics')
+        .update({
+          cloud_api_phone_number_id: cloudApiConfig.cloud_api_phone_number_id,
+          cloud_api_access_token: cloudApiConfig.cloud_api_access_token,
+          cloud_api_waba_id: cloudApiConfig.cloud_api_waba_id,
+          cloud_api_verify_token: cloudApiConfig.cloud_api_verify_token,
+          whatsapp_provider: 'cloud_api',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', clinicId);
+      alert('Configurações salvas com sucesso!');
+    } catch (error) {
+      console.error('Error saving Cloud API config:', error);
+      alert('Erro ao salvar configurações');
+    } finally {
+      setSavingCloudApi(false);
+    }
+  };
+
+  // Buscar templates
+  const fetchTemplates = async () => {
+    if (!clinicId) return;
+    const { data } = await (supabase as any)
+      .from('whatsapp_templates')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .order('name');
+    if (data) setTemplates(data as WhatsAppTemplate[]);
+  };
+
+  // Sincronizar templates do Meta
+  const syncTemplates = async () => {
+    if (!clinicId) return;
+    setSyncingTemplates(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/cloud-api-templates`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          clinic_id: clinicId,
+          action: 'sync_templates',
+        }),
+      });
+      
+      const result = await response.json();
+      if (result.error) {
+        alert(`Erro: ${result.error}`);
+      } else {
+        alert(`${result.count} templates sincronizados!`);
+        await fetchTemplates();
+      }
+    } catch (error) {
+      console.error('Error syncing templates:', error);
+      alert('Erro ao sincronizar templates');
+    } finally {
+      setSyncingTemplates(false);
+    }
+  };
+
+  // Enviar mensagem em massa
+  const sendMassMessage = async () => {
+    if (!clinicId || !selectedTemplate || !massMessagePhones.trim()) return;
+    setSendingMassMessage(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const phones = massMessagePhones.split('\n').map(p => p.trim()).filter(p => p.length > 0);
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const phone of phones) {
+        try {
+          const response = await fetch(`${supabaseUrl}/functions/v1/cloud-api-templates`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({
+              clinic_id: clinicId,
+              action: 'send_template',
+              phone: phone,
+              template_name: selectedTemplate.name,
+              template_language: selectedTemplate.language,
+            }),
+          });
+          
+          const result = await response.json();
+          if (result.success) successCount++;
+          else failCount++;
+        } catch {
+          failCount++;
+        }
+      }
+      
+      alert(`Envio concluído!\nSucesso: ${successCount}\nFalha: ${failCount}`);
+      setShowMassMessageModal(false);
+      setMassMessagePhones('');
+      setSelectedTemplate(null);
+    } catch (error) {
+      console.error('Error sending mass message:', error);
+      alert('Erro ao enviar mensagens');
+    } finally {
+      setSendingMassMessage(false);
+    }
+  };
+
   useEffect(() => {
     fetchTags();
     fetchQuickReplies();
+    fetchCloudApiConfig();
+    fetchTemplates();
   }, [clinicId]);
 
   // CRUD Etiquetas
@@ -353,7 +513,205 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
           </div>
         </div>
         )}
+
+        {/* Card: Cloud API - só aparece se habilitado pelo SuperAdmin */}
+        {canConfigureCloudApi && cloudApiConfig?.cloud_api_enabled && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4 lg:col-span-2">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="size-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined">verified</span>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900">WhatsApp Cloud API</h3>
+              <p className="text-xs text-slate-500">API Oficial do Meta para envio em massa</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Phone Number ID *</label>
+              <input
+                type="text"
+                value={cloudApiConfig?.cloud_api_phone_number_id || ''}
+                onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, cloud_api_phone_number_id: e.target.value })}
+                placeholder="ID do número no Meta"
+                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">WABA ID *</label>
+              <input
+                type="text"
+                value={cloudApiConfig?.cloud_api_waba_id || ''}
+                onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, cloud_api_waba_id: e.target.value })}
+                placeholder="WhatsApp Business Account ID"
+                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Access Token *</label>
+              <input
+                type="password"
+                value={cloudApiConfig?.cloud_api_access_token || ''}
+                onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, cloud_api_access_token: e.target.value })}
+                placeholder="Token do System User"
+                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Verify Token (Webhook)</label>
+              <input
+                type="text"
+                value={cloudApiConfig?.cloud_api_verify_token || ''}
+                onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, cloud_api_verify_token: e.target.value })}
+                placeholder="Token para verificação"
+                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+              />
+            </div>
+          </div>
+          
+          <div className="p-3 bg-slate-50 rounded-lg">
+            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Webhook URL</p>
+            <code className="text-xs text-slate-600 break-all">
+              {`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-cloud-webhook`}
+            </code>
+          </div>
+          
+          <button
+            onClick={saveCloudApiConfig}
+            disabled={savingCloudApi}
+            className="w-full h-10 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {savingCloudApi ? 'Salvando...' : 'Salvar Configurações'}
+          </button>
+        </div>
+        )}
+
+        {/* Card: Templates - só aparece se Cloud API configurada */}
+        {canConfigureCloudApi && cloudApiConfig?.cloud_api_enabled && cloudApiConfig?.cloud_api_waba_id && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <div className="size-10 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center">
+                <span className="material-symbols-outlined">description</span>
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Templates</h3>
+                <p className="text-xs text-slate-500">Mensagens aprovadas pelo Meta</p>
+              </div>
+            </div>
+            <button
+              onClick={syncTemplates}
+              disabled={syncingTemplates}
+              className="h-8 px-3 bg-violet-600 text-white text-xs font-bold rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center gap-1"
+            >
+              <span className={`material-symbols-outlined text-[14px] ${syncingTemplates ? 'animate-spin' : ''}`}>
+                {syncingTemplates ? 'progress_activity' : 'sync'}
+              </span>
+              Sincronizar
+            </button>
+          </div>
+          
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {templates.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">Clique em "Sincronizar" para buscar templates</p>
+            ) : (
+              templates.map(template => (
+                <div key={template.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">{template.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        template.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
+                        template.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {template.status}
+                      </span>
+                      <span className="text-[10px] text-slate-400">{template.category}</span>
+                    </div>
+                  </div>
+                  {template.status === 'APPROVED' && (
+                    <button
+                      onClick={() => { setSelectedTemplate(template); setShowMassMessageModal(true); }}
+                      className="text-violet-600 hover:bg-violet-50 p-1.5 rounded"
+                      title="Enviar em massa"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">send</span>
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        )}
       </div>
+
+      {/* Modal de Envio em Massa */}
+      {showMassMessageModal && selectedTemplate && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-800">Envio em Massa</h3>
+              <button 
+                onClick={() => { setShowMassMessageModal(false); setSelectedTemplate(null); }}
+                className="p-1 hover:bg-slate-100 rounded"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="p-3 bg-violet-50 rounded-lg border border-violet-200">
+                <p className="text-sm font-medium text-violet-800">Template: {selectedTemplate.name}</p>
+                <p className="text-xs text-violet-600 mt-1">{selectedTemplate.category} • {selectedTemplate.language}</p>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-slate-700">Números de telefone</label>
+                <p className="text-xs text-slate-500 mb-2">Um número por linha (com DDD)</p>
+                <textarea
+                  value={massMessagePhones}
+                  onChange={(e) => setMassMessagePhones(e.target.value)}
+                  placeholder="11999999999&#10;21988888888&#10;31977777777"
+                  rows={6}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  {massMessagePhones.split('\n').filter(p => p.trim()).length} números
+                </p>
+              </div>
+              
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => { setShowMassMessageModal(false); setSelectedTemplate(null); }}
+                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={sendMassMessage}
+                  disabled={sendingMassMessage || !massMessagePhones.trim()}
+                  className="flex-1 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {sendingMassMessage ? (
+                    <>
+                      <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-[16px]">send</span>
+                      Enviar
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -892,6 +892,89 @@ Agora o Belitx pode ser **instalado no iPhone** como se fosse um aplicativo da A
 
 ---
 
+## Atualizações - 20/01/2026
+
+### 📱 Atualização 1: Integração WhatsApp Melhorada
+
+#### O que mudou?
+
+Melhoramos a integração do WhatsApp com o painel.
+
+#### ❌ Antes
+- Só apareciam conversas quando o **cliente** enviava primeiro
+- Contatos adicionados manualmente no celular não apareciam no sistema
+
+#### ✅ Agora
+- **Todas as conversas aparecem**, independente de quem iniciou
+- Contato novo adicionado no celular já aparece automaticamente
+- Status "Em Atendimento" quando você inicia, "Novo Lead" quando o cliente inicia
+- `instance_id` agora é salvo em novos chats para rastreamento
+
+#### Arquivos Modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/evolution-webhook/index.ts` | Removido bloqueio de `isFromMe`, adicionado `instance_id` ao criar chat |
+
+#### Edge Function: evolution-webhook (v20)
+
+- Cria chat mesmo quando atendente inicia conversa (`isFromMe = true`)
+- Status automático: "Em Atendimento" (atendente iniciou) ou "Novo Lead" (cliente iniciou)
+- Associa `instance_id` ao chat para rastreamento de instância
+
+---
+
+### 📊 Atualização 2: Novo Menu "Relatórios"
+
+#### O que é?
+
+Um novo menu para **análise financeira** da clínica, separado do menu Lançamentos.
+
+#### 👥 Quem tem acesso?
+- 👑 SuperAdmin
+- 👑 Admin
+- 📋 Gerente
+- 💰 Financeiro
+
+#### 📈 O que você vai encontrar?
+
+- **🟠 Valor Comercial** — Total fechado pelos vendedores
+- **🟢 Receita Clínica** — Total recebido pela clínica
+- **🟣 ROI** — Retorno sobre vendas (%)
+- **👤 Por Comercial** — Ranking dos vendedores com vendas, valores e ROI individual
+- **📝 Detalhamento** — Lista completa de todas as vendas com cliente, data, origem e status
+- **🔍 Filtros** — Por período, origem ou vendedor
+- **📥 Exportar** — Baixar relatório em CSV (planilha)
+
+#### 🔄 Diferença dos menus
+
+- **💳 Lançamentos** → Registrar recebimentos nas vendas
+- **📊 Relatórios** → Visualizar e analisar dados
+
+#### Arquivos Criados/Modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `pages/Reports.tsx` | **NOVO** - Página de Relatórios Financeiros |
+| `lib/permissions.ts` | Adicionado `reports` ao MenuPage e permissões dos perfis |
+| `components/Layout.tsx` | Adicionado menu "Relatórios" com ícone `analytics` |
+| `App.tsx` | Adicionada rota `/reports` |
+
+#### Novas Permissões
+
+| Perfil | Acesso a Relatórios |
+|--------|---------------------|
+| SuperAdmin | ✅ |
+| Admin | ✅ |
+| Gerente | ✅ |
+| Financeiro | ✅ |
+| Supervisor | ❌ |
+| Comercial | ❌ |
+| Recepcionista | ❌ |
+| Visualizador | ❌ |
+
+---
+
 ## Licença
 
 Este projeto é privado e de uso exclusivo.

@@ -13,6 +13,16 @@ export interface WhatsAppInstance {
   qrCodeExpiresAt: string | null;
   connectedAt: string | null;
   isShared: boolean;
+  provider: 'evolution' | 'cloud_api';
+  cloudPhoneNumberId: string | null;
+  cloudWabaId: string | null;
+}
+
+export interface ClinicCloudApiConfig {
+  whatsappProvider: 'evolution' | 'cloud_api';
+  cloudApiAccessToken: string | null;
+  cloudApiPhoneNumberId: string | null;
+  cloudApiWabaId: string | null;
 }
 
 interface UseWhatsAppReturn {
@@ -27,6 +37,8 @@ interface UseWhatsAppReturn {
   refreshStatus: (instanceId?: string) => Promise<void>;
   deleteInstance: (instanceId: string) => Promise<{ error: string | null }>;
   fetchProfilePicture: (phoneNumber: string, instanceName?: string) => Promise<string | null>;
+  clinicCloudConfig: ClinicCloudApiConfig | null;
+  settings: { apiUrl: string; apiKey: string } | null;
 }
 
 export function useWhatsApp(clinicId: string | undefined, userId?: string): UseWhatsAppReturn {
@@ -43,6 +55,7 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
     proxyUsername?: string;
     proxyPassword?: string;
   } | null>(null);
+  const [clinicCloudConfig, setClinicCloudConfig] = useState<ClinicCloudApiConfig | null>(null);
 
   const selectedInstance = instances.find(i => i.id === selectedInstanceId) || null;
 
@@ -58,6 +71,9 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
     qrCodeExpiresAt: data.qr_code_expires_at as string | null,
     connectedAt: data.connected_at as string | null,
     isShared: data.is_shared as boolean ?? true,
+    provider: (data.provider as 'evolution' | 'cloud_api') || 'evolution',
+    cloudPhoneNumberId: data.cloud_phone_number_id as string | null,
+    cloudWabaId: data.cloud_waba_id as string | null,
   });
 
   const fetchSettings = useCallback(async () => {
@@ -88,6 +104,35 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
       console.error('Error fetching settings:', err);
     }
   }, []);
+
+  const fetchClinicCloudConfig = useCallback(async () => {
+    if (!clinicId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('clinics')
+        .select('whatsapp_provider, cloud_api_access_token, cloud_api_phone_number_id, cloud_api_waba_id')
+        .eq('id', clinicId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching clinic cloud config:', error);
+        return;
+      }
+
+      const d = data as any;
+      if (d) {
+        setClinicCloudConfig({
+          whatsappProvider: d.whatsapp_provider || 'evolution',
+          cloudApiAccessToken: d.cloud_api_access_token || null,
+          cloudApiPhoneNumberId: d.cloud_api_phone_number_id || null,
+          cloudApiWabaId: d.cloud_api_waba_id || null,
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching clinic cloud config:', err);
+    }
+  }, [clinicId]);
 
   const fetchInstances = useCallback(async () => {
     if (!clinicId) {
@@ -127,6 +172,7 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
   useEffect(() => {
     fetchSettings();
     fetchInstances();
+    fetchClinicCloudConfig();
 
     if (!clinicId) return;
 
@@ -515,5 +561,7 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
     refreshStatus,
     deleteInstance,
     fetchProfilePicture,
+    clinicCloudConfig,
+    settings,
   };
 }
