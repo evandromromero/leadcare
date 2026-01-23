@@ -241,11 +241,11 @@ serve(async (req) => {
         .single()
       chat = newChat
     } else {
-      // Atualiza chat - só incrementa unread se for do cliente/participante
+      // Atualiza chat - zera unread se for mensagem enviada (fromMe), incrementa se for do cliente
       await supabase
         .from('chats')
         .update({
-          unread_count: isFromMe ? (chat.unread_count || 0) : (chat.unread_count || 0) + 1,
+          unread_count: isFromMe ? 0 : (chat.unread_count || 0) + 1,
           last_message: isGroup ? `${senderName}: ${message}` : message,
           last_message_time: new Date().toISOString(),
           last_message_from_client: !isFromMe

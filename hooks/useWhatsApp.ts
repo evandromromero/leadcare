@@ -304,6 +304,23 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
         }),
       });
 
+      // Habilitar readMessages para zerar contador no celular ao enviar pelo painel
+      await fetch(`${settings.apiUrl}/settings/set/${instanceName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': settings.apiKey,
+        },
+        body: JSON.stringify({
+          rejectCall: false,
+          groupsIgnore: false,
+          alwaysOnline: false,
+          readMessages: true,
+          readStatus: false,
+          syncFullHistory: true,
+        }),
+      });
+
       const connectResponse = await fetch(
         `${settings.apiUrl}/instance/connect/${instanceName}`,
         {

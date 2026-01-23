@@ -150,6 +150,38 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     setChats(prev => prev.map(c => 
       c.id === chatId ? { ...c, unread_count: 0 } : c
     ));
+
+    // Marcar como lido no WhatsApp via Evolution API (em background)
+    if (whatsappInstance?.status === 'connected' && evolutionSettings && chat.phone_number) {
+      try {
+        const isGroup = (chat as any).is_group;
+        const remoteJid = isGroup 
+          ? (chat as any).group_id 
+          : `${chat.phone_number.replace(/\D/g, '')}@s.whatsapp.net`;
+        
+        // Buscar última mensagem do cliente para marcar como lida
+        const lastClientMessage = chat.messages?.filter(m => m.is_from_client).pop();
+        
+        if (lastClientMessage?.remote_message_id) {
+          await fetch(`${evolutionSettings.apiUrl}/chat/markMessageAsRead/${whatsappInstance.instanceName}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': evolutionSettings.apiKey,
+            },
+            body: JSON.stringify({
+              readMessages: [{
+                remoteJid: remoteJid,
+                fromMe: false,
+                id: lastClientMessage.remote_message_id
+              }]
+            }),
+          });
+        }
+      } catch (err) {
+        console.error('Error marking as read on WhatsApp:', err);
+      }
+    }
   };
 
   const markAsUnread = async (chatId: string) => {

@@ -123,6 +123,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [taskForm, setTaskForm] = useState({ title: '', description: '', due_date: '' });
   const [savingTask, setSavingTask] = useState(false);
   
+  // Estados para modal de valor na conversão
+  const [showConversionValueModal, setShowConversionValueModal] = useState(false);
+  const [conversionValue, setConversionValue] = useState('');
+  const [pendingConversionChatId, setPendingConversionChatId] = useState<string | null>(null);
+  
   // Estados para mensagens agendadas
   const [scheduledMessages, setScheduledMessages] = useState<Array<{
     id: string;
@@ -431,11 +436,133 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   };
 
+  // Função para enviar evento de conversão ao Facebook
+  const sendFacebookConversionEvent = async (chatId: string, value: number) => {
+    if (!clinicId) return;
+    
+    try {
+      // Buscar configurações do Facebook da clínica
+      const { data: clinicData } = await (supabase as any)
+        .from('clinics')
+        .select('facebook_dataset_id, facebook_api_token')
+        .eq('id', clinicId)
+        .single();
+      
+      if (!clinicData?.facebook_dataset_id || !clinicData?.facebook_api_token) {
+        console.log('Facebook Conversions API não configurada');
+        return;
+      }
+      
+      // Buscar dados do chat para pegar email/telefone
+      const { data: chatData } = await supabase
+        .from('chats')
+        .select('phone_number, client_name')
+        .eq('id', chatId)
+        .single();
+      
+      // Hashear telefone em SHA256
+      const phone = chatData?.phone_number?.replace(/\D/g, '') || '';
+      const phoneHash = phone ? await crypto.subtle.digest('SHA-256', new TextEncoder().encode(phone)).then(buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')) : null;
+      
+      // Enviar evento para o Facebook
+      const eventData = {
+        data: [{
+          event_name: 'Purchase',
+          event_time: Math.floor(Date.now() / 1000),
+          action_source: 'website',
+          user_data: {
+            ph: phoneHash ? [phoneHash] : [],
+          },
+          custom_data: {
+            currency: 'BRL',
+            value: value.toFixed(2),
+          },
+        }],
+      };
+      
+      const response = await fetch(
+        `https://graph.facebook.com/v18.0/${clinicData.facebook_dataset_id}/events?access_token=${clinicData.facebook_api_token}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData),
+        }
+      );
+      
+      if (response.ok) {
+        console.log('Evento de conversão enviado ao Facebook com sucesso');
+      } else {
+        const errorData = await response.json();
+        console.error('Erro ao enviar evento ao Facebook:', errorData);
+      }
+    } catch (err) {
+      console.error('Erro ao enviar evento de conversão:', err);
+    }
+  };
+
   // Alterar etapa do funil
   const handleChangeStage = async (newStatus: string) => {
     if (!selectedChatId) return;
+    
+    // Se está mudando para "Convertido", verificar se tem valor
+    if (newStatus === 'Convertido') {
+      // Verificar se tem orçamento aprovado ou pagamentos
+      const totalQuotes = quotes.filter(q => q.status === 'approved').reduce((sum, q) => sum + q.value, 0);
+      const totalPayments = payments.reduce((sum, p) => sum + p.value, 0);
+      const totalValue = totalQuotes || totalPayments;
+      
+      if (totalValue > 0) {
+        // Tem valor, enviar evento e mudar status
+        await updateChatStatus(selectedChatId, newStatus);
+        await sendFacebookConversionEvent(selectedChatId, totalValue);
+        setShowStageDropdown(false);
+      } else {
+        // Não tem valor, abrir modal para pedir
+        setPendingConversionChatId(selectedChatId);
+        setConversionValue('');
+        setShowConversionValueModal(true);
+        setShowStageDropdown(false);
+      }
+      return;
+    }
+    
     await updateChatStatus(selectedChatId, newStatus);
     setShowStageDropdown(false);
+  };
+
+  // Confirmar conversão com valor informado
+  const handleConfirmConversion = async () => {
+    if (!pendingConversionChatId || !conversionValue) return;
+    
+    const value = parseFloat(conversionValue.replace(',', '.'));
+    if (isNaN(value) || value <= 0) {
+      alert('Informe um valor válido');
+      return;
+    }
+    
+    // Salvar como pagamento
+    await supabase.from('payments' as any).insert({
+      chat_id: pendingConversionChatId,
+      clinic_id: clinicId,
+      value: value,
+      description: 'Valor da conversão',
+      payment_date: new Date().toISOString().split('T')[0],
+      created_by: user?.id,
+    });
+    
+    // Mudar status e enviar evento
+    await updateChatStatus(pendingConversionChatId, 'Convertido');
+    await sendFacebookConversionEvent(pendingConversionChatId, value);
+    
+    // Recarregar pagamentos
+    if (selectedChatId === pendingConversionChatId) {
+      await fetchPayments(pendingConversionChatId);
+    }
+    
+    // Fechar modal
+    setShowConversionValueModal(false);
+    setPendingConversionChatId(null);
+    setConversionValue('');
   };
 
   // Buscar responsável atual do chat e status de bloqueio
@@ -3968,6 +4095,47 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                             Registrar Pagamento
                           </>
                         )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal de Valor para Conversão */}
+              {showConversionValueModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowConversionValueModal(false)}>
+                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-emerald-50">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-emerald-600">paid</span>
+                        <h3 className="font-bold text-slate-800">Valor da Conversão</h3>
+                      </div>
+                      <button onClick={() => setShowConversionValueModal(false)} className="text-slate-400 hover:text-slate-600">
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <p className="text-sm text-slate-600">
+                        Informe o valor da venda para registrar a conversão:
+                      </p>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
+                        <input
+                          type="text"
+                          value={conversionValue}
+                          onChange={(e) => setConversionValue(e.target.value)}
+                          placeholder="0,00"
+                          autoFocus
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-transparent text-lg font-bold"
+                        />
+                      </div>
+                      <button
+                        onClick={handleConfirmConversion}
+                        disabled={!conversionValue}
+                        className="w-full py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                        Confirmar Conversão
                       </button>
                     </div>
                   </div>

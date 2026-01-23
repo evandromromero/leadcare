@@ -43,6 +43,8 @@ interface ClinicDetail {
   cloud_api_waba_id?: string | null;
   cloud_api_app_id?: string | null;
   cloud_api_verify_token?: string | null;
+  facebook_dataset_id?: string | null;
+  facebook_api_token?: string | null;
 }
 
 interface ClinicUser {
@@ -2640,6 +2642,58 @@ const AdminClinicDetail: React.FC = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Facebook Conversions API */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mt-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <span className="material-symbols-outlined text-blue-600">campaign</span>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">Facebook Conversions API</h2>
+              <p className="text-sm text-slate-500">Enviar eventos de conversão para o Facebook Ads</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-medium text-slate-600 uppercase">Dataset ID (Pixel ID)</label>
+              <input
+                type="text"
+                value={clinic.facebook_dataset_id || ''}
+                onChange={async (e) => {
+                  const newValue = e.target.value;
+                  setClinic(prev => prev ? { ...prev, facebook_dataset_id: newValue } : prev);
+                  await (supabase as any).from('clinics').update({ facebook_dataset_id: newValue || null }).eq('id', clinic.id);
+                }}
+                placeholder="Ex: 1610564503295321"
+                className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 uppercase">Token da API</label>
+              <input
+                type="password"
+                value={clinic.facebook_api_token || ''}
+                onChange={async (e) => {
+                  const newValue = e.target.value;
+                  setClinic(prev => prev ? { ...prev, facebook_api_token: newValue } : prev);
+                  await (supabase as any).from('clinics').update({ facebook_api_token: newValue || null }).eq('id', clinic.id);
+                }}
+                placeholder="Token de acesso do Facebook"
+                className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+              />
+            </div>
+          </div>
+          
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-xs text-blue-700">
+              <span className="font-medium">Como funciona:</span> Quando um lead for marcado como "Convertido", 
+              o sistema enviará automaticamente um evento <code className="bg-blue-100 px-1 rounded">Purchase</code> para o Facebook 
+              com o valor do orçamento/pagamento registrado.
+            </p>
           </div>
         </div>
 
