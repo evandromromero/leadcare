@@ -18,7 +18,7 @@ interface InboxProps {
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
 }
 
-type FilterType = 'todos' | 'nao_lidos' | 'aguardando' | 'followup';
+type FilterType = 'todos' | 'nao_lidos' | 'aguardando' | 'followup' | 'grupos';
 type ChannelType = 'whatsapp' | 'instagram' | 'facebook';
 
 const PIPELINE_STAGES = [
@@ -34,7 +34,7 @@ const PIPELINE_STAGES = [
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages } = useChats(clinicId, user?.id);
+  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages, togglePinChat } = useChats(clinicId, user?.id);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({});
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -43,6 +43,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [activeChannel, setActiveChannel] = useState<ChannelType>('whatsapp');
   const [channelConfig, setChannelConfig] = useState<{ instagram_enabled: boolean; facebook_enabled: boolean }>({ instagram_enabled: false, facebook_enabled: false });
   const [searchQuery, setSearchQuery] = useState('');
+  const [syncingGroups, setSyncingGroups] = useState(false);
   
   const canSendMessage = hasPermission(user?.role, 'send_message');
   const canMoveLead = hasPermission(user?.role, 'move_lead');
@@ -279,6 +280,92 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       }
     };
     fetchClinicUsers();
+  }, [clinicId]);
+
+  // Sincronizar grupos do WhatsApp automaticamente (em background)
+  useEffect(() => {
+    const syncGroups = async () => {
+      if (!clinicId) return;
+      
+      try {
+        // Buscar configurações da Evolution API
+        const { data: settings } = await supabase
+          .from('settings')
+          .select('evolution_api_url, evolution_api_key')
+          .single();
+        
+        if (!settings?.evolution_api_url || !settings?.evolution_api_key) return;
+        
+        // Buscar instância WhatsApp conectada
+        const { data: instances } = await supabase
+          .from('whatsapp_instances')
+          .select('id, instance_name, status')
+          .eq('clinic_id', clinicId)
+          .eq('status', 'connected')
+          .limit(1);
+        
+        const instance = instances?.[0];
+        if (!instance) return;
+        
+        // Buscar grupos da Evolution API
+        const response = await fetch(
+          `${settings.evolution_api_url}/group/fetchAllGroups/${instance.instance_name}?getParticipants=false`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': settings.evolution_api_key,
+            },
+          }
+        );
+        
+        if (!response.ok) return;
+        
+        const groups = await response.json();
+        if (!Array.isArray(groups) || groups.length === 0) return;
+        
+        // Cadastrar cada grupo no banco (silenciosamente)
+        for (const group of groups) {
+          const groupId = group.id;
+          const groupName = group.subject || group.name || 'Grupo sem nome';
+          const groupPhone = groupId.replace('@g.us', '');
+          
+          // Verificar se já existe
+          const { data: existingChat } = await supabase
+            .from('chats')
+            .select('id')
+            .eq('clinic_id', clinicId)
+            .eq('group_id', groupId)
+            .single();
+          
+          if (!existingChat) {
+            await (supabase as any)
+              .from('chats')
+              .insert({
+                clinic_id: clinicId,
+                client_name: groupName,
+                phone_number: groupPhone,
+                group_id: groupId,
+                is_group: true,
+                status: 'Em Atendimento',
+                unread_count: 0,
+                last_message: '',
+                last_message_time: new Date().toISOString(),
+                instance_id: instance.id,
+              });
+          }
+        }
+        
+        // Recarregar lista de chats silenciosamente
+        refetch();
+      } catch (err) {
+        console.error('Erro ao sincronizar grupos (background):', err);
+      }
+    };
+    
+    // Executar após 2 segundos para não travar o carregamento inicial
+    const timer = setTimeout(syncGroups, 2000);
+    return () => clearTimeout(timer);
   }, [clinicId]);
 
   // Buscar chats com follow-up pendente (mensagens agendadas)
@@ -1331,15 +1418,17 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     // Filtros de categoria
     switch (activeFilter) {
       case 'nao_lidos':
-        return (chat.unread_count || 0) > 0;
+        return !(chat as any).is_group && (chat.unread_count || 0) > 0;
       case 'aguardando':
         // Chats onde a última mensagem foi do cliente E já foi lida (aguardando resposta)
-        return (chat as any).last_message_from_client === true && (chat.unread_count || 0) === 0;
+        return !(chat as any).is_group && (chat as any).last_message_from_client === true && (chat.unread_count || 0) === 0;
       case 'followup':
-        return chat.id in followupData;
+        return !(chat as any).is_group && chat.id in followupData;
+      case 'grupos':
+        return (chat as any).is_group === true;
       case 'todos':
       default:
-        return true;
+        return !(chat as any).is_group; // Todos mostra apenas conversas individuais
     }
   });
 
@@ -1592,6 +1681,111 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     return (now - messageTime) <= fifteenMinutes;
   };
 
+  // Sincronizar grupos do WhatsApp
+  const syncWhatsAppGroups = async () => {
+    if (!clinicId) return;
+    
+    setSyncingGroups(true);
+    try {
+      // Buscar configurações da Evolution API
+      const { data: settings } = await supabase
+        .from('settings')
+        .select('evolution_api_url, evolution_api_key')
+        .single();
+      
+      if (!settings?.evolution_api_url || !settings?.evolution_api_key) {
+        alert('Configurações da Evolution API não encontradas');
+        return;
+      }
+      
+      // Buscar instância WhatsApp conectada
+      const { data: instances } = await supabase
+        .from('whatsapp_instances')
+        .select('id, instance_name, status')
+        .eq('clinic_id', clinicId)
+        .eq('status', 'connected')
+        .limit(1);
+      
+      const instance = instances?.[0];
+      if (!instance) {
+        alert('Nenhuma instância WhatsApp conectada');
+        return;
+      }
+      
+      // Buscar grupos da Evolution API
+      const response = await fetch(
+        `${settings.evolution_api_url}/group/fetchAllGroups/${instance.instance_name}?getParticipants=false`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': settings.evolution_api_key,
+          },
+        }
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Erro ao buscar grupos:', errorData);
+        alert('Erro ao buscar grupos do WhatsApp');
+        return;
+      }
+      
+      const groups = await response.json();
+      console.log('Grupos encontrados:', groups);
+      
+      if (!Array.isArray(groups) || groups.length === 0) {
+        alert('Nenhum grupo encontrado');
+        return;
+      }
+      
+      // Cadastrar cada grupo no banco
+      let cadastrados = 0;
+      for (const group of groups) {
+        const groupId = group.id; // formato: 123456789-1234567890@g.us
+        const groupName = group.subject || group.name || 'Grupo sem nome';
+        const groupPhone = groupId.replace('@g.us', '');
+        
+        // Verificar se já existe
+        const { data: existingChat } = await supabase
+          .from('chats')
+          .select('id')
+          .eq('clinic_id', clinicId)
+          .eq('group_id', groupId)
+          .single();
+        
+        if (!existingChat) {
+          // Criar chat para o grupo
+          await (supabase as any)
+            .from('chats')
+            .insert({
+              clinic_id: clinicId,
+              client_name: groupName,
+              phone_number: groupPhone,
+              group_id: groupId,
+              is_group: true,
+              status: 'Em Atendimento',
+              unread_count: 0,
+              last_message: 'Grupo sincronizado',
+              last_message_time: new Date().toISOString(),
+              instance_id: instance.id,
+            });
+          cadastrados++;
+        }
+      }
+      
+      // Recarregar lista de chats
+      await refetch();
+      
+      alert(`Sincronização concluída! ${cadastrados} grupo(s) adicionado(s).`);
+    } catch (err) {
+      console.error('Erro ao sincronizar grupos:', err);
+      alert('Erro ao sincronizar grupos');
+    } finally {
+      setSyncingGroups(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!msgInput.trim() || !selectedChatId || !user || !selectedChat) return;
     
@@ -1682,14 +1876,18 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         // Aguardar delay mínimo entre mensagens
         await waitForRateLimit(instance.instance_name);
 
+        // Verificar se é grupo ou conversa individual
+        const isGroupChat = (selectedChat as any).is_group === true;
+        const groupId = (selectedChat as any).group_id;
+
         let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
-        if (!formattedPhone.startsWith('55')) {
+        if (!isGroupChat && !formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
         }
         
-        // Preparar body da requisição
+        // Preparar body da requisição (diferente para grupos)
         const messageBody: any = {
-          number: formattedPhone,
+          number: isGroupChat ? groupId : formattedPhone,
           text: whatsappMessage,
         };
         
@@ -1705,7 +1903,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           if (originalMsg?.remote_message_id) {
             messageBody.quoted = {
               key: {
-                remoteJid: `${formattedPhone}@s.whatsapp.net`,
+                remoteJid: isGroupChat ? groupId : `${formattedPhone}@s.whatsapp.net`,
                 fromMe: !replyingTo.isFromClient,
                 id: originalMsg.remote_message_id,
               },
@@ -2272,10 +2470,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           </div>
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
             {[
-              { key: 'todos' as FilterType, label: 'Todos', count: chats.length, tooltip: 'Todas as conversas do sistema' },
-              { key: 'nao_lidos' as FilterType, label: 'Não lidos', count: chats.filter(c => (c.unread_count || 0) > 0).length, tooltip: 'Conversas com mensagens não lidas' },
-              { key: 'aguardando' as FilterType, label: 'Aguardando', count: chats.filter(c => (c as any).last_message_from_client === true && (c.unread_count || 0) === 0).length, tooltip: 'Conversas lidas mas não respondidas - cliente aguardando sua resposta' },
-              { key: 'followup' as FilterType, label: 'Follow-up', count: Object.keys(followupData).length, tooltip: 'Conversas com mensagens agendadas para envio futuro' },
+              { key: 'todos' as FilterType, label: 'Todos', count: chats.filter(c => !(c as any).is_group).length, tooltip: 'Todas as conversas individuais' },
+              { key: 'nao_lidos' as FilterType, label: 'Não lidos', count: chats.filter(c => !(c as any).is_group && (c.unread_count || 0) > 0).length, tooltip: 'Conversas com mensagens não lidas' },
+              { key: 'aguardando' as FilterType, label: 'Aguardando', count: chats.filter(c => !(c as any).is_group && (c as any).last_message_from_client === true && (c.unread_count || 0) === 0).length, tooltip: 'Conversas lidas mas não respondidas - cliente aguardando sua resposta' },
+              { key: 'grupos' as FilterType, label: 'Grupos', count: chats.filter(c => (c as any).is_group).length, tooltip: 'Grupos do WhatsApp' },
             ].map((f) => (
               <button 
                 key={f.key}
@@ -2335,7 +2533,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     setLoadingMessages(false);
                   }
                 }}
-                className={`flex items-start gap-3 p-4 cursor-pointer transition-colors relative border-l-4 ${
+                className={`group flex items-start gap-3 p-4 cursor-pointer transition-colors relative border-l-4 ${
                   selectedChatId === chat.id ? 'bg-cyan-50/50 border-cyan-600' : 'hover:bg-slate-50 border-transparent'
                 }`}
               >
@@ -2353,8 +2551,30 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline mb-1">
-                    <h3 className="text-sm font-bold text-slate-900 truncate">{chat.client_name}</h3>
-                    <span className="text-[10px] font-bold text-slate-400">{formatTime(chat.last_message_time)}</span>
+                    <div className="flex items-center gap-1 min-w-0">
+                      {(chat as any).is_group && (
+                        <span className="material-symbols-outlined text-emerald-600 text-sm shrink-0">groups</span>
+                      )}
+                      {(chat as any).is_pinned && (
+                        <span className="material-symbols-outlined text-cyan-600 text-sm shrink-0">push_pin</span>
+                      )}
+                      <h3 className="text-sm font-bold text-slate-900 truncate">{chat.client_name}</h3>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePinChat(chat.id);
+                        }}
+                        className="p-1 rounded hover:bg-slate-200 transition-colors opacity-0 group-hover:opacity-100"
+                        title={(chat as any).is_pinned ? 'Desafixar' : 'Fixar'}
+                      >
+                        <span className={`material-symbols-outlined text-sm ${(chat as any).is_pinned ? 'text-cyan-600' : 'text-slate-400'}`}>
+                          {(chat as any).is_pinned ? 'push_pin' : 'push_pin'}
+                        </span>
+                      </button>
+                      <span className="text-[10px] font-bold text-slate-400">{formatTime(chat.last_message_time)}</span>
+                    </div>
                   </div>
                   {activeFilter === 'followup' && followupData[chat.id] ? (
                     <div className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">

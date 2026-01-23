@@ -80,12 +80,16 @@ serve(async (req) => {
     }
 
     const isFromMe = key.fromMe === true
-    let phone = (key.remoteJid || '').replace('@s.whatsapp.net', '').replace('@g.us', '')
+    const remoteJid = key.remoteJid || ''
+    const isGroup = remoteJid.endsWith('@g.us')
+    let phone = remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '')
+    const groupId = isGroup ? remoteJid : null
     
-    console.log('Message processing - Phone:', phone, 'isFromMe:', isFromMe, 'messageType:', data.messageType)
+    console.log('Message processing - Phone/GroupId:', phone, 'isFromMe:', isFromMe, 'isGroup:', isGroup, 'messageType:', data.messageType)
     
-    if (phone.includes('-') || phone.length > 15) {
-      console.log('Skipping group or invalid phone:', phone)
+    // Validar: se não for grupo, verificar se é telefone válido
+    if (!isGroup && (phone.includes('-') || phone.length > 15)) {
+      console.log('Skipping invalid phone:', phone)
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
@@ -196,25 +200,40 @@ serve(async (req) => {
       }
     }
 
-    // Get or create chat
-    let { data: chat } = await supabase
-      .from('chats')
-      .select('id, unread_count')
-      .eq('clinic_id', clinicId)
-      .eq('phone_number', phone)
-      .single()
+    // Get or create chat (diferente para grupos vs conversas individuais)
+    let { data: chat } = isGroup 
+      ? await supabase
+          .from('chats')
+          .select('id, unread_count')
+          .eq('clinic_id', clinicId)
+          .eq('group_id', groupId)
+          .single()
+      : await supabase
+          .from('chats')
+          .select('id, unread_count')
+          .eq('clinic_id', clinicId)
+          .eq('phone_number', phone)
+          .eq('is_group', false)
+          .single()
+
+    // Nome do grupo vem em pushName ou no subject do grupo
+    const groupName = isGroup ? (data.pushName || data.groupSubject || `Grupo ${phone}`) : null
+    // Para grupos, o remetente da mensagem vem em participant
+    const senderName = isGroup ? (data.pushName || 'Participante') : pushName
 
     if (!chat) {
-      // Criar chat mesmo se for mensagem do atendente (iniciou conversa pelo celular)
+      // Criar chat (grupo ou individual)
       const { data: newChat } = await supabase
         .from('chats')
         .insert({
           clinic_id: clinicId,
-          client_name: pushName || 'Cliente',
-          phone_number: phone,
+          client_name: isGroup ? groupName : (pushName || 'Cliente'),
+          phone_number: isGroup ? phone : phone,
+          group_id: groupId,
+          is_group: isGroup,
           status: isFromMe ? 'Em Atendimento' : 'Novo Lead',
           unread_count: isFromMe ? 0 : 1,
-          last_message: message,
+          last_message: isGroup ? `${senderName}: ${message}` : message,
           last_message_time: new Date().toISOString(),
           instance_id: instance.id
         })
@@ -222,14 +241,14 @@ serve(async (req) => {
         .single()
       chat = newChat
     } else {
-      // Atualiza chat - só incrementa unread se for do cliente
+      // Atualiza chat - só incrementa unread se for do cliente/participante
       await supabase
         .from('chats')
         .update({
           unread_count: isFromMe ? (chat.unread_count || 0) : (chat.unread_count || 0) + 1,
-          last_message: message,
+          last_message: isGroup ? `${senderName}: ${message}` : message,
           last_message_time: new Date().toISOString(),
-          last_message_from_client: !isFromMe // true se mensagem do cliente, false se do atendente
+          last_message_from_client: !isFromMe
         })
         .eq('id', chat.id)
     }

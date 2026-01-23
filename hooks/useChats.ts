@@ -26,6 +26,7 @@ interface UseChatsReturn {
   fetchAndUpdateAvatar: (chatId: string, phoneNumber: string) => Promise<void>;
   fetchMessages: (chatId: string, limit?: number, before?: string) => Promise<{ messages: DbMessage[]; hasMore: boolean }>;
   loadMoreMessages: (chatId: string) => Promise<void>;
+  togglePinChat: (chatId: string) => Promise<void>;
 }
 
 const MESSAGES_PER_PAGE = 50;
@@ -70,10 +71,13 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
     try {
       // Carregar apenas metadados dos chats (sem mensagens)
-      const { data: chatsData, error: chatsError } = await supabase
+      const { data: chatsData, error: chatsError } = await (supabase as any)
         .from('chats')
         .select(`
-          *,
+          id, clinic_id, lead_id, client_name, phone_number, avatar_url, status,
+          unread_count, last_message, last_message_time, assigned_to, created_at,
+          updated_at, instance_id, locked_by, locked_at, last_message_from_client,
+          channel, is_pinned, is_group, group_id,
           chat_tags (
             tags (*)
           )
@@ -88,13 +92,23 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
         return;
       }
 
+      
       const formattedChats: ChatWithMessages[] = (chatsData || []).map(chat => ({
         ...chat,
         messages: [], // Mensagens serão carregadas sob demanda
         tags: chat.chat_tags?.map((ct: { tags: DbTag }) => ct.tags).filter(Boolean) || [],
       }));
 
-      setChats([...formattedChats]);
+      // Ordenar: fixados primeiro, depois por last_message_time
+      const sortedChats = formattedChats.sort((a, b) => {
+        const aPinned = (a as any).is_pinned || false;
+        const bPinned = (b as any).is_pinned || false;
+        if (aPinned && !bPinned) return -1;
+        if (!aPinned && bPinned) return 1;
+        return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime();
+      });
+
+      setChats([...sortedChats]);
     } catch (err) {
       console.error('[useChats] Exception fetching chats:', err);
       setError('Erro ao carregar conversas');
@@ -718,6 +732,39 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     await fetchMessages(chatId, MESSAGES_PER_PAGE, oldestMessage.created_at || undefined);
   };
 
+  // Fixar/desafixar chat
+  const togglePinChat = async (chatId: string): Promise<void> => {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return;
+
+    const newPinnedState = !(chat as any).is_pinned;
+
+    const { error } = await supabase
+      .from('chats')
+      .update({ is_pinned: newPinnedState } as any)
+      .eq('id', chatId);
+
+    if (error) {
+      console.error('Error toggling pin:', error);
+      return;
+    }
+
+    // Atualizar estado local e reordenar
+    setChats(prev => {
+      const updated = prev.map(c => 
+        c.id === chatId ? { ...c, is_pinned: newPinnedState } as any : c
+      );
+      // Reordenar: fixados primeiro, depois por last_message_time
+      return updated.sort((a, b) => {
+        const aPinned = (a as any).is_pinned || false;
+        const bPinned = (b as any).is_pinned || false;
+        if (aPinned && !bPinned) return -1;
+        if (!aPinned && bPinned) return 1;
+        return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime();
+      });
+    });
+  };
+
   return {
     chats,
     loading,
@@ -732,5 +779,6 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     fetchAndUpdateAvatar,
     fetchMessages,
     loadMoreMessages,
+    togglePinChat,
   };
 }
