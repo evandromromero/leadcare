@@ -22,6 +22,14 @@ interface CloudApiConfig {
   cloud_api_access_token: string | null;
   cloud_api_waba_id: string | null;
   cloud_api_verify_token: string | null;
+  instagram_enabled: boolean;
+  instagram_page_id: string | null;
+  instagram_access_token: string | null;
+  instagram_client_can_configure: boolean;
+  facebook_enabled: boolean;
+  facebook_page_id: string | null;
+  facebook_access_token: string | null;
+  facebook_client_can_configure: boolean;
 }
 
 interface WhatsAppTemplate {
@@ -90,12 +98,12 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
     setLoadingReplies(false);
   };
 
-  // Buscar configuração Cloud API
+  // Buscar configuração Cloud API e canais
   const fetchCloudApiConfig = async () => {
     if (!clinicId) return;
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from('clinics')
-      .select('cloud_api_enabled, cloud_api_phone_number_id, cloud_api_access_token, cloud_api_waba_id, cloud_api_verify_token')
+      .select('cloud_api_enabled, cloud_api_phone_number_id, cloud_api_access_token, cloud_api_waba_id, cloud_api_verify_token, instagram_enabled, instagram_page_id, instagram_access_token, instagram_client_can_configure, facebook_enabled, facebook_page_id, facebook_access_token, facebook_client_can_configure')
       .eq('id', clinicId)
       .single();
     if (data) setCloudApiConfig(data as CloudApiConfig);
@@ -644,6 +652,116 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
               ))
             )}
           </div>
+        </div>
+        )}
+
+        {/* Card: Instagram - só aparece se habilitado */}
+        {canConfigureCloudApi && cloudApiConfig?.instagram_enabled && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="size-10 bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900">Instagram Direct</h3>
+              <p className="text-xs text-slate-500">Receba mensagens do Instagram</p>
+            </div>
+          </div>
+          
+          {cloudApiConfig?.instagram_client_can_configure ? (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Page ID *</label>
+                <input
+                  type="text"
+                  value={cloudApiConfig?.instagram_page_id || ''}
+                  onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, instagram_page_id: e.target.value })}
+                  placeholder="ID da página do Instagram"
+                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Access Token *</label>
+                <input
+                  type="password"
+                  value={cloudApiConfig?.instagram_access_token || ''}
+                  onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, instagram_access_token: e.target.value })}
+                  placeholder="Token de acesso do Instagram"
+                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                />
+              </div>
+              <button
+                onClick={saveCloudApiConfig}
+                disabled={savingCloudApi}
+                className="w-full h-9 bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#F77737] text-white text-sm font-bold rounded-lg hover:opacity-90 disabled:opacity-50"
+              >
+                {savingCloudApi ? 'Salvando...' : 'Salvar Instagram'}
+              </button>
+            </div>
+          ) : (
+            <div className="p-3 bg-pink-50 rounded-lg border border-pink-200">
+              <p className="text-xs text-pink-700">
+                <strong>Status:</strong> {cloudApiConfig?.instagram_page_id ? 'Configurado' : 'Aguardando configuração pelo administrador'}
+              </p>
+            </div>
+          )}
+        </div>
+        )}
+
+        {/* Card: Facebook - só aparece se habilitado */}
+        {canConfigureCloudApi && cloudApiConfig?.facebook_enabled && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="size-10 bg-[#1877F2] rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0c-6.627 0-12 4.975-12 11.111 0 3.497 1.745 6.616 4.472 8.652v4.237l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111 0-6.136-5.373-11.111-12-11.111zm1.193 14.963l-3.056-3.259-5.963 3.259 6.559-6.963 3.13 3.259 5.889-3.259-6.559 6.963z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900">Facebook Messenger</h3>
+              <p className="text-xs text-slate-500">Receba mensagens do Facebook</p>
+            </div>
+          </div>
+          
+          {cloudApiConfig?.facebook_client_can_configure ? (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Page ID *</label>
+                <input
+                  type="text"
+                  value={cloudApiConfig?.facebook_page_id || ''}
+                  onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, facebook_page_id: e.target.value })}
+                  placeholder="ID da página do Facebook"
+                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Access Token *</label>
+                <input
+                  type="password"
+                  value={cloudApiConfig?.facebook_access_token || ''}
+                  onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, facebook_access_token: e.target.value })}
+                  placeholder="Token de acesso do Facebook"
+                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                />
+              </div>
+              <button
+                onClick={saveCloudApiConfig}
+                disabled={savingCloudApi}
+                className="w-full h-9 bg-[#1877F2] text-white text-sm font-bold rounded-lg hover:bg-[#166FE5] disabled:opacity-50"
+              >
+                {savingCloudApi ? 'Salvando...' : 'Salvar Facebook'}
+              </button>
+            </div>
+          ) : (
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-xs text-blue-700">
+                <strong>Status:</strong> {cloudApiConfig?.facebook_page_id ? 'Configurado' : 'Aguardando configuração pelo administrador'}
+              </p>
+            </div>
+          )}
         </div>
         )}
       </div>

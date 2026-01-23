@@ -360,18 +360,16 @@ const AdminClinicDetail: React.FC = () => {
       setUsers((usersData || []) as unknown as ClinicUser[]);
 
       // Buscar estatísticas
-      const [usersCount, chatsCount, messagesCount, leadsCount] = await Promise.all([
+      const [usersCount, chatsCount, leadsCount] = await Promise.all([
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('clinic_id', id),
         supabase.from('chats').select('*', { count: 'exact', head: true }).eq('clinic_id', id),
-        supabase.from('messages').select('*', { count: 'exact', head: true })
-          .in('chat_id', (await supabase.from('chats').select('id').eq('clinic_id', id)).data?.map(c => c.id) || []),
         supabase.from('leads').select('*', { count: 'exact', head: true }).eq('clinic_id', id),
       ]);
 
       setStats({
         users_count: usersCount.count || 0,
         chats_count: chatsCount.count || 0,
-        messages_count: messagesCount.count || 0,
+        messages_count: 0,
         leads_count: leadsCount.count || 0,
       });
 
@@ -403,16 +401,12 @@ const AdminClinicDetail: React.FC = () => {
         .eq('clinic_id', id);
 
       if (!chatsData) return;
-
-      const chatIds = chatsData.map(c => c.id);
       
-      if (chatIds.length === 0) return;
-      
-      // Buscar todos os pagamentos dos chats (excluindo canceladas)
+      // Buscar todos os pagamentos da clínica diretamente (excluindo canceladas)
       const { data: paymentsData } = await supabase
         .from('payments' as any)
         .select('value, payment_date, chat_id, created_by, status')
-        .in('chat_id', chatIds)
+        .eq('clinic_id', id)
         .or('status.is.null,status.eq.active');
 
       const payments = (paymentsData || []) as Array<{ value: number; payment_date: string; chat_id: string; created_by: string | null }>;
@@ -1457,6 +1451,34 @@ const AdminClinicDetail: React.FC = () => {
     }
   };
 
+  const toggleChannelEnabled = async (channel: 'instagram' | 'facebook') => {
+    if (!clinic || !user) return;
+
+    try {
+      const field = `${channel}_enabled`;
+      const currentValue = (clinic as any)[field] || false;
+      const newValue = !currentValue;
+      
+      const { error } = await supabase
+        .from('clinics')
+        .update({ [field]: newValue, updated_at: new Date().toISOString() })
+        .eq('id', clinic.id);
+
+      if (error) throw error;
+
+      await supabase.from('admin_access_logs').insert({
+        super_admin_id: user.id,
+        clinic_id: clinic.id,
+        action: 'edit',
+        details: { field, old_value: currentValue, new_value: newValue },
+      });
+
+      setClinic({ ...clinic, [field]: newValue } as any);
+    } catch (error) {
+      console.error(`Error updating ${channel}_enabled:`, error);
+    }
+  };
+
   const fetchTemplates = async () => {
     if (!clinic) return;
     
@@ -1756,18 +1778,6 @@ const AdminClinicDetail: React.FC = () => {
             <div>
               <p className="text-xl sm:text-2xl font-bold text-slate-800">{stats.chats_count}</p>
               <p className="text-xs sm:text-sm text-slate-500">Conversas</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-100 rounded-lg flex items-center justify-center shrink-0">
-              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-xl sm:text-2xl font-bold text-slate-800">{stats.messages_count}</p>
-              <p className="text-xs sm:text-sm text-slate-500">Mensagens</p>
             </div>
           </div>
         </div>
@@ -2375,6 +2385,154 @@ const AdminClinicDetail: React.FC = () => {
                   />
                 </button>
               </div>
+
+              {/* Permitir Instagram */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-800">Permitir Instagram</p>
+                    <p className="text-sm text-slate-500">Habilita integração com Instagram Direct</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => toggleChannelEnabled('instagram')}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    (clinic as any).instagram_enabled ? 'bg-pink-500' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      (clinic as any).instagram_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Configuração Instagram - aparece quando habilitado */}
+              {(clinic as any).instagram_enabled && (
+                <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-pink-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                        </svg>
+                      </div>
+                      <p className="font-medium text-slate-800">Configuração Instagram</p>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={(clinic as any).instagram_client_can_configure || false}
+                        onChange={(e) => updateCloudApiField('instagram_client_can_configure', e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-pink-600 focus:ring-pink-500"
+                      />
+                      <span className="text-xs text-slate-600">Cliente pode configurar</span>
+                    </label>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Page ID</label>
+                      <input
+                        type="text"
+                        value={(clinic as any).instagram_page_id || ''}
+                        onChange={(e) => updateCloudApiField('instagram_page_id', e.target.value)}
+                        placeholder="ID da página do Instagram"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Access Token</label>
+                      <input
+                        type="password"
+                        value={(clinic as any).instagram_access_token || ''}
+                        onChange={(e) => updateCloudApiField('instagram_access_token', e.target.value)}
+                        placeholder="Token de acesso do Instagram"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Permitir Facebook */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#1877F2] flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 0c-6.627 0-12 4.975-12 11.111 0 3.497 1.745 6.616 4.472 8.652v4.237l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111 0-6.136-5.373-11.111-12-11.111zm1.193 14.963l-3.056-3.259-5.963 3.259 6.559-6.963 3.13 3.259 5.889-3.259-6.559 6.963z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-800">Permitir Facebook</p>
+                    <p className="text-sm text-slate-500">Habilita integração com Facebook Messenger</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => toggleChannelEnabled('facebook')}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    (clinic as any).facebook_enabled ? 'bg-[#1877F2]' : 'bg-slate-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      (clinic as any).facebook_enabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Configuração Facebook - aparece quando habilitado */}
+              {(clinic as any).facebook_enabled && (
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-[#1877F2] flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 0c-6.627 0-12 4.975-12 11.111 0 3.497 1.745 6.616 4.472 8.652v4.237l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111 0-6.136-5.373-11.111-12-11.111zm1.193 14.963l-3.056-3.259-5.963 3.259 6.559-6.963 3.13 3.259 5.889-3.259-6.559 6.963z"/>
+                        </svg>
+                      </div>
+                      <p className="font-medium text-slate-800">Configuração Facebook</p>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={(clinic as any).facebook_client_can_configure || false}
+                        onChange={(e) => updateCloudApiField('facebook_client_can_configure', e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-xs text-slate-600">Cliente pode configurar</span>
+                    </label>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Page ID</label>
+                      <input
+                        type="text"
+                        value={(clinic as any).facebook_page_id || ''}
+                        onChange={(e) => updateCloudApiField('facebook_page_id', e.target.value)}
+                        placeholder="ID da página do Facebook"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Access Token</label>
+                      <input
+                        type="password"
+                        value={(clinic as any).facebook_access_token || ''}
+                        onChange={(e) => updateCloudApiField('facebook_access_token', e.target.value)}
+                        placeholder="Token de acesso do Facebook"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* WhatsApp Provider Selection */}
               <div className="p-4 bg-slate-50 rounded-lg">

@@ -24,7 +24,11 @@ interface UseChatsReturn {
   markAsRead: (chatId: string) => Promise<void>;
   markAsUnread: (chatId: string) => Promise<void>;
   fetchAndUpdateAvatar: (chatId: string, phoneNumber: string) => Promise<void>;
+  fetchMessages: (chatId: string, limit?: number, before?: string) => Promise<{ messages: DbMessage[]; hasMore: boolean }>;
+  loadMoreMessages: (chatId: string) => Promise<void>;
 }
+
+const MESSAGES_PER_PAGE = 50;
 
 export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
   const [chats, setChats] = useState<ChatWithMessages[]>([]);
@@ -65,13 +69,11 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     setError(null);
 
     try {
+      // Carregar apenas metadados dos chats (sem mensagens)
       const { data: chatsData, error: chatsError } = await supabase
         .from('chats')
         .select(`
           *,
-          messages (
-            *
-          ),
           chat_tags (
             tags (*)
           )
@@ -88,9 +90,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
       const formattedChats: ChatWithMessages[] = (chatsData || []).map(chat => ({
         ...chat,
-        messages: [...(chat.messages || [])].sort((a: DbMessage, b: DbMessage) => 
-          new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
-        ),
+        messages: [], // Mensagens serão carregadas sob demanda
         tags: chat.chat_tags?.map((ct: { tags: DbTag }) => ct.tags).filter(Boolean) || [],
       }));
 
@@ -255,11 +255,24 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
             })
             .eq('id', chatId);
 
-          setChats(prev => prev.map(c => 
-            c.id === chatId 
-              ? { ...c, messages: [...c.messages, newMessage as any], last_message: content, last_message_time: new Date().toISOString() }
-              : c
-          ));
+          setChats(prev => {
+            const chatIndex = prev.findIndex(c => c.id === chatId);
+            if (chatIndex === -1) return prev;
+            
+            const updatedChat = {
+              ...prev[chatIndex],
+              messages: [...prev[chatIndex].messages, newMessage as any],
+              last_message: content,
+              last_message_time: new Date().toISOString()
+            };
+            
+            // Mover chat para o topo
+            return [
+              updatedChat,
+              ...prev.slice(0, chatIndex),
+              ...prev.slice(chatIndex + 1)
+            ];
+          });
           return { success: true };
         }
       } catch (err) {
@@ -297,17 +310,25 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
       })
       .eq('id', chatId);
 
-    setChats(prev => prev.map(c => 
-      c.id === chatId 
-        ? { 
-            ...c, 
-            messages: [...c.messages, newMessage],
-            last_message: content,
-            last_message_time: new Date().toISOString(),
-            assigned_to: userId
-          } 
-        : c
-    ));
+    setChats(prev => {
+      const chatIndex = prev.findIndex(c => c.id === chatId);
+      if (chatIndex === -1) return prev;
+      
+      const updatedChat = {
+        ...prev[chatIndex],
+        messages: [...prev[chatIndex].messages, newMessage],
+        last_message: content,
+        last_message_time: new Date().toISOString(),
+        assigned_to: userId
+      };
+      
+      // Mover chat para o topo
+      return [
+        updatedChat,
+        ...prev.slice(0, chatIndex),
+        ...prev.slice(chatIndex + 1)
+      ];
+    });
   };
 
   const fetchWhatsAppInstance = async () => {
@@ -401,7 +422,6 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     const subscription = supabase
       .channel('leadcare-updates')
       .on('broadcast', { event: 'new_message' }, async (payload) => {
-        console.log('[Realtime] Nova mensagem via broadcast:', payload);
         // Só atualiza se for da clínica atual
         if (payload.payload?.clinic_id === clinicId) {
           const chatId = payload.payload?.chat_id;
@@ -650,6 +670,54 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     }
   };
 
+  // Buscar mensagens de um chat com paginação
+  const fetchMessages = async (chatId: string, limit: number = MESSAGES_PER_PAGE, before?: string): Promise<{ messages: DbMessage[]; hasMore: boolean }> => {
+    let query = supabase
+      .from('messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: false })
+      .limit(limit + 1); // Buscar 1 a mais para saber se tem mais
+
+    if (before) {
+      query = query.lt('created_at', before);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching messages:', error);
+      return { messages: [], hasMore: false };
+    }
+
+    const hasMore = (data?.length || 0) > limit;
+    const messages = (data || []).slice(0, limit).reverse(); // Reverter para ordem cronológica
+
+    // Atualizar estado local do chat
+    setChats(prev => prev.map(chat => {
+      if (chat.id !== chatId) return chat;
+      
+      if (before) {
+        // Carregar mais antigas: adicionar no início
+        return { ...chat, messages: [...messages, ...chat.messages] };
+      } else {
+        // Primeira carga: substituir
+        return { ...chat, messages };
+      }
+    }));
+
+    return { messages, hasMore };
+  };
+
+  // Carregar mais mensagens antigas
+  const loadMoreMessages = async (chatId: string): Promise<void> => {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat || !chat.messages.length) return;
+
+    const oldestMessage = chat.messages[0];
+    await fetchMessages(chatId, MESSAGES_PER_PAGE, oldestMessage.created_at || undefined);
+  };
+
   return {
     chats,
     loading,
@@ -662,5 +730,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     markAsRead,
     markAsUnread,
     fetchAndUpdateAvatar,
+    fetchMessages,
+    loadMoreMessages,
   };
 }

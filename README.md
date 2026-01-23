@@ -981,6 +981,141 @@ Este projeto é privado e de uso exclusivo.
 
 ---
 
+## Fase 10: WhatsApp Cloud API ✅ COMPLETA
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Suporte a WhatsApp Cloud API (oficial Meta) | ✅ Completo |
+| Toggle de provedor (Evolution vs Cloud API) no Admin | ✅ Completo |
+| Configuração de credenciais Cloud API | ✅ Completo |
+| Webhook para receber mensagens Cloud API | ✅ Completo |
+| Edge Function para envio de mensagens Cloud API | ✅ Completo |
+| Download automático de mídia Cloud API | ✅ Completo |
+| Suporte a reações via Cloud API | ✅ Completo |
+| Templates de mensagens (sincronização do Meta) | ✅ Completo |
+| Envio em massa com templates | ✅ Completo |
+| Toggle "Permitir Cloud API" por clínica | ✅ Completo |
+| Configuração de Cloud API no painel do cliente | ✅ Completo |
+
+### WhatsApp Cloud API vs Evolution API
+
+| Aspecto | Evolution API | Cloud API |
+|---------|---------------|-----------|
+| **Conexão** | QR Code | Token permanente |
+| **Estabilidade** | Pode desconectar | 99.9% uptime |
+| **Risco de banimento** | Alto | Zero (oficial) |
+| **Envio em massa** | Limitado | Permitido com templates |
+| **Custo** | Gratuito | ~R$ 0,25-0,50/msg |
+
+### Novas Tabelas
+
+| Tabela | Descrição |
+|--------|-----------|
+| `whatsapp_templates` | Templates de mensagens sincronizados do Meta |
+| `mass_message_campaigns` | Campanhas de envio em massa |
+| `mass_message_recipients` | Destinatários de cada campanha |
+
+### Novos Campos em `clinics`
+
+| Campo | Descrição |
+|-------|-----------|
+| `whatsapp_provider` | 'evolution' ou 'cloud_api' |
+| `cloud_api_enabled` | Se Admin/Gerente pode configurar Cloud API |
+| `cloud_api_phone_number_id` | ID do número no Meta |
+| `cloud_api_access_token` | Token de acesso |
+| `cloud_api_waba_id` | WhatsApp Business Account ID |
+| `cloud_api_verify_token` | Token de verificação do webhook |
+
+### Edge Functions
+
+| Função | Descrição |
+|--------|-----------|
+| `whatsapp-cloud-webhook` | Recebe mensagens da Cloud API |
+| `cloud-api-send` | Envia mensagens via Cloud API |
+| `cloud-api-media` | Download de mídia da Cloud API |
+| `cloud-api-templates` | Sincroniza e envia templates |
+
+### Fluxo de Configuração
+
+1. SuperAdmin ativa "Permitir Cloud API" na clínica
+2. Admin/Gerente acessa Configurações
+3. Preenche credenciais do Meta (Phone Number ID, WABA ID, Access Token)
+4. Configura webhook no Meta Business Suite
+5. Sincroniza templates aprovados
+6. Pode fazer envio em massa
+
+---
+
+## Fase 11: Integração Multi-Canal (Instagram + Facebook) ✅ COMPLETA
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Ícones de canal no Inbox (WhatsApp, Instagram, Facebook) | ✅ Completo |
+| Toggle "Permitir Instagram" no Admin | ✅ Completo |
+| Toggle "Permitir Facebook" no Admin | ✅ Completo |
+| Configuração de credenciais Instagram (Page ID, Access Token) | ✅ Completo |
+| Configuração de credenciais Facebook (Page ID, Access Token) | ✅ Completo |
+| Cards de status no Settings do cliente | ✅ Completo |
+| Filtro de conversas por canal | ✅ Completo |
+| Ícones desabilitados (cinza) quando não habilitado | ✅ Completo |
+
+### Novos Campos em `clinics`
+
+| Campo | Descrição |
+|-------|-----------|
+| `instagram_enabled` | Se integração Instagram está habilitada |
+| `instagram_page_id` | ID da página do Instagram |
+| `instagram_access_token` | Token de acesso do Instagram |
+| `facebook_enabled` | Se integração Facebook está habilitada |
+| `facebook_page_id` | ID da página do Facebook |
+| `facebook_access_token` | Token de acesso do Facebook |
+
+### Novos Campos em `chats` e `messages`
+
+| Campo | Descrição |
+|-------|-----------|
+| `channel` | Canal da conversa/mensagem: 'whatsapp', 'instagram', 'facebook' |
+
+### Visual do Inbox
+
+```
+[💬] [📸] [📘]  ← Ícones pequenos e redondos no topo
+  ↑     ↑    ↑
+verde cinza cinza (quando desabilitados)
+verde rosa  azul  (quando habilitados e ativos)
+```
+
+### Fluxo de Configuração
+
+1. SuperAdmin ativa "Permitir Instagram" ou "Permitir Facebook"
+2. SuperAdmin preenche Page ID e Access Token
+3. Cliente vê ícones coloridos no Inbox
+4. Cliente clica no ícone para ver conversas daquele canal
+
+### Benefícios
+
+- **Centralizado**: Todas as mensagens em um só lugar
+- **Rápido**: Troca de canal com um clique
+- **Controlado**: Admin decide quais canais cada cliente pode usar
+- **Visual**: Ícones indicam claramente qual canal está ativo
+
+### Permissão de Configuração pelo Cliente
+
+| Campo | Descrição |
+|-------|-----------|
+| `instagram_client_can_configure` | Se cliente pode editar credenciais do Instagram |
+| `facebook_client_can_configure` | Se cliente pode editar credenciais do Facebook |
+
+**Comportamento no Settings do Cliente:**
+
+| Situação | O que aparece |
+|----------|---------------|
+| Habilitado + Cliente pode configurar | Campos editáveis (Page ID, Access Token) + botão Salvar |
+| Habilitado + Cliente NÃO pode configurar | Apenas status ("Configurado" ou "Aguardando") |
+| Não habilitado | Não aparece nada |
+
+---
+
 ## Desenvolvido por
 
 **LeadCare** - CRM para Clínicas

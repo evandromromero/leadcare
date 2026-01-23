@@ -1,4 +1,4 @@
-const CACHE_NAME = 'belitx-v2.7';
+const CACHE_NAME = 'belitx-v2.8';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -10,7 +10,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        
+
         console.log('Cache opened');
         return cache.addAll(urlsToCache);
       })

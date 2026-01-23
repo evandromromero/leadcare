@@ -19,6 +19,7 @@ interface InboxProps {
 }
 
 type FilterType = 'todos' | 'nao_lidos' | 'aguardando' | 'followup';
+type ChannelType = 'whatsapp' | 'instagram' | 'facebook';
 
 const PIPELINE_STAGES = [
   { value: 'Novo Lead', label: 'Novo Lead', color: '#0891b2', hint: 'Lead que acabou de entrar em contato' },
@@ -33,10 +34,14 @@ const PIPELINE_STAGES = [
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar } = useChats(clinicId, user?.id);
+  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages } = useChats(clinicId, user?.id);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({});
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [msgInput, setMsgInput] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('todos');
+  const [activeChannel, setActiveChannel] = useState<ChannelType>('whatsapp');
+  const [channelConfig, setChannelConfig] = useState<{ instagram_enabled: boolean; facebook_enabled: boolean }>({ instagram_enabled: false, facebook_enabled: false });
   const [searchQuery, setSearchQuery] = useState('');
   
   const canSendMessage = hasPermission(user?.role, 'send_message');
@@ -235,6 +240,25 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       }
     };
     fetchQuickReplies();
+  }, [clinicId]);
+
+  // Buscar configuração de canais (Instagram/Facebook)
+  useEffect(() => {
+    const fetchChannelConfig = async () => {
+      if (!clinicId) return;
+      const { data } = await (supabase as any)
+        .from('clinics')
+        .select('instagram_enabled, facebook_enabled')
+        .eq('id', clinicId)
+        .single();
+      if (data) {
+        setChannelConfig({
+          instagram_enabled: data.instagram_enabled || false,
+          facebook_enabled: data.facebook_enabled || false,
+        });
+      }
+    };
+    fetchChannelConfig();
   }, [clinicId]);
 
   // Buscar usuários da clínica para encaminhamento
@@ -1291,6 +1315,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
 
   // Filtrar chats baseado no filtro ativo e busca
   const filteredChats = chats.filter(chat => {
+    // Filtro de canal
+    const chatChannel = (chat as any).channel || 'whatsapp';
+    if (chatChannel !== activeChannel) return false;
+
     // Filtro de busca
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -1688,6 +1716,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           }
         }
         
+        console.log('[Evolution] Sending message:', { url: `${settings.evolution_api_url}/message/sendText/${instance.instance_name}`, body: messageBody });
+        
         const response = await fetch(`${settings.evolution_api_url}/message/sendText/${instance.instance_name}`, {
           method: 'POST',
           headers: {
@@ -1705,6 +1735,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           
           // Registrar envio no rate limiter
           recordMessageSent(instance.instance_name);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('[Evolution] Error sending message:', response.status, JSON.stringify(errorData, null, 2));
+          
+          // Se instância não existe ou está desconectada, mostrar erro amigável
+          if (errorData?.response?.message?.includes('not found') || errorData?.response?.message?.includes('disconnected')) {
+            alert('WhatsApp desconectado. Reconecte em Configurações > WhatsApp.');
+            return;
+          }
         }
       }
         
@@ -1721,20 +1760,26 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         remote_message_id: remoteMessageId,
       }).select().single();
       
-      if (newMsg) {
-        // Atualizar estado local imediatamente
-        await refetch();
-      }
-      
-      // Atualizar chat
+      // Atualizar chat no banco
       await supabase.from('chats').update({
         last_message: msgInput.trim(),
         last_message_time: new Date().toISOString(),
         last_message_from_client: false,
       }).eq('id', selectedChatId);
       
+      // Guardar o ID do chat antes de limpar
+      const chatIdToReload = selectedChatId;
+      
       setMsgInput('');
       setReplyingTo(null);
+      
+      // Recarregar lista de chats e mensagens do chat atual
+      await refetch();
+      
+      // Recarregar mensagens do chat que estava selecionado
+      if (chatIdToReload) {
+        await fetchMessages(chatIdToReload);
+      }
       
     } catch (err) {
       console.error('Error sending message:', err);
@@ -2148,6 +2193,72 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     <div className="flex h-full bg-slate-50 overflow-hidden">
       {/* Col 1: Chat List */}
       <aside className="w-[380px] flex flex-col bg-white border-r border-slate-200 h-full overflow-hidden shrink-0">
+        {/* Channel Selector */}
+        <div className="flex items-center justify-center gap-1.5 p-2 border-b border-slate-100">
+          {/* WhatsApp */}
+          <button
+            onClick={() => setActiveChannel('whatsapp')}
+            className={`p-1.5 rounded-full transition-all ${
+              activeChannel === 'whatsapp' 
+                ? 'bg-[#25D366] shadow-md shadow-[#25D366]/30' 
+                : 'bg-slate-100 hover:bg-[#25D366]/10'
+            }`}
+            title="WhatsApp"
+          >
+            <svg className={`w-4 h-4 ${activeChannel === 'whatsapp' ? 'text-white' : 'text-[#25D366]'}`} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+            </svg>
+          </button>
+
+          {/* Instagram - sempre visível, desabilitado se não configurado */}
+          <button
+            onClick={() => channelConfig.instagram_enabled && setActiveChannel('instagram')}
+            disabled={!channelConfig.instagram_enabled}
+            className={`p-1.5 rounded-full transition-all ${
+              !channelConfig.instagram_enabled
+                ? 'bg-slate-100 cursor-not-allowed opacity-50'
+                : activeChannel === 'instagram' 
+                  ? 'bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] shadow-md shadow-pink-500/30' 
+                  : 'bg-slate-100 hover:bg-pink-50'
+            }`}
+            title={channelConfig.instagram_enabled ? 'Instagram' : 'Instagram (não habilitado)'}
+          >
+            <svg className={`w-4 h-4 ${
+              !channelConfig.instagram_enabled 
+                ? 'text-slate-400' 
+                : activeChannel === 'instagram' 
+                  ? 'text-white' 
+                  : 'text-pink-500'
+            }`} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+            </svg>
+          </button>
+
+          {/* Facebook - sempre visível, desabilitado se não configurado */}
+          <button
+            onClick={() => channelConfig.facebook_enabled && setActiveChannel('facebook')}
+            disabled={!channelConfig.facebook_enabled}
+            className={`p-1.5 rounded-full transition-all ${
+              !channelConfig.facebook_enabled
+                ? 'bg-slate-100 cursor-not-allowed opacity-50'
+                : activeChannel === 'facebook' 
+                  ? 'bg-[#1877F2] shadow-md shadow-[#1877F2]/30' 
+                  : 'bg-slate-100 hover:bg-blue-50'
+            }`}
+            title={channelConfig.facebook_enabled ? 'Facebook Messenger' : 'Facebook (não habilitado)'}
+          >
+            <svg className={`w-4 h-4 ${
+              !channelConfig.facebook_enabled 
+                ? 'text-slate-400' 
+                : activeChannel === 'facebook' 
+                  ? 'text-white' 
+                  : 'text-[#1877F2]'
+            }`} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0c-6.627 0-12 4.975-12 11.111 0 3.497 1.745 6.616 4.472 8.652v4.237l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111 0-6.136-5.373-11.111-12-11.111zm1.193 14.963l-3.056-3.259-5.963 3.259 6.559-6.963 3.13 3.259 5.889-3.259-6.559 6.963z"/>
+            </svg>
+          </button>
+        </div>
+
         <div className="p-4 border-b border-slate-100 space-y-4">
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined text-[20px]">search</span>
@@ -2213,16 +2324,31 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             filteredChats.map(chat => (
               <div 
                 key={chat.id} 
-                onClick={() => {
+                onClick={async () => {
                   setSelectedChatId(chat.id);
                   markAsRead(chat.id);
+                  // Carregar mensagens sob demanda se ainda não carregadas
+                  if (!chat.messages || chat.messages.length === 0) {
+                    setLoadingMessages(true);
+                    const { hasMore } = await fetchMessages(chat.id);
+                    setHasMoreMessages(prev => ({ ...prev, [chat.id]: hasMore }));
+                    setLoadingMessages(false);
+                  }
                 }}
                 className={`flex items-start gap-3 p-4 cursor-pointer transition-colors relative border-l-4 ${
                   selectedChatId === chat.id ? 'bg-cyan-50/50 border-cyan-600' : 'hover:bg-slate-50 border-transparent'
                 }`}
               >
                 <div className="relative shrink-0">
-                  <img src={chat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.client_name)}&background=0891b2&color=fff`} className="size-12 rounded-full border border-slate-100" />
+                  <img 
+                    src={chat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.client_name)}&background=0891b2&color=fff`} 
+                    className="size-12 rounded-full border border-slate-100"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.onerror = null;
+                      target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.client_name)}&background=0891b2&color=fff`;
+                    }}
+                  />
                   <div className="absolute bottom-0 right-0 size-3 bg-green-500 border-2 border-white rounded-full"></div>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -2265,7 +2391,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           <>
             <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10">
               <div className="flex items-center gap-3">
-                <img src={selectedChat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`} className="size-10 rounded-full" />
+                <img 
+                  src={selectedChat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`} 
+                  className="size-10 rounded-full"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null;
+                    target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`;
+                  }}
+                />
                 <div>
                   <h2 className="text-sm font-bold text-slate-900 leading-tight">{selectedChat.client_name}</h2>
                   <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
@@ -2316,6 +2450,56 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             </header>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4" style={{ backgroundImage: 'radial-gradient(#cbd5e1 0.5px, transparent 0.5px)', backgroundSize: '15px 15px' }}>
+              {/* Botão carregar mais mensagens */}
+              {hasMoreMessages[selectedChat.id] && (
+                <div className="flex justify-center mb-4">
+                  <button
+                    onClick={async () => {
+                      setLoadingMessages(true);
+                      const { hasMore } = await loadMoreMessages(selectedChat.id).then(() => 
+                        ({ hasMore: hasMoreMessages[selectedChat.id] })
+                      );
+                      // Atualizar hasMore após carregar
+                      const chat = chats.find(c => c.id === selectedChat.id);
+                      if (chat && chat.messages.length > 0) {
+                        const oldestMsg = chat.messages[0];
+                        const { data } = await supabase
+                          .from('messages')
+                          .select('id')
+                          .eq('chat_id', selectedChat.id)
+                          .lt('created_at', oldestMsg.created_at || '')
+                          .limit(1);
+                        setHasMoreMessages(prev => ({ ...prev, [selectedChat.id]: (data?.length || 0) > 0 }));
+                      }
+                      setLoadingMessages(false);
+                    }}
+                    disabled={loadingMessages}
+                    className="bg-white/80 backdrop-blur-md px-4 py-2 rounded-full text-xs font-medium text-slate-600 shadow-sm border border-slate-200 hover:bg-white hover:shadow-md transition-all disabled:opacity-50"
+                  >
+                    {loadingMessages ? (
+                      <span className="flex items-center gap-2">
+                        <span className="animate-spin">⏳</span> Carregando...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm">expand_less</span>
+                        Carregar mensagens anteriores
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* Loading inicial de mensagens */}
+              {loadingMessages && (!selectedChat.messages || selectedChat.messages.length === 0) && (
+                <div className="flex justify-center py-8">
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <span className="animate-spin">⏳</span>
+                    <span className="text-sm">Carregando mensagens...</span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-center mb-8">
                 <span className="bg-white/80 backdrop-blur-md px-4 py-1 rounded-full text-[10px] font-bold text-slate-500 shadow-sm border border-slate-100 uppercase tracking-widest">Hoje</span>
               </div>
@@ -2650,7 +2834,15 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         {selectedChat ? (
           <div className="flex flex-col h-full">
             <div className="p-8 text-center border-b border-slate-100">
-              <img src={selectedChat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`} className="size-24 rounded-full mx-auto mb-4 border-4 border-slate-50 shadow-md" />
+              <img 
+                src={selectedChat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`} 
+                className="size-24 rounded-full mx-auto mb-4 border-4 border-slate-50 shadow-md"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`;
+                }}
+              />
               <h2 className="text-xl font-black text-slate-900 mb-1">{selectedChat.client_name}</h2>
               <p className="text-sm font-bold text-slate-400">{selectedChat.phone_number}</p>
               
