@@ -1,4 +1,4 @@
-const CACHE_NAME = 'belitx-v2.8';
+const CACHE_NAME = 'belitx-v3.1';
 const urlsToCache = [
   '/',
   '/index.html',

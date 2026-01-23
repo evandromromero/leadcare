@@ -517,13 +517,20 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
                   messages: updatedMessages
                 };
                 
-                // Mover chat para o topo
-                const newList = [
-                  updatedChat,
-                  ...prev.slice(0, chatIndex),
-                  ...prev.slice(chatIndex + 1)
-                ];
-                return newList;
+                // Remover chat da posição atual e reordenar
+                const otherChats = [...prev.slice(0, chatIndex), ...prev.slice(chatIndex + 1)];
+                const allChats = [updatedChat, ...otherChats];
+                
+                // Reordenar: fixados primeiro, depois por last_message_time
+                const sortedList = allChats.sort((a, b) => {
+                  const aPinned = (a as any).is_pinned || false;
+                  const bPinned = (b as any).is_pinned || false;
+                  if (aPinned && !bPinned) return -1;
+                  if (!aPinned && bPinned) return 1;
+                  return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime();
+                });
+                
+                return sortedList;
               });
             }
           }
@@ -572,6 +579,11 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     }
 
     try {
+      // Buscar chat para verificar se é grupo
+      const targetChat = chats.find(c => c.id === chatId);
+      const isGroupChat = (targetChat as any)?.is_group === true;
+      const groupId = (targetChat as any)?.group_id;
+
       // Buscar mensagem para obter remote_message_id
       const { data: messageData } = await supabase
         .from('messages')
@@ -603,9 +615,12 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
       // Formatar número
       let formattedPhone = phoneNumber.replace(/\D/g, '');
-      if (!formattedPhone.startsWith('55')) {
+      if (!isGroupChat && !formattedPhone.startsWith('55')) {
         formattedPhone = '55' + formattedPhone;
       }
+
+      // Determinar remoteJid baseado se é grupo ou individual
+      const remoteJid = isGroupChat ? groupId : `${formattedPhone}@s.whatsapp.net`;
 
       // Chamar API da Evolution para editar mensagem (POST /chat/updateMessage)
       const response = await fetch(`${evolutionSettings.apiUrl}/chat/updateMessage/${whatsappInstance.instanceName}`, {
@@ -615,12 +630,12 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
           'apikey': evolutionSettings.apiKey,
         },
         body: JSON.stringify({
-          number: formattedPhone,
+          number: isGroupChat ? groupId : formattedPhone,
           key: {
-            remoteJid: `${formattedPhone}@s.whatsapp.net`,
+            remoteJid: remoteJid,
             fromMe: true,
             id: message.remote_message_id,
-            participant: `${formattedPhone}@s.whatsapp.net`,
+            participant: remoteJid,
           },
           text: newContent,
         }),

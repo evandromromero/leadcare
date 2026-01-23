@@ -327,14 +327,15 @@ serve(async (req) => {
       }
     }
 
-    // Save message
+    // Save message (incluindo sender_name para grupos)
     await supabase.from('messages').insert({
       chat_id: chat!.id,
       content: message || '[Sem texto]',
       type: mediaType || 'text',
       media_url: finalMediaUrl,
       is_from_client: !isFromMe,
-      remote_message_id: messageId || null
+      remote_message_id: messageId || null,
+      sender_name: isGroup && !isFromMe ? senderName : null
     })
 
     // Enviar Broadcast para notificar o cliente em tempo real

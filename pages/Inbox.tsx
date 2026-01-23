@@ -1736,10 +1736,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       }
       // Enviar via Evolution API se conectado
       else if (instance?.status === 'connected' && settings?.evolution_api_url && msgData?.remote_message_id && selectedChat.phone_number) {
+        // Verificar se é grupo ou conversa individual
+        const isGroupChat = (selectedChat as any).is_group === true;
+        const groupId = (selectedChat as any).group_id;
+
         let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
-        if (!formattedPhone.startsWith('55')) {
+        if (!isGroupChat && !formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
         }
+
+        const remoteJid = isGroupChat ? groupId : `${formattedPhone}@s.whatsapp.net`;
         
         await fetch(`${settings.evolution_api_url}/message/sendReaction/${instance.instance_name}`, {
           method: 'POST',
@@ -1749,7 +1755,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           },
           body: JSON.stringify({
             key: {
-              remoteJid: `${formattedPhone}@s.whatsapp.net`,
+              remoteJid: remoteJid,
               fromMe: !msgData.is_from_client,
               id: msgData.remote_message_id,
             },
@@ -2060,6 +2066,49 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           
           // Registrar envio no rate limiter
           recordMessageSent(instance.instance_name);
+          
+          // Marcar mensagens recebidas como lidas no WhatsApp (zera contador no celular)
+          try {
+            // Buscar mensagens não lidas do cliente neste chat
+            const { data: unreadMessages } = await supabase
+              .from('messages')
+              .select('remote_message_id')
+              .eq('chat_id', selectedChatId)
+              .eq('is_from_client', true)
+              .not('remote_message_id', 'is', null);
+            
+            if (unreadMessages && unreadMessages.length > 0) {
+              const remoteJid = isGroupChat ? groupId : `${formattedPhone}@s.whatsapp.net`;
+              const readMessages = unreadMessages
+                .filter((m: any) => m.remote_message_id)
+                .map((m: any) => ({
+                  remoteJid,
+                  id: m.remote_message_id,
+                }));
+              
+              if (readMessages.length > 0) {
+                // Marcar mensagens recebidas como lidas
+                const payload = {
+                  readMessages: readMessages.map((m: any) => ({
+                    remoteJid: m.remoteJid,
+                    fromMe: false,
+                    id: m.id,
+                  })),
+                };
+                
+                await fetch(`${settings.evolution_api_url}/chat/markMessageAsRead/${instance.instance_name}`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': settings.evolution_api_key,
+                  },
+                  body: JSON.stringify(payload),
+                });
+              }
+            }
+          } catch (readErr) {
+            console.error('[Evolution] Error marking messages as read:', readErr);
+          }
         } else {
           const errorData = await response.json().catch(() => ({}));
           console.error('[Evolution] Error sending message:', response.status, JSON.stringify(errorData, null, 2));
@@ -2227,8 +2276,12 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         // Aguardar delay mínimo entre mensagens
         await waitForRateLimit(instance.instance_name);
 
+        // Verificar se é grupo ou conversa individual
+        const isGroupChat = (selectedChat as any).is_group === true;
+        const groupId = (selectedChat as any).group_id;
+
         let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
-        if (!formattedPhone.startsWith('55')) {
+        if (!isGroupChat && !formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
         }
         
@@ -2236,14 +2289,14 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                          mediaType === 'video' ? 'sendMedia' : 
                          mediaType === 'audio' ? 'sendWhatsAppAudio' : 'sendMedia';
         
-        await fetch(`${settings.evolution_api_url}/message/${endpoint}/${instance.instance_name}`, {
+        const mediaResponse = await fetch(`${settings.evolution_api_url}/message/${endpoint}/${instance.instance_name}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'apikey': settings.evolution_api_key,
           },
           body: JSON.stringify({
-            number: formattedPhone,
+            number: isGroupChat ? groupId : formattedPhone,
             mediatype: mediaType,
             media: mediaUrl,
             caption: mediaCaption,
@@ -2252,6 +2305,51 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         
         // Registrar envio no rate limiter
         recordMessageSent(instance.instance_name);
+        
+        // Marcar mensagens recebidas como lidas no WhatsApp (zera contador no celular)
+        if (mediaResponse.ok) {
+          try {
+            const { data: unreadMessages } = await supabase
+              .from('messages')
+              .select('remote_message_id')
+              .eq('chat_id', selectedChatId)
+              .eq('is_from_client', true)
+              .not('remote_message_id', 'is', null);
+            
+            if (unreadMessages && unreadMessages.length > 0) {
+              const remoteJid = isGroupChat ? groupId : `${formattedPhone}@s.whatsapp.net`;
+              const readMessages = unreadMessages
+                .filter((m: any) => m.remote_message_id)
+                .map((m: any) => ({
+                  remoteJid,
+                  id: m.remote_message_id,
+                }));
+              
+              if (readMessages.length > 0) {
+                // Marcar mensagens recebidas como lidas
+                const payload = {
+                  readMessages: readMessages.map((m: any) => ({
+                    remoteJid: m.remoteJid,
+                    fromMe: false,
+                    id: m.id,
+                  })),
+                };
+                
+                await fetch(`${settings.evolution_api_url}/chat/markMessageAsRead/${instance.instance_name}`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': settings.evolution_api_key,
+                  },
+                  body: JSON.stringify(payload),
+                });
+                console.log('[Evolution] Marked messages as read (media):', readMessages.length);
+              }
+            }
+          } catch (readErr) {
+            console.error('[Evolution] Error marking messages as read:', readErr);
+          }
+        }
       }
       
       // Salvar mensagem no banco
@@ -2453,25 +2551,74 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         // Aguardar delay mínimo entre mensagens
         await waitForRateLimit(instance.instance_name);
 
+        // Verificar se é grupo ou conversa individual
+        const isGroupChat = (selectedChat as any).is_group === true;
+        const groupId = (selectedChat as any).group_id;
+
         let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
-        if (!formattedPhone.startsWith('55')) {
+        if (!isGroupChat && !formattedPhone.startsWith('55')) {
           formattedPhone = '55' + formattedPhone;
         }
         
-        await fetch(`${settings.evolution_api_url}/message/sendWhatsAppAudio/${instance.instance_name}`, {
+        const audioResponse = await fetch(`${settings.evolution_api_url}/message/sendWhatsAppAudio/${instance.instance_name}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'apikey': settings.evolution_api_key,
           },
           body: JSON.stringify({
-            number: formattedPhone,
+            number: isGroupChat ? groupId : formattedPhone,
             audio: mediaUrl,
           }),
         });
         
         // Registrar envio no rate limiter
         recordMessageSent(instance.instance_name);
+        
+        // Marcar mensagens recebidas como lidas no WhatsApp (zera contador no celular)
+        if (audioResponse.ok) {
+          try {
+            const { data: unreadMessages } = await supabase
+              .from('messages')
+              .select('remote_message_id')
+              .eq('chat_id', selectedChatId)
+              .eq('is_from_client', true)
+              .not('remote_message_id', 'is', null);
+            
+            if (unreadMessages && unreadMessages.length > 0) {
+              const remoteJid = isGroupChat ? groupId : `${formattedPhone}@s.whatsapp.net`;
+              const readMessages = unreadMessages
+                .filter((m: any) => m.remote_message_id)
+                .map((m: any) => ({
+                  remoteJid,
+                  id: m.remote_message_id,
+                }));
+              
+              if (readMessages.length > 0) {
+                // Marcar mensagens recebidas como lidas
+                const payload = {
+                  readMessages: readMessages.map((m: any) => ({
+                    remoteJid: m.remoteJid,
+                    fromMe: false,
+                    id: m.id,
+                  })),
+                };
+                
+                await fetch(`${settings.evolution_api_url}/chat/markMessageAsRead/${instance.instance_name}`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': settings.evolution_api_key,
+                  },
+                  body: JSON.stringify(payload),
+                });
+                console.log('[Evolution] Marked messages as read (audio):', readMessages.length);
+              }
+            }
+          } catch (readErr) {
+            console.error('[Evolution] Error marking messages as read:', readErr);
+          }
+        }
       }
       
       // Salvar mensagem no banco
@@ -2872,6 +3019,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           {(m as any).quoted_content}
                         </p>
                       </div>
+                    )}
+                    {/* Nome do remetente em grupos (mensagens do cliente) */}
+                    {(selectedChat as any).is_group && m.is_from_client && (m as any).sender_name && (
+                      <p className="text-[10px] font-bold text-slate-500 mb-1">{(m as any).sender_name}</p>
                     )}
                     {/* Nome do atendente */}
                     {!m.is_from_client && m.sent_by && userNames[m.sent_by] && (

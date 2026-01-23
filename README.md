@@ -1116,6 +1116,127 @@ verde rosa  azul  (quando habilitados e ativos)
 
 ---
 
+## Atualizações - 22/01/2026 (Noite)
+
+### Resumo das Melhorias 🚀
+
+Nesta atualização implementamos **4 grandes melhorias** no sistema LeadCare.
+
+---
+
+### 1. Suporte a Grupos do WhatsApp 📱
+
+**O que é?**
+Agora o LeadCare consegue receber e enviar mensagens em **grupos do WhatsApp**, não apenas em conversas individuais.
+
+**Como funciona?**
+- Os grupos aparecem automaticamente na aba **"Grupos"** ao lado de "Todos", "Não lidos" e "Aguardando"
+- Você pode enviar mensagens nos grupos da mesma forma que envia para clientes individuais
+- Os grupos são sincronizados automaticamente quando você abre o painel
+- Grupos têm um ícone verde de pessoas ao lado do nome
+
+**Como usar?**
+1. Abra o **Inbox** (Caixa de Entrada)
+2. Clique no botão **"Grupos"** nos filtros
+3. Selecione o grupo desejado
+4. Envie mensagens normalmente
+
+**Arquivos modificados:**
+- `supabase/functions/evolution-webhook/index.ts` - Processar mensagens de grupos
+- `hooks/useChats.ts` - Query com campos `is_group` e `group_id`
+- `pages/Inbox.tsx` - Filtro de grupos, ícone, envio para grupos
+
+**Migração de banco:**
+- Campos `is_group` (boolean) e `group_id` (text) na tabela `chats`
+
+---
+
+### 2. Fixar Conversas 📌
+
+**O que é?**
+Agora você pode **fixar conversas importantes** no topo da lista para não perder de vista.
+
+**Como funciona?**
+- Passe o mouse sobre uma conversa e clique no ícone de **pin**
+- A conversa vai para o topo da lista e fica lá mesmo quando outras mensagens chegam
+- Clique novamente para desafixar
+
+**Arquivos modificados:**
+- `hooks/useChats.ts` - Função `togglePinChat`, ordenação por `is_pinned`
+- `pages/Inbox.tsx` - Botão de pin, ícone visual
+
+**Migração de banco:**
+- Campo `is_pinned` (boolean) na tabela `chats`
+
+---
+
+### 3. Sincronização de Leitura WhatsApp ↔ Painel 🔄
+
+**O que é?**
+Agora quando você **responde pelo celular**, o contador de mensagens não lidas no painel é zerado automaticamente. E quando você **responde pelo painel**, o contador no celular também é zerado.
+
+**Como funciona?**
+
+| Ação | Resultado |
+|------|-----------|
+| Respondeu pelo **celular** | Painel zera o contador automaticamente |
+| Respondeu pelo **painel** | WhatsApp do celular zera o contador |
+
+**Configuração:**
+- `readMessages: true` ativado automaticamente em novas instâncias
+- Configurado via `POST /settings/set/{instance}` na Evolution API
+
+**Arquivos modificados:**
+- `supabase/functions/evolution-webhook/index.ts` - Zerar `unread_count` quando `fromMe=true`
+- `hooks/useWhatsApp.ts` - Ativar `readMessages` ao criar instância
+- `hooks/useChats.ts` - Marcar como lido no WhatsApp via API
+
+---
+
+### 4. Integração Facebook Conversions API 📊
+
+**O que é?**
+Quando você marca um lead como **"Convertido"**, o sistema envia automaticamente um evento de **compra (Purchase)** para o Facebook Ads, permitindo rastrear conversões e otimizar campanhas.
+
+**Como funciona?**
+1. Atendente clica em **"Convertido"** no funil
+2. Sistema verifica se tem valor registrado (orçamento aprovado ou pagamento)
+3. **Se tem valor**: Muda status e envia evento ao Facebook
+4. **Se NÃO tem valor**: Abre modal pedindo o valor antes de converter
+
+**Configuração (Admin):**
+1. Acesse `/admin` → Clique na clínica
+2. Role até **"Facebook Conversions API"**
+3. Preencha:
+   - **Dataset ID (Pixel ID)**: ID do pixel do Facebook
+   - **Token da API**: Token de acesso do Facebook
+
+**O que é enviado ao Facebook?**
+- **Evento**: Purchase (Compra)
+- **Valor**: Valor do orçamento/pagamento em BRL
+- **Telefone**: Hasheado em SHA256 para privacidade
+- **Endpoint**: `POST https://graph.facebook.com/v18.0/{dataset_id}/events`
+
+**Arquivos modificados:**
+- `pages/admin/AdminClinicDetail.tsx` - Seção de configuração Facebook
+- `pages/Inbox.tsx` - Função `sendFacebookConversionEvent`, modal de valor
+
+**Migração de banco:**
+- Campos `facebook_dataset_id` e `facebook_api_token` na tabela `clinics`
+
+---
+
+### Resumo Técnico
+
+| Funcionalidade | Arquivos Modificados | Migração |
+|----------------|---------------------|----------|
+| Grupos WhatsApp | `evolution-webhook`, `useChats.ts`, `Inbox.tsx` | `is_group`, `group_id` |
+| Fixar Conversas | `useChats.ts`, `Inbox.tsx` | `is_pinned` |
+| Sincronização Leitura | `evolution-webhook`, `useChats.ts`, `useWhatsApp.ts` | - |
+| Facebook Conversions | `AdminClinicDetail.tsx`, `Inbox.tsx` | `facebook_dataset_id`, `facebook_api_token` |
+
+---
+
 ## Desenvolvido por
 
 **LeadCare** - CRM para Clínicas

@@ -23,6 +23,7 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
   const { signIn, user, loading: authLoading, error: authError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginSettings, setLoginSettings] = useState<LoginSettings>({
@@ -151,15 +152,19 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
               </div>
               <div className="relative">
                 <input 
-                  type="password" 
+                  type={showPassword ? "text" : "password"} 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Insira sua senha" 
-                  className="w-full h-14 rounded-xl border-slate-200 focus:border-cyan-600 focus:ring-1 focus:ring-cyan-600 transition-all px-4"
+                  className="w-full h-14 rounded-xl border-slate-200 focus:border-cyan-600 focus:ring-1 focus:ring-cyan-600 transition-all px-4 pr-12"
                   required
                 />
-                <button type="button" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
-                  <span className="material-symbols-outlined">visibility</span>
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <span className="material-symbols-outlined">{showPassword ? 'visibility_off' : 'visibility'}</span>
                 </button>
               </div>
             </div>
