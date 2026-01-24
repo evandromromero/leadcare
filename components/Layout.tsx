@@ -9,6 +9,8 @@ import ImpersonateBanner from './ImpersonateBanner';
 import { canAccessPage, MenuPage } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
 
+const db = supabase as any;
+
 interface LayoutProps {
   children: React.ReactNode;
   state: GlobalState;
@@ -27,22 +29,55 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const [logoUrl, setLogoUrl] = useState<string>('');
   const [logoLoaded, setLogoLoaded] = useState(false);
   const tasksDropdownRef = useRef<HTMLDivElement>(null);
+  const [supportEnabled, setSupportEnabled] = useState(false);
 
-  // Buscar logo do banco
-  useEffect(() => {
-    const fetchLogo = async () => {
-      const { data } = await supabase
-        .from('settings')
-        .select('login_logo_url')
-        .single();
-      const d = data as any;
-      if (d?.login_logo_url) {
-        setLogoUrl(d.login_logo_url);
+  // Buscar logo e configurações de suporte do banco
+  const fetchSupportStatus = async () => {
+    const { data } = await db
+      .from('settings')
+      .select('login_logo_url, support_enabled')
+      .single();
+    const d = data as any;
+    if (d?.login_logo_url) {
+      setLogoUrl(d.login_logo_url);
+    }
+    if (d?.support_enabled !== undefined) {
+      // Verificar também se a clínica tem suporte habilitado
+      if (clinicId) {
+        const { data: clinicData } = await db
+          .from('clinics')
+          .select('support_enabled')
+          .eq('id', clinicId)
+          .single();
+        setSupportEnabled(d.support_enabled && (clinicData?.support_enabled ?? true));
+      } else {
+        setSupportEnabled(d.support_enabled);
       }
-      setLogoLoaded(true);
+    }
+    setLogoLoaded(true);
+  };
+
+  useEffect(() => {
+    fetchSupportStatus();
+  }, [clinicId]);
+
+  // Subscription para atualizar menu de suporte em tempo real
+  useEffect(() => {
+    const channel = db
+      .channel('layout_settings_changes')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'settings' },
+        () => {
+          fetchSupportStatus();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      db.removeChannel(channel);
     };
-    fetchLogo();
-  }, []);
+  }, [clinicId]);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -86,7 +121,14 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
     { path: '/settings', label: 'Configurações', icon: 'settings', page: 'settings' as MenuPage },
   ];
 
-  const navItems = allNavItems.filter(item => canAccessPage(user?.role, item.page));
+  // Adicionar menu de suporte se habilitado
+  const navItemsWithSupport = supportEnabled 
+    ? [...allNavItems, { path: '/support', label: 'Suporte', icon: 'support_agent', page: 'support' as MenuPage }]
+    : allNavItems;
+
+  const navItems = navItemsWithSupport.filter(item => 
+    item.page === 'support' || canAccessPage(user?.role, item.page as MenuPage)
+  );
 
   const statusColors = {
     connected: 'bg-green-500',

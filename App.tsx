@@ -14,12 +14,16 @@ import Users from './pages/Users';
 import Settings from './pages/Settings';
 import Receipts from './pages/Receipts';
 import Reports from './pages/Reports';
+import Support from './pages/Support';
+import SupportPanel from './pages/SupportPanel';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminClinics from './pages/admin/AdminClinics';
 import AdminClinicDetail from './pages/admin/AdminClinicDetail';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminUsers from './pages/admin/AdminUsers';
+import SupportAgents from './pages/admin/SupportAgents';
+import SupportQuickReplies from './pages/admin/SupportQuickReplies';
 import { useAuth, AuthProvider } from './hooks/useAuth';
 
 interface PrivateRouteProps {
@@ -207,6 +211,12 @@ const AppRoutes: React.FC = () => {
           </PrivateRoute>
         } />
 
+        <Route path="/support" element={
+          <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
+            <Support />
+          </PrivateRoute>
+        } />
+
         {/* Admin Routes - sem Layout de clínica */}
         <Route path="/admin" element={
           <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
@@ -247,6 +257,25 @@ const AppRoutes: React.FC = () => {
             </AdminLayout>
           </AdminRoute>
         } />
+
+        <Route path="/admin/support-agents" element={
+          <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
+            <AdminLayout>
+              <SupportAgents />
+            </AdminLayout>
+          </AdminRoute>
+        } />
+
+        <Route path="/admin/support-replies" element={
+          <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
+            <AdminLayout>
+              <SupportQuickReplies />
+            </AdminLayout>
+          </AdminRoute>
+        } />
+
+        {/* Painel de Suporte - Separado (tem seu próprio login) */}
+        <Route path="/suporte" element={<SupportPanel />} />
 
         <Route path="/" element={<Navigate to="/login" />} />
     </Routes>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useWhatsApp, WhatsAppInstance } from '../hooks/useWhatsApp';
 import { useAuth } from '../hooks/useAuth';
@@ -19,7 +19,20 @@ interface UserWhatsAppSettings {
 
 const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const forceReconnect = searchParams.get('force') === 'true';
+  const [forceMode, setForceMode] = useState(false);
   const { user } = useAuth();
+  
+  // Persistir forceReconnect em estado local para não perder quando selectedInstance mudar
+  useEffect(() => {
+    if (forceReconnect && !forceMode) {
+      setForceMode(true);
+      // Limpar o parâmetro da URL para não ficar poluído
+      searchParams.delete('force');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [forceReconnect, forceMode, searchParams, setSearchParams]);
   const clinicId = state.selectedClinic?.id;
   const { 
     instances, 
@@ -85,6 +98,15 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
   useEffect(() => {
     if (loading) return;
     
+    console.log('[Connect] forceMode:', forceMode, 'selectedInstance:', selectedInstance?.status);
+    
+    // Se forceMode=true, mostrar lista para permitir reconexão mesmo se "connected"
+    if (forceMode) {
+      console.log('[Connect] Forçando exibição da lista para reconexão');
+      setStep('list');
+      return;
+    }
+    
     if (selectedInstance?.status === 'connected') {
       setStep('connected');
       setState(prev => ({ ...prev, whatsappStatus: 'connected' }));
@@ -93,7 +115,7 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
     } else {
       setStep('list');
     }
-  }, [selectedInstance, loading, setState]);
+  }, [selectedInstance, loading, setState, forceMode]);
 
   useEffect(() => {
     if (step === 'waiting' || step === 'connected') {
@@ -118,12 +140,18 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
   };
 
   const handleReconnect = async () => {
-    if (!selectedInstance) return;
+    if (!selectedInstance) {
+      console.log('[Connect] handleReconnect: selectedInstance é null');
+      return;
+    }
+    console.log('[Connect] handleReconnect: Iniciando reconexão para', selectedInstance.id);
     setStep('generating');
     setConnectError(null);
     const result = await reconnect(selectedInstance.id);
+    console.log('[Connect] handleReconnect: Resultado:', result);
     
     if (result.error) {
+      console.error('[Connect] handleReconnect: Erro:', result.error);
       setConnectError(result.error);
       setStep('list');
     }

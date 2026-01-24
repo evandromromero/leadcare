@@ -44,6 +44,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [channelConfig, setChannelConfig] = useState<{ instagram_enabled: boolean; facebook_enabled: boolean }>({ instagram_enabled: false, facebook_enabled: false });
   const [searchQuery, setSearchQuery] = useState('');
   const [syncingGroups, setSyncingGroups] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [lastRestartAt, setLastRestartAt] = useState<number>(0);
+  const [restartAttempts, setRestartAttempts] = useState<number>(0);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [connectionModal, setConnectionModal] = useState<{ show: boolean; title: string; message: string; needsQrCode: boolean }>({ show: false, title: '', message: '', needsQrCode: false });
   
   const canSendMessage = hasPermission(user?.role, 'send_message');
   const canMoveLead = hasPermission(user?.role, 'move_lead');
@@ -230,6 +235,223 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     '✅', '❌', '❓', '❔', '❕', '❗', '💯', '🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '⚫', '⚪', '🟤', '▶️', '⏸️', '⏹️', '⏺️'
   ];
 
+  // Constantes para cooldown de restart
+  const RESTART_COOLDOWN_MS = 60000; // 60 segundos entre restarts
+  const MAX_RESTARTS_IN_WINDOW = 3; // máximo 3 restarts em 10 min
+  const RESTART_WINDOW_MS = 600000; // 10 minutos
+
+  // Helper: verificar connectionState
+  const checkConnectionState = async (apiUrl: string, apiKey: string, instanceName: string): Promise<string | null> => {
+    try {
+      const response = await fetch(
+        `${apiUrl}/instance/connectionState/${instanceName}`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+        }
+      );
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data?.instance?.state || data?.state || null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Helper: tentar connect
+  const tryConnect = async (apiUrl: string, apiKey: string, instanceName: string): Promise<boolean> => {
+    try {
+      await fetch(
+        `${apiUrl}/instance/connect/${instanceName}`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+        }
+      );
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      const state = await checkConnectionState(apiUrl, apiKey, instanceName);
+      return state === 'open' || state === 'connected';
+    } catch {
+      return false;
+    }
+  };
+
+  // Helper: logout da instância
+  const tryLogout = async (apiUrl: string, apiKey: string, instanceName: string): Promise<boolean> => {
+    try {
+      await fetch(
+        `${apiUrl}/instance/logout/${instanceName}`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', 'apikey': apiKey },
+        }
+      );
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // Função para verificar e garantir conexão da instância (3 níveis de recuperação)
+  const ensureInstanceConnected = async (): Promise<{ connected: boolean; needsQrCode: boolean; error?: string; level?: number }> => {
+    try {
+      // Buscar configurações da Evolution API
+      const { data: settings } = await supabase
+        .from('settings')
+        .select('evolution_api_url, evolution_api_key')
+        .single();
+      
+      if (!settings?.evolution_api_url || !settings?.evolution_api_key) {
+        return { connected: false, needsQrCode: false, error: 'Evolution API não configurada' };
+      }
+      
+      const apiUrl = settings.evolution_api_url;
+      const apiKey = settings.evolution_api_key;
+      
+      // Buscar instância WhatsApp
+      const { data: instances } = await supabase
+        .from('whatsapp_instances')
+        .select('id, instance_name, status')
+        .eq('clinic_id', clinicId)
+        .limit(1);
+      
+      const instance = instances?.[0];
+      if (!instance) {
+        return { connected: false, needsQrCode: false, error: 'Nenhuma instância WhatsApp encontrada' };
+      }
+      
+      const instanceName = instance.instance_name;
+      
+      // Verificar estado real da conexão via API
+      const connectionState = await checkConnectionState(apiUrl, apiKey, instanceName);
+      
+      // Se está conectado, retorna sucesso
+      if (connectionState === 'open' || connectionState === 'connected') {
+        setConnectionError(null);
+        return { connected: true, needsQrCode: false };
+      }
+      
+      // Verificar cooldown antes de tentar recuperação
+      const now = Date.now();
+      const timeSinceLastRestart = now - lastRestartAt;
+      
+      if (timeSinceLastRestart < RESTART_COOLDOWN_MS) {
+        const waitSeconds = Math.ceil((RESTART_COOLDOWN_MS - timeSinceLastRestart) / 1000);
+        return { connected: false, needsQrCode: false, error: `Aguarde ${waitSeconds}s antes de tentar reconectar` };
+      }
+      
+      // Verificar limite de restarts na janela
+      if (restartAttempts >= MAX_RESTARTS_IN_WINDOW) {
+        setConnectionError('Requer QR Code');
+        return { connected: false, needsQrCode: true, error: 'Muitas tentativas de reconexão. Escaneie o QR Code novamente.', level: 3 };
+      }
+      
+      setIsReconnecting(true);
+      setLastRestartAt(now);
+      setRestartAttempts(prev => prev + 1);
+      
+      // ========== NÍVEL 1: Tentar connect (preserva sessão) ==========
+      console.log('[Recovery] Nível 1: Tentando connect...');
+      const level1Success = await tryConnect(apiUrl, apiKey, instanceName);
+      
+      if (level1Success) {
+        console.log('[Recovery] Nível 1: Sucesso!');
+        setIsReconnecting(false);
+        setConnectionError(null);
+        setRestartAttempts(0);
+        return { connected: true, needsQrCode: false, level: 1 };
+      }
+      
+      // ========== NÍVEL 2: Logout + Reconnect ==========
+      console.log('[Recovery] Nível 2: Tentando logout + reconnect...');
+      await tryLogout(apiUrl, apiKey, instanceName);
+      const level2Success = await tryConnect(apiUrl, apiKey, instanceName);
+      
+      if (level2Success) {
+        console.log('[Recovery] Nível 2: Sucesso!');
+        setIsReconnecting(false);
+        setConnectionError(null);
+        setRestartAttempts(0);
+        return { connected: true, needsQrCode: false, level: 2 };
+      }
+      
+      // ========== NÍVEL 3: Requer novo QR Code ==========
+      console.log('[Recovery] Nível 3: Requer QR Code');
+      setIsReconnecting(false);
+      setConnectionError('Requer QR Code');
+      return { 
+        connected: false, 
+        needsQrCode: true, 
+        error: 'Não foi possível reconectar automaticamente. Escaneie o QR Code em Configurações > WhatsApp.',
+        level: 3 
+      };
+      
+    } catch (err) {
+      console.error('Erro ao verificar conexão:', err);
+      setIsReconnecting(false);
+      return { connected: false, needsQrCode: false, error: 'Erro ao verificar conexão' };
+    }
+  };
+
+  // Reset do contador de restarts a cada 10 minutos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRestartAttempts(0);
+    }, RESTART_WINDOW_MS);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Verificar estado real da conexão ao carregar (não confiar apenas no banco)
+  useEffect(() => {
+    const checkRealConnectionState = async () => {
+      if (!clinicId) return;
+      
+      try {
+        // Buscar configurações da Evolution API
+        const { data: settings } = await supabase
+          .from('settings')
+          .select('evolution_api_url, evolution_api_key')
+          .single();
+        
+        if (!settings?.evolution_api_url || !settings?.evolution_api_key) return;
+        
+        // Buscar instância WhatsApp
+        const { data: instances } = await supabase
+          .from('whatsapp_instances')
+          .select('id, instance_name, status')
+          .eq('clinic_id', clinicId)
+          .limit(1);
+        
+        const instance = instances?.[0];
+        if (!instance) return;
+        
+        // Verificar estado real via API
+        const state = await checkConnectionState(
+          settings.evolution_api_url, 
+          settings.evolution_api_key, 
+          instance.instance_name
+        );
+        
+        console.log('[Connection Check] Estado real:', state, '| Status no banco:', instance.status);
+        
+        // Se o banco diz "connected" mas a API diz diferente, mostrar erro
+        if (instance.status === 'connected' && state !== 'open' && state !== 'connected') {
+          console.warn('[Connection Check] Discrepância detectada! Banco: connected, API:', state);
+          setConnectionError('Conexão instável. Clique para verificar.');
+        } else if (state === 'open' || state === 'connected') {
+          setConnectionError(null);
+        }
+      } catch (err) {
+        console.error('[Connection Check] Erro:', err);
+      }
+    };
+    
+    // Verificar após 3 segundos do carregamento
+    const timer = setTimeout(checkRealConnectionState, 3000);
+    return () => clearTimeout(timer);
+  }, [clinicId]);
+
   // Buscar mensagens rápidas do banco
   useEffect(() => {
     const fetchQuickReplies = async () => {
@@ -293,6 +515,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       if (!clinicId) return;
       
       try {
+        setConnectionError(null);
+        
         // Buscar configurações da Evolution API
         const { data: settings } = await supabase
           .from('settings')
@@ -324,7 +548,12 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           }
         );
         
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (response.status === 500) {
+            setConnectionError('Erro de conexão com WhatsApp. Verifique se a instância está conectada.');
+          }
+          return;
+        }
         
         const groups = await response.json();
         if (!Array.isArray(groups) || groups.length === 0) return;
@@ -365,6 +594,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         refetch();
       } catch (err) {
         console.error('Erro ao sincronizar grupos (background):', err);
+        setConnectionError('Erro de conexão. Clique para tentar novamente.');
       }
     };
     
@@ -1995,6 +2225,22 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       }
       // Enviar via Evolution API se conectado
       else if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
+        // Verificar conexão real antes de enviar (preflight)
+        const connectionCheck = await ensureInstanceConnected();
+        if (!connectionCheck.connected) {
+          if (connectionCheck.needsQrCode) {
+            setConnectionModal({
+              show: true,
+              title: 'WhatsApp Desconectado',
+              message: connectionCheck.error || 'Não foi possível reconectar. Escaneie o QR Code em Configurações > WhatsApp.',
+              needsQrCode: true
+            });
+          } else {
+            setConnectionError(connectionCheck.error || 'Erro de conexão');
+          }
+          return;
+        }
+        
         // Verificar rate limit antes de enviar
         const rateLimitCheck = checkRateLimit(instance.instance_name);
         if (!rateLimitCheck.allowed) {
@@ -2665,22 +2911,23 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     <div className="flex h-full bg-slate-50 overflow-hidden">
       {/* Col 1: Chat List */}
       <aside className="w-[380px] flex flex-col bg-white border-r border-slate-200 h-full overflow-hidden shrink-0">
-        {/* Channel Selector */}
-        <div className="flex items-center justify-center gap-1.5 p-2 border-b border-slate-100">
-          {/* WhatsApp */}
-          <button
-            onClick={() => setActiveChannel('whatsapp')}
-            className={`p-1.5 rounded-full transition-all ${
-              activeChannel === 'whatsapp' 
-                ? 'bg-[#25D366] shadow-md shadow-[#25D366]/30' 
-                : 'bg-slate-100 hover:bg-[#25D366]/10'
-            }`}
-            title="WhatsApp"
-          >
-            <svg className={`w-4 h-4 ${activeChannel === 'whatsapp' ? 'text-white' : 'text-[#25D366]'}`} viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-            </svg>
-          </button>
+        {/* Channel Selector + Status */}
+        <div className="flex items-center justify-between gap-2 p-2 border-b border-slate-100">
+          <div className="flex items-center gap-1.5">
+            {/* WhatsApp */}
+            <button
+              onClick={() => setActiveChannel('whatsapp')}
+              className={`p-1.5 rounded-full transition-all ${
+                activeChannel === 'whatsapp' 
+                  ? 'bg-[#25D366] shadow-md shadow-[#25D366]/30' 
+                  : 'bg-slate-100 hover:bg-[#25D366]/10'
+              }`}
+              title="WhatsApp"
+            >
+              <svg className={`w-4 h-4 ${activeChannel === 'whatsapp' ? 'text-white' : 'text-[#25D366]'}`} viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              </svg>
+            </button>
 
           {/* Instagram - sempre visível, desabilitado se não configurado */}
           <button
@@ -2729,6 +2976,51 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               <path d="M12 0c-6.627 0-12 4.975-12 11.111 0 3.497 1.745 6.616 4.472 8.652v4.237l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111 0-6.136-5.373-11.111-12-11.111zm1.193 14.963l-3.056-3.259-5.963 3.259 6.559-6.963 3.13 3.259 5.889-3.259-6.559 6.963z"/>
             </svg>
           </button>
+          </div>
+
+          {/* Status/Error Banner */}
+          {connectionError || isReconnecting ? (
+            <button
+              onClick={async () => {
+                if (isReconnecting) return; // Evitar cliques durante reconexão
+                const result = await ensureInstanceConnected();
+                if (result.connected) {
+                  refetch();
+                } else if (result.needsQrCode) {
+                  setConnectionModal({
+                    show: true,
+                    title: 'WhatsApp Desconectado',
+                    message: result.error || 'Não foi possível reconectar. Escaneie o QR Code em Configurações > WhatsApp.',
+                    needsQrCode: true
+                  });
+                }
+              }}
+              disabled={isReconnecting}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors ${
+                isReconnecting 
+                  ? 'bg-blue-50 border border-blue-200 cursor-wait' 
+                  : 'bg-amber-50 border border-amber-200 hover:bg-amber-100'
+              }`}
+              title={isReconnecting ? 'Reconectando...' : 'Clique para reconectar'}
+            >
+              {isReconnecting ? (
+                <>
+                  <span className="material-symbols-outlined text-[14px] text-blue-600 animate-spin">sync</span>
+                  <span className="text-[10px] font-medium text-blue-700">Reconectando...</span>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[14px] text-amber-600">warning</span>
+                  <span className="text-[10px] font-medium text-amber-700">Reconectar</span>
+                </>
+              )}
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-lg">
+              <span className="size-1.5 rounded-full bg-green-500"></span>
+              <span className="text-[10px] font-semibold text-green-700 uppercase">Conectado</span>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-b border-slate-100 space-y-4">
@@ -4626,6 +4918,88 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           </div>
         )}
       </aside>
+
+      {/* Modal de Conexão WhatsApp */}
+      {connectionModal.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setConnectionModal({ show: false, title: '', message: '', needsQrCode: false })}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6 text-center">
+              <div className="size-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="material-symbols-outlined text-red-600 text-3xl">link_off</span>
+              </div>
+              <h3 className="font-bold text-lg text-slate-800 mb-2">{connectionModal.title}</h3>
+              <p className="text-slate-600 text-sm mb-4">
+                {connectionModal.message}
+              </p>
+              {connectionModal.needsQrCode && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                  <div className="flex items-center justify-center gap-2 text-amber-700">
+                    <span className="material-symbols-outlined">qr_code_2</span>
+                    <span className="font-medium text-sm">Escaneie o QR Code</span>
+                  </div>
+                  <p className="text-amber-600 text-xs mt-1">Clique no botão abaixo para gerar</p>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConnectionModal({ show: false, title: '', message: '', needsQrCode: false })}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl transition-colors"
+                >
+                  Fechar
+                </button>
+                {connectionModal.needsQrCode && (
+                  <button
+                    onClick={async () => {
+                      setConnectionModal({ show: false, title: '', message: '', needsQrCode: false });
+                      
+                      // Fazer logout da instância antes de redirecionar
+                      try {
+                        const { data: settings } = await supabase
+                          .from('settings')
+                          .select('evolution_api_url, evolution_api_key')
+                          .single();
+                        
+                        const { data: instances } = await supabase
+                          .from('whatsapp_instances')
+                          .select('instance_name')
+                          .eq('clinic_id', clinicId)
+                          .limit(1);
+                        
+                        const instance = instances?.[0];
+                        if (settings?.evolution_api_url && settings?.evolution_api_key && instance) {
+                          // Fazer logout para limpar a sessão
+                          await fetch(
+                            `${settings.evolution_api_url}/instance/logout/${instance.instance_name}`,
+                            {
+                              method: 'DELETE',
+                              headers: { 'Content-Type': 'application/json', 'apikey': settings.evolution_api_key },
+                            }
+                          );
+                          
+                          // Atualizar status no banco
+                          await supabase
+                            .from('whatsapp_instances')
+                            .update({ status: 'disconnected' })
+                            .eq('clinic_id', clinicId);
+                        }
+                      } catch (err) {
+                        console.error('Erro ao fazer logout:', err);
+                      }
+                      
+                      // Redirecionar para página de conexão
+                      window.location.href = '/connect-whatsapp';
+                    }}
+                    className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
+                    Gerar QR Code
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Rate Limit */}
       {rateLimitModal.show && (

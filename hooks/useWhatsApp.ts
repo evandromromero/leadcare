@@ -370,6 +370,27 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
     setError(null);
 
     try {
+      // Primeiro, fazer logout para garantir que a instância está desconectada
+      console.log('[useWhatsApp] reconnect: Fazendo logout primeiro...');
+      try {
+        await fetch(
+          `${settings.apiUrl}/instance/logout/${targetInstance.instanceName}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': settings.apiKey,
+            },
+          }
+        );
+        // Aguardar um pouco para a Evolution processar o logout
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (logoutErr) {
+        console.log('[useWhatsApp] reconnect: Logout falhou (pode ser normal):', logoutErr);
+      }
+      
+      // Agora tentar conectar para gerar novo QR Code
+      console.log('[useWhatsApp] reconnect: Tentando connect...');
       const connectResponse = await fetch(
         `${settings.apiUrl}/instance/connect/${targetInstance.instanceName}`,
         {
@@ -398,6 +419,8 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
 
       const data = await connectResponse.json();
       const qrCode = data.base64 || data.qrcode?.base64 || null;
+      
+      console.log('[useWhatsApp] reconnect: QR Code recebido:', qrCode ? 'Sim' : 'Não');
 
       await supabase
         .from('whatsapp_instances')
@@ -408,6 +431,9 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
         })
         .eq('id', instanceId);
 
+      // Refetch para atualizar o estado local com o QR Code
+      await fetchInstances();
+      
       setSelectedInstanceId(instanceId);
       setLoading(false);
       return { error: null };

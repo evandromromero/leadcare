@@ -232,6 +232,46 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Quick Links - Suporte */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <Link
+          to="/suporte"
+          className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 hover:border-violet-300 hover:shadow-md transition-all flex items-center gap-4"
+        >
+          <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center">
+            <span className="material-symbols-outlined text-violet-600">support_agent</span>
+          </div>
+          <div>
+            <p className="font-medium text-slate-800">Painel de Suporte</p>
+            <p className="text-xs text-slate-500">Atender tickets de clientes</p>
+          </div>
+        </Link>
+        <Link
+          to="/admin/support-agents"
+          className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 hover:border-violet-300 hover:shadow-md transition-all flex items-center gap-4"
+        >
+          <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center">
+            <span className="material-symbols-outlined text-violet-600">group</span>
+          </div>
+          <div>
+            <p className="font-medium text-slate-800">Agentes de Suporte</p>
+            <p className="text-xs text-slate-500">Gerenciar equipe</p>
+          </div>
+        </Link>
+        <Link
+          to="/admin/support-replies"
+          className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 hover:border-violet-300 hover:shadow-md transition-all flex items-center gap-4"
+        >
+          <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center">
+            <span className="material-symbols-outlined text-violet-600">quick_phrases</span>
+          </div>
+          <div>
+            <p className="font-medium text-slate-800">Mensagens Rápidas</p>
+            <p className="text-xs text-slate-500">Respostas pré-definidas</p>
+          </div>
+        </Link>
+      </div>
+
       {/* Recent Clinics */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200">
         <div className="p-4 sm:p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">

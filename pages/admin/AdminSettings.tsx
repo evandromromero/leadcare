@@ -22,6 +22,9 @@ interface Settings {
   login_title: string;
   login_subtitle: string;
   login_footer_text: string;
+  // Suporte
+  support_enabled: boolean;
+  support_online: boolean;
 }
 
 const AdminSettings: React.FC = () => {
@@ -45,6 +48,9 @@ const AdminSettings: React.FC = () => {
     login_title: 'Potencialize suas vendas e gerencie clínicas em um só lugar.',
     login_subtitle: 'A plataforma completa para gestão de leads, atendimento multicanal e performance de equipe.',
     login_footer_text: '+2k Clínicas conectadas hoje.',
+    // Suporte
+    support_enabled: false,
+    support_online: false,
   });
   const [activeTab, setActiveTab] = useState<'api' | 'seo' | 'login'>('api');
   const [loading, setLoading] = useState(true);
@@ -125,6 +131,9 @@ const AdminSettings: React.FC = () => {
           login_title: d.login_title || 'Potencialize suas vendas e gerencie clínicas em um só lugar.',
           login_subtitle: d.login_subtitle || 'A plataforma completa para gestão de leads, atendimento multicanal e performance de equipe.',
           login_footer_text: d.login_footer_text || '+2k Clínicas conectadas hoje.',
+          // Suporte
+          support_enabled: d.support_enabled || false,
+          support_online: d.support_online || false,
         });
       }
     } catch (error) {
@@ -162,6 +171,9 @@ const AdminSettings: React.FC = () => {
           login_title: settings.login_title,
           login_subtitle: settings.login_subtitle,
           login_footer_text: settings.login_footer_text,
+          // Suporte
+          support_enabled: settings.support_enabled,
+          support_online: settings.support_online,
           updated_at: new Date().toISOString(),
         } as any);
 

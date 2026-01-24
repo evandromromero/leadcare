@@ -1032,7 +1032,6 @@ Este projeto é privado e de uso exclusivo.
 |--------|-----------|
 | `whatsapp-cloud-webhook` | Recebe mensagens da Cloud API |
 | `cloud-api-send` | Envia mensagens via Cloud API |
-| `cloud-api-media` | Download de mídia da Cloud API |
 | `cloud-api-templates` | Sincroniza e envia templates |
 
 ### Fluxo de Configuração
@@ -1043,6 +1042,102 @@ Este projeto é privado e de uso exclusivo.
 4. Configura webhook no Meta Business Suite
 5. Sincroniza templates aprovados
 6. Pode fazer envio em massa
+
+### Detalhes das Edge Functions
+
+#### `whatsapp-cloud-webhook`
+**URL:** `https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/whatsapp-cloud-webhook`
+**JWT:** Desabilitado (necessário para webhook da Meta)
+
+Recebe eventos da API oficial do WhatsApp:
+- Mensagens de texto, imagem, vídeo, áudio, documento, sticker, localização, contato
+- Respostas de botões e listas interativas
+- Status de entrega (sent, delivered, read, failed)
+- Reações a mensagens
+
+**Configuração no Meta Business Suite:**
+```
+Webhook URL: https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/whatsapp-cloud-webhook
+Verify Token: (valor do campo cloud_api_verify_token da clínica)
+Campos: messages, message_status
+```
+
+#### `cloud-api-send`
+**URL:** `https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/cloud-api-send`
+**JWT:** Habilitado
+
+Ações disponíveis:
+| Action | Descrição | Parâmetros |
+|--------|-----------|------------|
+| `send_text` | Enviar texto | `phone`, `message` |
+| `send_image` | Enviar imagem | `phone`, `media_url`, `caption` |
+| `send_video` | Enviar vídeo | `phone`, `media_url`, `caption` |
+| `send_audio` | Enviar áudio | `phone`, `media_url` |
+| `send_document` | Enviar documento | `phone`, `media_url`, `caption` |
+| `send_reaction` | Enviar reação | `phone`, `message_id`, `emoji` |
+| `send_template` | Enviar template | `phone`, `template_name`, `template_language`, `template_components` |
+| `send_location` | Enviar localização | `phone`, `latitude`, `longitude`, `name`, `address` |
+| `send_contacts` | Enviar contato | `phone`, `contacts` |
+| `mark_as_read` | Marcar como lida | `message_id` |
+
+**Exemplo de uso:**
+```typescript
+await fetch(`${supabaseUrl}/functions/v1/cloud-api-send`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${supabaseAnonKey}`,
+  },
+  body: JSON.stringify({
+    clinic_id: clinicId,
+    action: 'send_text',
+    phone: '5567999999999',
+    message: 'Olá!'
+  }),
+});
+```
+
+#### `cloud-api-templates`
+**URL:** `https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/cloud-api-templates`
+**JWT:** Habilitado
+
+Ações disponíveis:
+| Action | Descrição | Parâmetros |
+|--------|-----------|------------|
+| `sync_templates` | Sincronizar templates do Meta | - |
+| `list_templates` | Listar templates do banco | - |
+| `send_template` | Enviar template individual | `phone`, `template_name`, `variables`, `header_params`, `button_params` |
+| `send_bulk_template` | Envio em massa | `phones[]`, `template_name`, `variables_map` |
+
+**Exemplo de envio em massa:**
+```typescript
+await fetch(`${supabaseUrl}/functions/v1/cloud-api-templates`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${supabaseAnonKey}`,
+  },
+  body: JSON.stringify({
+    clinic_id: clinicId,
+    action: 'send_bulk_template',
+    template_name: 'promocao',
+    phones: [
+      { phone: '5567999999999', variables: ['João'] },
+      { phone: '5567888888888', variables: ['Maria'] }
+    ]
+  }),
+});
+```
+
+### Coexistência WhatsApp Celular + Cloud API
+
+| Cenário | Possível? | Observação |
+|---------|-----------|------------|
+| Cloud API + WhatsApp Business **mesmo número** | ❌ Não | Meta bloqueia |
+| Cloud API + WhatsApp Business **números diferentes** | ✅ Sim | Cada canal funciona separado |
+| Migrar número do celular para Cloud API | ✅ Sim | Requer aprovação do app |
+
+**Importante:** Para usar coexistência (número ativo no celular + Cloud API), o app precisa estar aprovado na Meta.
 
 ---
 
@@ -1234,6 +1329,180 @@ Quando você marca um lead como **"Convertido"**, o sistema envia automaticament
 | Fixar Conversas | `useChats.ts`, `Inbox.tsx` | `is_pinned` |
 | Sincronização Leitura | `evolution-webhook`, `useChats.ts`, `useWhatsApp.ts` | - |
 | Facebook Conversions | `AdminClinicDetail.tsx`, `Inbox.tsx` | `facebook_dataset_id`, `facebook_api_token` |
+
+---
+
+## Fase 10: Sistema de Suporte ao Cliente ✅ COMPLETA
+
+### Visão Geral
+
+Sistema completo de suporte ao cliente com **chat ao vivo** e **tickets de suporte**, permitindo comunicação em tempo real entre clínicas e equipe de suporte.
+
+### Funcionalidades Implementadas
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Página de Suporte do Cliente (`/support`) | ✅ Completo |
+| Painel de Suporte Admin (`/suporte`) | ✅ Completo |
+| Chat ao Vivo (quando suporte online) | ✅ Completo |
+| Sistema de Tickets (quando suporte offline) | ✅ Completo |
+| Categorias de Tickets (Suporte, Melhorias, Bug, Dúvida, Outro) | ✅ Completo |
+| Realtime via Supabase (mensagens instantâneas) | ✅ Completo |
+| Notificação sonora para novos tickets/mensagens | ✅ Completo |
+| Notificação do navegador (browser notification) | ✅ Completo |
+| Emoji Picker no chat | ✅ Completo |
+| Mensagens Rápidas (Quick Replies) | ✅ Completo |
+| Filtro por tipo (Chat ao Vivo / Ticket) | ✅ Completo |
+| Diferenciação visual (cores) entre Chat e Ticket | ✅ Completo |
+| Menu Suporte aparece em tempo real | ✅ Completo |
+| Chat flutuante aparece em tempo real | ✅ Completo |
+
+### Arquitetura do Sistema
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        CLIENTE (Clínica)                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  /support - Página de Suporte                           │   │
+│  │  ├── Chat Flutuante (quando suporte ONLINE)             │   │
+│  │  ├── Botão Novo Ticket (quando suporte OFFLINE)         │   │
+│  │  ├── Lista de Tickets com filtros                       │   │
+│  │  └── Visualização de mensagens                          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ Supabase Realtime
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      SUPABASE (Backend)                         │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌────────────────┐  │
+│  │ support_tickets │  │support_messages │  │    settings    │  │
+│  │ - id            │  │ - id            │  │ support_online │  │
+│  │ - clinic_id     │  │ - ticket_id     │  │support_enabled │  │
+│  │ - user_id       │  │ - sender_id     │  └────────────────┘  │
+│  │ - subject       │  │ - content       │                      │
+│  │ - status        │  │ - is_from_support│                     │
+│  │ - category      │  │ - read_at       │                      │
+│  │ - is_live_chat  │  │ - created_at    │                      │
+│  │ - priority      │  └─────────────────┘                      │
+│  └─────────────────┘                                           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ Supabase Realtime
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     SUPORTE (SuperAdmin)                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  /suporte - Painel de Suporte                           │   │
+│  │  ├── Toggle Online/Offline                              │   │
+│  │  ├── Toggle Habilitar/Desabilitar Suporte               │   │
+│  │  ├── Lista de Tickets (todos as clínicas)               │   │
+│  │  ├── Filtros por Status e Tipo                          │   │
+│  │  ├── Emoji Picker + Quick Replies                       │   │
+│  │  └── Notificações sonoras e do navegador                │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Tabelas do Banco de Dados
+
+| Tabela | Descrição |
+|--------|-----------|
+| `support_tickets` | Tickets de suporte (id, clinic_id, user_id, subject, status, category, is_live_chat, priority, assigned_to) |
+| `support_messages` | Mensagens dos tickets (id, ticket_id, sender_id, content, is_from_support, read_at) |
+| `support_quick_replies` | Mensagens rápidas do suporte (id, title, content, category, shortcut, is_active, sort_order) |
+| `settings` | Configurações globais (support_enabled, support_online) |
+| `clinics` | Campo `support_enabled` por clínica |
+
+### Arquivos Principais
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `hooks/useSupport.ts` | Hook principal com toda lógica de suporte |
+| `pages/Support.tsx` | Página do cliente para abrir tickets/chat |
+| `pages/SupportPanel.tsx` | Painel do SuperAdmin para gerenciar suporte |
+| `components/EmojiPicker.tsx` | Seletor de emojis por categorias |
+| `components/QuickReplies.tsx` | Mensagens rápidas com busca e categorias |
+| `components/Layout.tsx` | Menu dinâmico (mostra/esconde Suporte em tempo real) |
+
+### Hook useSupport
+
+```typescript
+const {
+  tickets,              // Lista de tickets
+  messages,             // Mensagens do ticket selecionado
+  selectedTicket,       // Ticket atualmente selecionado
+  setSelectedTicket,    // Selecionar ticket
+  loading,              // Estado de carregamento
+  supportSettings,      // { support_enabled, support_online }
+  clinicSupportEnabled, // Se a clínica tem suporte habilitado
+  createTicket,         // Criar novo ticket
+  sendMessage,          // Enviar mensagem
+  markMessagesAsRead,   // Marcar como lidas
+  updateTicketStatus,   // Atualizar status (open, in_progress, resolved, closed)
+  assignTicket,         // Atribuir a um agente
+  toggleSupportOnline,  // Alternar online/offline
+  toggleSupportEnabled, // Habilitar/desabilitar suporte
+  fetchTickets,         // Recarregar tickets
+  fetchMessages,        // Recarregar mensagens
+} = useSupport(clinicId, userId);
+```
+
+### Fluxo de Funcionamento
+
+#### 1. Cliente abre página de Suporte
+- Se `support_online = true`: Mostra chat flutuante para conversa em tempo real
+- Se `support_online = false`: Mostra botão "Novo Ticket" para abrir formulário
+
+#### 2. Criação de Ticket
+- **Chat ao Vivo**: `is_live_chat = true`, assunto automático "Chat ao Vivo"
+- **Ticket Normal**: `is_live_chat = false`, cliente escolhe categoria e assunto
+
+#### 3. Diferenciação Visual
+- **Chat ao Vivo**: Borda verde, badge verde com ícone de chat
+- **Ticket Normal**: Borda laranja, badge laranja com ícone de ticket
+
+#### 4. Realtime
+- Subscriptions em `support_tickets`, `support_messages` e `settings`
+- Mensagens aparecem instantaneamente sem refresh
+- Menu "Suporte" aparece/desaparece em tempo real
+- Chat flutuante aparece/desaparece em tempo real
+
+### Categorias de Tickets
+
+| Categoria | Valor | Ícone | Cor |
+|-----------|-------|-------|-----|
+| Suporte | `support` | support_agent | cyan |
+| Melhorias | `improvement` | lightbulb | purple |
+| Bug/Erro | `bug` | bug_report | red |
+| Dúvida | `question` | help | blue |
+| Outro | `other` | more_horiz | slate |
+
+### Status de Tickets
+
+| Status | Label | Cor |
+|--------|-------|-----|
+| `open` | Aberto | Amarelo |
+| `in_progress` | Em Andamento | Azul |
+| `resolved` | Resolvido | Verde |
+| `closed` | Fechado | Cinza |
+
+### Mensagens Rápidas (Quick Replies)
+
+Categorias pré-definidas:
+- **Saudações** (`greeting`): Boas-vindas, cumprimentos
+- **Encerramentos** (`closing`): Despedidas, agradecimentos
+- **Informações** (`info`): Respostas informativas
+- **Problemas** (`problem`): Respostas para bugs/erros
+- **Gerais** (`general`): Respostas genéricas
+
+### Correções de Bugs Implementadas
+
+| Bug | Solução |
+|-----|---------|
+| Mensagem duplicada ao enviar (Enter) | Trocado `onKeyPress` por `onKeyDown` |
+| Mensagem duplicada ao receber | Verificação `prev.some(m => m.id === newMessage.id)` antes de adicionar |
+| Menu não aparecia em tempo real | Subscription em `settings` no Layout.tsx |
 
 ---
 

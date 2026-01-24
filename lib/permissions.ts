@@ -1,6 +1,6 @@
 export type UserRole = 'SuperAdmin' | 'Admin' | 'Gerente' | 'Supervisor' | 'Comercial' | 'Recepcionista' | 'Financeiro' | 'Visualizador';
 
-export type MenuPage = 'dashboard' | 'inbox' | 'kanban' | 'users' | 'settings' | 'connect' | 'receipts' | 'reports';
+export type MenuPage = 'dashboard' | 'inbox' | 'kanban' | 'users' | 'settings' | 'connect' | 'receipts' | 'reports' | 'support';
 
 export type Action = 
   | 'create_user' 
