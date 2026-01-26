@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
@@ -20,6 +20,7 @@ interface LeadSourceStats {
   total_leads: number;
   converted_leads: number;
   revenue: number;
+  clinic_revenue: number;
   tag_name: string | null;
   tag_color: string | null;
 }
@@ -39,6 +40,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
   const [leadSourceStats, setLeadSourceStats] = useState<LeadSourceStats[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
+  
+  // Filtro de período para Leads por Origem
+  const [sourcesPeriodFilter, setSourcesPeriodFilter] = useState<'all' | '7d' | '30d' | 'month'>('all');
+  
+  // Filtro de origens selecionadas (null = todas)
+  const [selectedSources, setSelectedSources] = useState<string[] | null>(null);
+  const [showSourcesDropdown, setShowSourcesDropdown] = useState(false);
   
   // Estados para meta do atendente
   const [userGoalData, setUserGoalData] = useState<{
@@ -81,6 +89,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   
   // Estado para contar pagamentos ativos (vendas concluídas)
   const [activePaymentsCount, setActivePaymentsCount] = useState(0);
+  
+  // Filtrar leadSourceStats baseado nas origens selecionadas
+  const filteredLeadSourceStats = useMemo(() => {
+    if (selectedSources === null) return leadSourceStats;
+    return leadSourceStats.filter(s => selectedSources.includes(s.id));
+  }, [leadSourceStats, selectedSources]);
 
   // Calcular métricas baseado no view_mode do usuário
   // view_mode 'shared' = vê faturamento de todos
@@ -156,7 +170,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           // Comercial vê apenas o que ele criou (excluindo canceladas)
           const { data } = await supabase
             .from('payments' as any)
-            .select('value, payment_date, chat_id, created_by, status')
+            .select('id, value, payment_date, chat_id, created_by, status')
             .eq('clinic_id', clinicId)
             .eq('created_by', user.id)
             .or('status.is.null,status.eq.active');
@@ -165,7 +179,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           // Outros perfis veem baseado nos chats (excluindo canceladas)
           const { data } = await supabase
             .from('payments' as any)
-            .select('value, payment_date, chat_id, created_by, status')
+            .select('id, value, payment_date, chat_id, created_by, status')
             .in('chat_id', chatIdsForStats)
             .or('status.is.null,status.eq.active');
           paymentsData = data as any[];
@@ -217,15 +231,79 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             .select('id, name, code, color, tag_id, tag:tags(id, name, color)')
             .eq('clinic_id', clinicId);
           
+          // Buscar clinic_receipts vinculados aos payments para calcular receita clínica
+          const { data: receiptsData } = await supabase
+            .from('clinic_receipts' as any)
+            .select('id, payment_id, total_value')
+            .eq('clinic_id', clinicId);
+          
           if (sourcesData && sourcesData.length > 0) {
+            // Função para filtrar chats por período
+            const getFilteredChats = (allChats: any[], period: 'all' | '7d' | '30d' | 'month') => {
+              if (period === 'all') return allChats;
+              
+              const now = new Date();
+              let startDate: Date;
+              
+              switch (period) {
+                case '7d':
+                  startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                  break;
+                case '30d':
+                  startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                  break;
+                case 'month':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                  break;
+                default:
+                  return allChats;
+              }
+              
+              return allChats.filter(c => new Date(c.created_at) >= startDate);
+            };
+            
+            // Função para filtrar payments por período
+            const getFilteredPayments = (allPayments: any[], period: 'all' | '7d' | '30d' | 'month') => {
+              if (period === 'all') return allPayments;
+              
+              const now = new Date();
+              let startDate: Date;
+              
+              switch (period) {
+                case '7d':
+                  startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                  break;
+                case '30d':
+                  startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                  break;
+                case 'month':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                  break;
+                default:
+                  return allPayments;
+              }
+              
+              return allPayments.filter(p => new Date(p.payment_date) >= startDate);
+            };
+            
+            const filteredChats = getFilteredChats(chats, sourcesPeriodFilter);
+            const filteredPayments = getFilteredPayments(paymentsData as any[] || [], sourcesPeriodFilter);
+            
             // Calcular estatísticas por origem usando apenas os chats visíveis
             const stats: LeadSourceStats[] = (sourcesData as any[]).map(source => {
-              const sourceChats = chats.filter(c => (c as any).source_id === source.id);
+              const sourceChats = filteredChats.filter(c => (c as any).source_id === source.id);
               const convertedChats = sourceChats.filter(c => c.status === 'Convertido');
               const sourceChatIds = sourceChats.map(c => c.id);
-              const revenue = (paymentsData as any[] || [])
-                .filter(p => sourceChatIds.includes(p.chat_id))
-                .reduce((sum, p) => sum + Number(p.value), 0);
+              
+              // Valor comercial (payments filtrados por período)
+              const sourcePayments = filteredPayments.filter(p => sourceChatIds.includes(p.chat_id));
+              const revenue = sourcePayments.reduce((sum, p) => sum + Number(p.value), 0);
+              
+              // Receita clínica (clinic_receipts vinculados aos payments desta origem)
+              const sourcePaymentIds = sourcePayments.map(p => p.id);
+              const clinicRevenue = (receiptsData as any[] || [])
+                .filter(r => sourcePaymentIds.includes(r.payment_id))
+                .reduce((sum, r) => sum + Number(r.total_value), 0);
               
               return {
                 id: source.id,
@@ -235,6 +313,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                 total_leads: sourceChats.length,
                 converted_leads: convertedChats.length,
                 revenue,
+                clinic_revenue: clinicRevenue,
                 tag_name: source.tag?.name || null,
                 tag_color: source.tag?.color || null,
               };
@@ -323,7 +402,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     };
     
     fetchStats();
-  }, [clinicId, chats, loading]);
+  }, [clinicId, chats, loading, sourcesPeriodFilter]);
 
   // Buscar follow-ups agendados
   useEffect(() => {
@@ -645,10 +724,149 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         {/* Leads por Origem */}
         {canSeeBilling && leadSourceStats.length > 0 && (
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Leads por Origem</h3>
                 <p className="text-sm text-slate-500">Performance de cada canal de aquisição</p>
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <button
+                  onClick={() => setSourcesPeriodFilter('all')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    sourcesPeriodFilter === 'all' 
+                      ? 'bg-cyan-100 text-cyan-700' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  onClick={() => setSourcesPeriodFilter('7d')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    sourcesPeriodFilter === '7d' 
+                      ? 'bg-cyan-100 text-cyan-700' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  7 dias
+                </button>
+                <button
+                  onClick={() => setSourcesPeriodFilter('30d')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    sourcesPeriodFilter === '30d' 
+                      ? 'bg-cyan-100 text-cyan-700' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  30 dias
+                </button>
+                <button
+                  onClick={() => setSourcesPeriodFilter('month')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    sourcesPeriodFilter === 'month' 
+                      ? 'bg-cyan-100 text-cyan-700' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Este mês
+                </button>
+                
+                <div className="w-px h-6 bg-slate-200 mx-1"></div>
+                
+                <div className="relative">
+                  <button
+                    onClick={() => setShowSourcesDropdown(!showSourcesDropdown)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+                      selectedSources && selectedSources.length > 0
+                        ? 'bg-violet-100 text-violet-700'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-sm">filter_list</span>
+                    {selectedSources && selectedSources.length > 0 
+                      ? `${selectedSources.length} origem(ns)`
+                      : 'Todas origens'
+                    }
+                    <span className="material-symbols-outlined text-sm">
+                      {showSourcesDropdown ? 'expand_less' : 'expand_more'}
+                    </span>
+                  </button>
+                  
+                  {showSourcesDropdown && (
+                    <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+                      <div className="p-2 border-b border-slate-100 flex justify-between items-center">
+                        <span className="text-xs font-semibold text-slate-600">Filtrar por origem</span>
+                        <button
+                          onClick={() => setSelectedSources(null)}
+                          className="text-xs text-cyan-600 hover:text-cyan-700 font-medium"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto p-2 space-y-1">
+                        {leadSourceStats.map(source => {
+                          const isSelected = selectedSources === null || selectedSources.includes(source.id);
+                          return (
+                            <label
+                              key={source.id}
+                              className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${
+                                isSelected ? 'bg-slate-50' : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    if (selectedSources === null) {
+                                      setSelectedSources(null);
+                                    } else {
+                                      const newSelected = [...selectedSources, source.id];
+                                      if (newSelected.length === leadSourceStats.length) {
+                                        setSelectedSources(null);
+                                      } else {
+                                        setSelectedSources(newSelected);
+                                      }
+                                    }
+                                  } else {
+                                    if (selectedSources === null) {
+                                      setSelectedSources(leadSourceStats.filter(s => s.id !== source.id).map(s => s.id));
+                                    } else {
+                                      const newSelected = selectedSources.filter(id => id !== source.id);
+                                      setSelectedSources(newSelected.length > 0 ? newSelected : null);
+                                    }
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                              />
+                              <span
+                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: source.tag_color || source.color }}
+                              ></span>
+                              <span className="text-sm text-slate-700 truncate">{source.name}</span>
+                              {source.tag_name && (
+                                <span
+                                  className="text-[10px] text-white px-1.5 py-0.5 rounded font-medium ml-auto"
+                                  style={{ backgroundColor: source.tag_color || '#6B7280' }}
+                                >
+                                  {source.tag_name}
+                                </span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div className="p-2 border-t border-slate-100">
+                        <button
+                          onClick={() => setShowSourcesDropdown(false)}
+                          className="w-full px-3 py-1.5 bg-cyan-600 text-white text-xs font-medium rounded-lg hover:bg-cyan-700 transition-colors"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             
@@ -660,11 +878,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Leads</th>
                     <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Convertidos</th>
                     <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Taxa</th>
-                    <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Receita</th>
+                    <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Comercial</th>
+                    <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Receita Clínica</th>
+                    <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {leadSourceStats.map(source => {
+                  {filteredLeadSourceStats.map(source => {
                     const conversionRate = source.total_leads > 0 
                       ? ((source.converted_leads / source.total_leads) * 100).toFixed(1) 
                       : '0.0';
@@ -699,8 +919,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <span className="font-black text-emerald-600">
+                          <span className="font-bold text-amber-600">
                             R$ {source.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="font-black text-emerald-600">
+                            R$ {source.clinic_revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="font-black text-cyan-600">
+                            R$ {(source.revenue + source.clinic_revenue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
                         </td>
                       </tr>
@@ -711,18 +941,24 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                   <tr className="border-t-2 border-slate-200 bg-slate-50">
                     <td className="py-3 px-4 font-bold text-slate-700">Total</td>
                     <td className="py-3 px-4 text-center font-bold text-slate-800">
-                      {leadSourceStats.reduce((sum, s) => sum + s.total_leads, 0)}
+                      {filteredLeadSourceStats.reduce((sum, s) => sum + s.total_leads, 0)}
                     </td>
                     <td className="py-3 px-4 text-center font-bold text-green-600">
-                      {leadSourceStats.reduce((sum, s) => sum + s.converted_leads, 0)}
+                      {filteredLeadSourceStats.reduce((sum, s) => sum + s.converted_leads, 0)}
                     </td>
                     <td className="py-3 px-4 text-center font-bold text-slate-600">
-                      {leadSourceStats.reduce((sum, s) => sum + s.total_leads, 0) > 0 
-                        ? ((leadSourceStats.reduce((sum, s) => sum + s.converted_leads, 0) / leadSourceStats.reduce((sum, s) => sum + s.total_leads, 0)) * 100).toFixed(1)
+                      {filteredLeadSourceStats.reduce((sum, s) => sum + s.total_leads, 0) > 0 
+                        ? ((filteredLeadSourceStats.reduce((sum, s) => sum + s.converted_leads, 0) / filteredLeadSourceStats.reduce((sum, s) => sum + s.total_leads, 0)) * 100).toFixed(1)
                         : '0.0'}%
                     </td>
+                    <td className="py-3 px-4 text-right font-bold text-amber-600">
+                      R$ {filteredLeadSourceStats.reduce((sum, s) => sum + s.revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
                     <td className="py-3 px-4 text-right font-black text-emerald-600">
-                      R$ {leadSourceStats.reduce((sum, s) => sum + s.revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {filteredLeadSourceStats.reduce((sum, s) => sum + s.clinic_revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-3 px-4 text-right font-black text-cyan-600">
+                      R$ {filteredLeadSourceStats.reduce((sum, s) => sum + s.revenue + s.clinic_revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
                 </tfoot>

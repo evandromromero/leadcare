@@ -21,7 +21,8 @@ import {
   Clock,
   User,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Info
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -129,6 +130,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   
   const [formData, setFormData] = useState({
     description: '',
@@ -476,11 +478,67 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Lancamentos</h1>
-          <p className="text-slate-500 text-sm">Vendas do comercial e receitas da clinica</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Lancamentos</h1>
+            <p className="text-slate-500 text-sm">Vendas do comercial e receitas da clinica</p>
+          </div>
+          <div className="relative">
+            <button
+              onMouseEnter={() => setShowInfoTooltip(true)}
+              onMouseLeave={() => setShowInfoTooltip(false)}
+              className="w-8 h-8 bg-cyan-50 hover:bg-cyan-100 rounded-full flex items-center justify-center transition-colors"
+            >
+              <Info className="w-4 h-4 text-cyan-600" />
+            </button>
+            
+            {showInfoTooltip && (
+              <div className="absolute left-0 top-10 z-50 w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-4 animate-in fade-in duration-200">
+                <div className="absolute -top-2 left-4 w-4 h-4 bg-white border-l border-t border-slate-200 rotate-45"></div>
+                <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-cyan-100 rounded-lg flex items-center justify-center">
+                    <Info className="w-3.5 h-3.5 text-cyan-600" />
+                  </span>
+                  Como funciona?
+                </h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg flex-shrink-0"></div>
+                    <div>
+                      <p className="font-semibold text-slate-700">Valor Comercial</p>
+                      <p className="text-slate-500 text-xs">Valor total das vendas registradas pelo comercial. Representa o potencial de receita.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg flex-shrink-0"></div>
+                    <div>
+                      <p className="font-semibold text-slate-700">Receita Clinica</p>
+                      <p className="text-slate-500 text-xs">Valor efetivamente recebido pela clinica. Soma dos recebimentos confirmados.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 bg-gradient-to-r from-violet-500 to-purple-600 rounded-lg flex-shrink-0"></div>
+                    <div>
+                      <p className="font-semibold text-slate-700">ROI</p>
+                      <p className="text-slate-500 text-xs">Retorno sobre o investimento. Percentual da receita em relacao ao valor comercial.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 bg-gradient-to-r from-slate-600 to-slate-700 rounded-lg flex-shrink-0"></div>
+                    <div>
+                      <p className="font-semibold text-slate-700">Ticket Medio</p>
+                      <p className="text-slate-500 text-xs">Valor medio por recebimento. Receita total dividida pelo numero de recebimentos.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <p className="text-xs text-slate-400">Passe o mouse sobre os cards para mais detalhes.</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <button onClick={exportToCSV} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">
           <Download className="w-4 h-4" />

@@ -6,11 +6,20 @@ import {
   Filter,
   User,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Target,
+  Clock,
+  Users,
+  BarChart3,
+  Percent,
+  AlertCircle,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { GlobalState } from '../types';
+import { getDataAccess } from '../lib/permissions';
 
 interface ReportsProps {
   state: GlobalState;
@@ -274,7 +283,7 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Relatorios Financeiros</h1>

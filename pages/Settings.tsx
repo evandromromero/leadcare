@@ -77,6 +77,15 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
   const [massMessagePhones, setMassMessagePhones] = useState('');
   const [sendingMassMessage, setSendingMassMessage] = useState(false);
 
+  // Estados para horário de funcionamento
+  const [businessHoursStart, setBusinessHoursStart] = useState('08:00');
+  const [businessHoursEnd, setBusinessHoursEnd] = useState('18:00');
+  const [businessDays, setBusinessDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [hasLunchBreak, setHasLunchBreak] = useState(false);
+  const [lunchBreakStart, setLunchBreakStart] = useState('12:00');
+  const [lunchBreakEnd, setLunchBreakEnd] = useState('13:00');
+  const [savingBusinessHours, setSavingBusinessHours] = useState(false);
+
   // Cores predefinidas para etiquetas
   const tagColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 
@@ -229,11 +238,65 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
     }
   };
 
+  // Buscar horário de funcionamento
+  const fetchBusinessHours = async () => {
+    if (!clinicId) return;
+    const { data } = await (supabase as any)
+      .from('clinics')
+      .select('business_hours_start, business_hours_end, business_days, has_lunch_break, lunch_break_start, lunch_break_end')
+      .eq('id', clinicId)
+      .single();
+    if (data) {
+      setBusinessHoursStart(data.business_hours_start || '08:00');
+      setBusinessHoursEnd(data.business_hours_end || '18:00');
+      setBusinessDays(data.business_days || [1, 2, 3, 4, 5]);
+      setHasLunchBreak(data.has_lunch_break || false);
+      setLunchBreakStart(data.lunch_break_start || '12:00');
+      setLunchBreakEnd(data.lunch_break_end || '13:00');
+    }
+  };
+
+  // Salvar horário de funcionamento
+  const saveBusinessHours = async () => {
+    if (!clinicId) return;
+    setSavingBusinessHours(true);
+    try {
+      await supabase
+        .from('clinics')
+        .update({
+          business_hours_start: businessHoursStart,
+          business_hours_end: businessHoursEnd,
+          business_days: businessDays,
+          has_lunch_break: hasLunchBreak,
+          lunch_break_start: hasLunchBreak ? lunchBreakStart : null,
+          lunch_break_end: hasLunchBreak ? lunchBreakEnd : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', clinicId);
+      alert('Horário de funcionamento salvo com sucesso!');
+    } catch (error) {
+      console.error('Error saving business hours:', error);
+      alert('Erro ao salvar horário de funcionamento');
+    } finally {
+      setSavingBusinessHours(false);
+    }
+  };
+
+  // Toggle dia da semana
+  const toggleBusinessDay = (day: number) => {
+    if (businessDays.includes(day)) {
+      setBusinessDays(businessDays.filter(d => d !== day));
+    } else {
+      setBusinessDays([...businessDays, day].sort());
+    }
+  };
+
   useEffect(() => {
     fetchTags();
     fetchQuickReplies();
     fetchCloudApiConfig();
     fetchTemplates();
+    fetchBusinessHours();
   }, [clinicId]);
 
   // CRUD Etiquetas
@@ -451,6 +514,142 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
             )}
           </div>
         </div>
+
+        {/* Card: Horário de Funcionamento */}
+        {canEditClinicProfile && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="size-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined">schedule</span>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900">Horário de Funcionamento</h3>
+              <p className="text-xs text-slate-500">Define quando sua clínica atende</p>
+            </div>
+          </div>
+
+          {/* Horário */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Início do Expediente</label>
+              <input
+                type="time"
+                value={businessHoursStart}
+                onChange={(e) => setBusinessHoursStart(e.target.value)}
+                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Fim do Expediente</label>
+              <input
+                type="time"
+                value={businessHoursEnd}
+                onChange={(e) => setBusinessHoursEnd(e.target.value)}
+                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Dias da Semana */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-2">Dias de Atendimento</label>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { day: 0, label: 'Dom' },
+                { day: 1, label: 'Seg' },
+                { day: 2, label: 'Ter' },
+                { day: 3, label: 'Qua' },
+                { day: 4, label: 'Qui' },
+                { day: 5, label: 'Sex' },
+                { day: 6, label: 'Sáb' },
+              ].map(({ day, label }) => (
+                <button
+                  key={day}
+                  onClick={() => toggleBusinessDay(day)}
+                  className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    businessDays.includes(day)
+                      ? 'bg-cyan-600 text-white'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Intervalo de Almoço */}
+          <div className="border-t border-slate-200 pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Intervalo de Almoço</label>
+                <p className="text-xs text-slate-400">Fecha para almoço?</p>
+              </div>
+              <button
+                onClick={() => setHasLunchBreak(!hasLunchBreak)}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  hasLunchBreak ? 'bg-cyan-600' : 'bg-slate-200'
+                }`}
+              >
+                <span 
+                  className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    hasLunchBreak ? 'left-7' : 'left-1'
+                  }`}
+                />
+              </button>
+            </div>
+            
+            {hasLunchBreak && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Início do Almoço</label>
+                  <input
+                    type="time"
+                    value={lunchBreakStart}
+                    onChange={(e) => setLunchBreakStart(e.target.value)}
+                    className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Fim do Almoço</label>
+                  <input
+                    type="time"
+                    value={lunchBreakEnd}
+                    onChange={(e) => setLunchBreakEnd(e.target.value)}
+                    className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Info */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="text-xs text-amber-700">
+              <span className="font-medium">Dica:</span> O horário de funcionamento é usado para calcular métricas de tempo de resposta de forma mais precisa, desconsiderando horários fora do expediente.
+            </p>
+          </div>
+
+          {/* Botão Salvar */}
+          <button
+            onClick={saveBusinessHours}
+            disabled={savingBusinessHours}
+            className="w-full h-10 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {savingBusinessHours ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Salvando...
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-[18px]">save</span>
+                Salvar Horário
+              </>
+            )}
+          </button>
+        </div>
+        )}
 
         {/* Card: Perfil da Clínica */}
         {canEditClinicProfile && (

@@ -77,7 +77,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
           id, clinic_id, lead_id, client_name, phone_number, avatar_url, status,
           unread_count, last_message, last_message_time, assigned_to, created_at,
           updated_at, instance_id, locked_by, locked_at, last_message_from_client,
-          channel, is_pinned, is_group, group_id,
+          channel, is_pinned, is_group, group_id, source_id,
           chat_tags (
             tags (*)
           )

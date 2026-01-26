@@ -14,6 +14,7 @@ import Users from './pages/Users';
 import Settings from './pages/Settings';
 import Receipts from './pages/Receipts';
 import Reports from './pages/Reports';
+import Metrics from './pages/Metrics';
 import Support from './pages/Support';
 import SupportPanel from './pages/SupportPanel';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -22,6 +23,7 @@ import AdminClinicDetail from './pages/admin/AdminClinicDetail';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminUsers from './pages/admin/AdminUsers';
+import AdminPlans from './pages/admin/AdminPlans';
 import SupportAgents from './pages/admin/SupportAgents';
 import SupportQuickReplies from './pages/admin/SupportQuickReplies';
 import { useAuth, AuthProvider } from './hooks/useAuth';
@@ -211,6 +213,12 @@ const AppRoutes: React.FC = () => {
           </PrivateRoute>
         } />
 
+        <Route path="/metrics" element={
+          <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
+            <Metrics state={state} />
+          </PrivateRoute>
+        } />
+
         <Route path="/support" element={
           <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
             <Support />
@@ -254,6 +262,14 @@ const AppRoutes: React.FC = () => {
           <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
             <AdminLayout>
               <AdminUsers />
+            </AdminLayout>
+          </AdminRoute>
+        } />
+
+        <Route path="/admin/plans" element={
+          <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
+            <AdminLayout>
+              <AdminPlans />
             </AdminLayout>
           </AdminRoute>
         } />

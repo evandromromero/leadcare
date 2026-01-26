@@ -8,7 +8,8 @@ import {
   Shield,
   Users,
   Menu,
-  X
+  X,
+  CreditCard
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -43,6 +44,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const menuItems = [
     { path: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/admin/clinics', icon: Building2, label: 'Clínicas' },
+    { path: '/admin/plans', icon: CreditCard, label: 'Planos' },
     { path: '/admin/users', icon: Users, label: 'SuperAdmins' },
     { path: '/admin/settings', icon: Settings, label: 'Configurações' },
   ];

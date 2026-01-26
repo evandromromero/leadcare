@@ -274,7 +274,7 @@ const AdminClinicDetail: React.FC = () => {
   const [savingGoals, setSavingGoals] = useState(false);
   
   // Estado para abas
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'whatsapp' | 'metrics' | 'receipts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'whatsapp' | 'metrics' | 'receipts' | 'subscription'>('overview');
   
   // Estados para aba de Lançamentos
   const [receiptsData, setReceiptsData] = useState<{
@@ -1806,6 +1806,7 @@ const AdminClinicDetail: React.FC = () => {
             { id: 'whatsapp', label: 'WhatsApp', labelFull: 'WhatsApp', icon: 'chat' },
             { id: 'metrics', label: 'Métricas', labelFull: 'Métricas', icon: 'analytics' },
             { id: 'receipts', label: 'Lanç.', labelFull: 'Lançamentos', icon: 'receipt_long' },
+            { id: 'subscription', label: 'Plano', labelFull: 'Assinatura', icon: 'credit_card' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -4303,6 +4304,11 @@ const AdminClinicDetail: React.FC = () => {
         </div>
       )}
 
+      {/* Tab: Assinatura */}
+      {activeTab === 'subscription' && (
+        <SubscriptionTab clinicId={id!} clinicName={clinic.name} />
+      )}
+
       {/* Modal de Permissões */}
       {showPermissionsModal && permissionsUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -4579,6 +4585,585 @@ const AdminClinicDetail: React.FC = () => {
                 className="px-6 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
               >
                 Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Componente da aba de Assinatura
+interface SubscriptionTabProps {
+  clinicId: string;
+  clinicName: string;
+}
+
+interface Plan {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  price_monthly: number;
+  price_yearly: number;
+  trial_days: number;
+  max_users: number;
+  max_whatsapp_instances: number;
+  has_cloud_api: boolean;
+  has_instagram: boolean;
+  has_facebook: boolean;
+  has_mass_messaging: boolean;
+  has_reports: boolean;
+  has_api_access: boolean;
+  has_priority_support: boolean;
+  is_public: boolean;
+}
+
+interface Subscription {
+  id: string;
+  clinic_id: string;
+  plan_id: string;
+  billing_cycle: 'monthly' | 'yearly';
+  starts_at: string;
+  trial_ends_at: string | null;
+  expires_at: string | null;
+  status: 'trialing' | 'active' | 'past_due' | 'cancelled' | 'expired';
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  payment_method: string | null;
+  plan?: Plan;
+}
+
+interface Invoice {
+  id: string;
+  subscription_id: string;
+  amount: number;
+  discount: number;
+  total: number;
+  status: 'pending' | 'confirmed' | 'overdue' | 'refunded' | 'cancelled';
+  due_date: string;
+  paid_at: string | null;
+  reference_month: string | null;
+  description: string | null;
+}
+
+const SubscriptionTab: React.FC<SubscriptionTabProps> = ({ clinicId, clinicName }) => {
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showChangePlanModal, setShowChangePlanModal] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+  const [selectedBillingCycle, setSelectedBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+
+  useEffect(() => {
+    fetchData();
+  }, [clinicId]);
+
+  const fetchData = async () => {
+    try {
+      // Buscar planos
+      const { data: plansData } = await supabase
+        .from('plans' as any)
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      setPlans((plansData || []) as Plan[]);
+
+      // Buscar assinatura da clínica
+      const { data: subData } = await supabase
+        .from('subscriptions' as any)
+        .select('*, plan:plans(*)')
+        .eq('clinic_id', clinicId)
+        .single();
+
+      if (subData) {
+        setSubscription(subData as Subscription);
+        setSelectedPlanId(subData.plan_id);
+        setSelectedBillingCycle(subData.billing_cycle || 'monthly');
+      }
+
+      // Buscar faturas
+      const { data: invoicesData } = await supabase
+        .from('subscription_invoices' as any)
+        .select('*')
+        .eq('clinic_id', clinicId)
+        .order('due_date', { ascending: false })
+        .limit(10);
+
+      setInvoices((invoicesData || []) as Invoice[]);
+    } catch (err) {
+      console.error('Error fetching subscription data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createSubscription = async (planId: string, billingCycle: 'monthly' | 'yearly') => {
+    setSaving(true);
+    try {
+      const plan = plans.find(p => p.id === planId);
+      if (!plan) throw new Error('Plano não encontrado');
+
+      const now = new Date();
+      const trialEndsAt = plan.trial_days > 0 
+        ? new Date(now.getTime() + plan.trial_days * 24 * 60 * 60 * 1000).toISOString()
+        : null;
+
+      const { error } = await supabase
+        .from('subscriptions' as any)
+        .insert({
+          clinic_id: clinicId,
+          plan_id: planId,
+          billing_cycle: billingCycle,
+          starts_at: now.toISOString(),
+          trial_ends_at: trialEndsAt,
+          status: plan.trial_days > 0 ? 'trialing' : 'active',
+        });
+
+      if (error) throw error;
+
+      setShowChangePlanModal(false);
+      fetchData();
+    } catch (err: any) {
+      console.error('Error creating subscription:', err);
+      alert(err.message || 'Erro ao criar assinatura');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateSubscription = async (planId: string, billingCycle: 'monthly' | 'yearly') => {
+    if (!subscription) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('subscriptions' as any)
+        .update({
+          plan_id: planId,
+          billing_cycle: billingCycle,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', subscription.id);
+
+      if (error) throw error;
+
+      setShowChangePlanModal(false);
+      fetchData();
+    } catch (err: any) {
+      console.error('Error updating subscription:', err);
+      alert(err.message || 'Erro ao atualizar assinatura');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelSubscription = async () => {
+    if (!subscription) return;
+    if (!confirm('Tem certeza que deseja cancelar a assinatura?')) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('subscriptions' as any)
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', subscription.id);
+
+      if (error) throw error;
+      fetchData();
+    } catch (err: any) {
+      console.error('Error cancelling subscription:', err);
+      alert(err.message || 'Erro ao cancelar assinatura');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reactivateSubscription = async () => {
+    if (!subscription) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('subscriptions' as any)
+        .update({
+          status: 'active',
+          cancelled_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', subscription.id);
+
+      if (error) throw error;
+      fetchData();
+    } catch (err: any) {
+      console.error('Error reactivating subscription:', err);
+      alert(err.message || 'Erro ao reativar assinatura');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const markInvoiceAsPaid = async (invoiceId: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('subscription_invoices' as any)
+        .update({
+          status: 'confirmed',
+          paid_at: new Date().toISOString(),
+        })
+        .eq('id', invoiceId);
+
+      if (error) throw error;
+      fetchData();
+    } catch (err: any) {
+      console.error('Error marking invoice as paid:', err);
+      alert(err.message || 'Erro ao marcar fatura como paga');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-BR');
+  };
+
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      trialing: 'bg-blue-100 text-blue-700',
+      active: 'bg-green-100 text-green-700',
+      past_due: 'bg-red-100 text-red-700',
+      cancelled: 'bg-slate-100 text-slate-600',
+      expired: 'bg-orange-100 text-orange-700',
+      pending: 'bg-yellow-100 text-yellow-700',
+      confirmed: 'bg-green-100 text-green-700',
+      overdue: 'bg-red-100 text-red-700',
+      refunded: 'bg-purple-100 text-purple-700',
+    };
+
+    const labels: Record<string, string> = {
+      trialing: 'Em Trial',
+      active: 'Ativo',
+      past_due: 'Inadimplente',
+      cancelled: 'Cancelado',
+      expired: 'Expirado',
+      pending: 'Pendente',
+      confirmed: 'Pago',
+      overdue: 'Vencido',
+      refunded: 'Reembolsado',
+    };
+
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-slate-100 text-slate-600'}`}>
+        {labels[status] || status}
+      </span>
+    );
+  };
+
+  const getDaysRemaining = () => {
+    if (!subscription?.trial_ends_at) return null;
+    const trialEnd = new Date(subscription.trial_ends_at);
+    const now = new Date();
+    const diff = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : 0;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Plano Atual */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-4 sm:p-6 border-b border-slate-200 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-800">Plano Atual</h2>
+          <button
+            onClick={() => setShowChangePlanModal(true)}
+            className="px-4 py-2 bg-cyan-600 text-white text-sm rounded-lg hover:bg-cyan-700 transition-colors"
+          >
+            {subscription ? 'Alterar Plano' : 'Atribuir Plano'}
+          </button>
+        </div>
+
+        {subscription ? (
+          <div className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="text-2xl font-bold text-slate-800">
+                    {subscription.plan?.name || 'Plano'}
+                  </h3>
+                  {getStatusBadge(subscription.status)}
+                </div>
+                <p className="text-slate-500">{subscription.plan?.description}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-bold text-slate-800">
+                  {formatCurrency(
+                    subscription.billing_cycle === 'yearly'
+                      ? (subscription.plan?.price_yearly || 0)
+                      : (subscription.plan?.price_monthly || 0)
+                  )}
+                </p>
+                <p className="text-sm text-slate-500">
+                  /{subscription.billing_cycle === 'yearly' ? 'ano' : 'mês'}
+                </p>
+              </div>
+            </div>
+
+            {/* Trial Info */}
+            {subscription.status === 'trialing' && subscription.trial_ends_at && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-blue-600">hourglass_top</span>
+                  <div>
+                    <p className="font-medium text-blue-800">Período de Teste</p>
+                    <p className="text-sm text-blue-600">
+                      {getDaysRemaining()} dias restantes (expira em {formatDate(subscription.trial_ends_at)})
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Limites */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+              <div className="bg-slate-50 rounded-lg p-3">
+                <p className="text-xs text-slate-500 mb-1">Usuários</p>
+                <p className="text-lg font-bold text-slate-800">
+                  {subscription.plan?.max_users === 999 ? '∞' : subscription.plan?.max_users}
+                </p>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3">
+                <p className="text-xs text-slate-500 mb-1">Instâncias</p>
+                <p className="text-lg font-bold text-slate-800">
+                  {subscription.plan?.max_whatsapp_instances}
+                </p>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3">
+                <p className="text-xs text-slate-500 mb-1">Cloud API</p>
+                <p className="text-lg font-bold text-slate-800">
+                  {subscription.plan?.has_cloud_api ? '✓' : '✗'}
+                </p>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3">
+                <p className="text-xs text-slate-500 mb-1">Relatórios</p>
+                <p className="text-lg font-bold text-slate-800">
+                  {subscription.plan?.has_reports ? '✓' : '✗'}
+                </p>
+              </div>
+            </div>
+
+            {/* Ações */}
+            <div className="flex flex-wrap gap-3">
+              {subscription.status === 'cancelled' ? (
+                <button
+                  onClick={reactivateSubscription}
+                  disabled={saving}
+                  className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  Reativar Assinatura
+                </button>
+              ) : (
+                <button
+                  onClick={cancelSubscription}
+                  disabled={saving}
+                  className="px-4 py-2 bg-red-100 text-red-700 text-sm rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50"
+                >
+                  Cancelar Assinatura
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="p-8 text-center">
+            <span className="material-symbols-outlined text-6xl text-slate-300 mb-4">credit_card_off</span>
+            <p className="text-slate-500 mb-4">Esta clínica não possui assinatura ativa</p>
+            <button
+              onClick={() => setShowChangePlanModal(true)}
+              className="px-6 py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors"
+            >
+              Atribuir Plano
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Histórico de Faturas */}
+      {invoices.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-4 sm:p-6 border-b border-slate-200">
+            <h2 className="text-lg font-semibold text-slate-800">Histórico de Faturas</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Referência</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Vencimento</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Valor</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {invoices.map(invoice => (
+                  <tr key={invoice.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 text-sm text-slate-800">
+                      {invoice.reference_month 
+                        ? new Date(invoice.reference_month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+                        : invoice.description || '-'
+                      }
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">
+                      {formatDate(invoice.due_date)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-800 text-right font-medium">
+                      {formatCurrency(invoice.total)}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {getStatusBadge(invoice.status)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {invoice.status === 'pending' && (
+                        <button
+                          onClick={() => markInvoiceAsPaid(invoice.id)}
+                          disabled={saving}
+                          className="text-xs px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors disabled:opacity-50"
+                        >
+                          Marcar Pago
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Alterar Plano */}
+      {showChangePlanModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div className="p-4 sm:p-6 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-800">
+                {subscription ? 'Alterar Plano' : 'Atribuir Plano'}
+              </h2>
+              <button
+                onClick={() => setShowChangePlanModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+              {/* Ciclo de Cobrança */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-700 mb-2">Ciclo de Cobrança</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="billing_cycle"
+                      value="monthly"
+                      checked={selectedBillingCycle === 'monthly'}
+                      onChange={() => setSelectedBillingCycle('monthly')}
+                      className="w-4 h-4 text-cyan-600"
+                    />
+                    <span className="text-sm text-slate-700">Mensal</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="billing_cycle"
+                      value="yearly"
+                      checked={selectedBillingCycle === 'yearly'}
+                      onChange={() => setSelectedBillingCycle('yearly')}
+                      className="w-4 h-4 text-cyan-600"
+                    />
+                    <span className="text-sm text-slate-700">Anual (desconto)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Lista de Planos */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {plans.map(plan => (
+                  <div
+                    key={plan.id}
+                    onClick={() => setSelectedPlanId(plan.id)}
+                    className={`border-2 rounded-xl p-4 cursor-pointer transition-all ${
+                      selectedPlanId === plan.id
+                        ? 'border-cyan-500 bg-cyan-50'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-bold text-slate-800">{plan.name}</h3>
+                      {!plan.is_public && (
+                        <span className="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded">Especial</span>
+                      )}
+                    </div>
+                    <p className="text-2xl font-bold text-slate-800 mb-1">
+                      {formatCurrency(selectedBillingCycle === 'yearly' ? plan.price_yearly : plan.price_monthly)}
+                    </p>
+                    <p className="text-xs text-slate-500 mb-3">
+                      /{selectedBillingCycle === 'yearly' ? 'ano' : 'mês'}
+                    </p>
+                    {plan.trial_days > 0 && (
+                      <p className="text-xs text-green-600 font-medium mb-2">
+                        {plan.trial_days} dias grátis
+                      </p>
+                    )}
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p>{plan.max_users === 999 ? 'Usuários ilimitados' : `${plan.max_users} usuários`}</p>
+                      <p>{plan.max_whatsapp_instances} instância(s)</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-6 border-t border-slate-200 flex gap-3">
+              <button
+                onClick={() => setShowChangePlanModal(false)}
+                className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (subscription) {
+                    updateSubscription(selectedPlanId, selectedBillingCycle);
+                  } else {
+                    createSubscription(selectedPlanId, selectedBillingCycle);
+                  }
+                }}
+                disabled={saving || !selectedPlanId}
+                className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Salvando...' : subscription ? 'Alterar Plano' : 'Atribuir Plano'}
               </button>
             </div>
           </div>
