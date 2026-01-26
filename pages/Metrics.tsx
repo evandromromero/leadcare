@@ -298,9 +298,9 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
       // Calcular tempo médio de resposta real
       const chatIds = periodChats.map(c => c.id);
       if (chatIds.length > 0) {
-        const { data: messagesData } = await supabase
+        const { data: messagesData } = await (supabase as any)
           .from('messages')
-          .select('chat_id, created_at, from_me')
+          .select('chat_id, created_at, is_from_client')
           .in('chat_id', chatIds.slice(0, 100)) // Limitar para performance
           .order('created_at', { ascending: true });
         
@@ -323,8 +323,9 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
           
           Object.values(messagesByChat).forEach(msgs => {
             // Encontrar primeira mensagem do cliente e primeira resposta
-            const firstClientMsg = msgs.find(m => !m.from_me);
-            const firstResponse = msgs.find(m => m.from_me && firstClientMsg && new Date(m.created_at) > new Date(firstClientMsg.created_at));
+            // is_from_client: true = mensagem do cliente, false = resposta do atendente
+            const firstClientMsg = msgs.find(m => m.is_from_client === true);
+            const firstResponse = msgs.find(m => m.is_from_client === false && firstClientMsg && new Date(m.created_at) > new Date(firstClientMsg.created_at));
             
             if (firstClientMsg && firstResponse) {
               const clientTime = new Date(firstClientMsg.created_at);

@@ -1506,6 +1506,103 @@ Categorias pré-definidas:
 
 ---
 
+## Atualizações - 25/01/2026
+
+### Dashboard - Leads por Origem
+
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| Coluna "Receita Clínica" | Nova coluna mostrando receita de `clinic_receipts` por origem |
+| Coluna "Total" | Soma de Comercial + Receita Clínica por origem |
+| Filtros de Período | Botões "Todos", "7 dias", "30 dias", "Este mês" |
+| Filtro de Origens | Dropdown multi-select para filtrar origens específicas |
+
+#### Detalhes da Implementação
+
+**Interface `LeadSourceStats` atualizada:**
+```typescript
+interface LeadSourceStats {
+  id: string;
+  name: string;
+  code: string | null;
+  color: string;
+  total_leads: number;
+  converted_leads: number;
+  revenue: number;        // Valor Comercial (payments)
+  clinic_revenue: number; // Receita Clínica (clinic_receipts)
+  tag_name: string | null;
+  tag_color: string | null;
+}
+```
+
+**Filtros de Período:**
+- `all` - Todos os dados
+- `7d` - Últimos 7 dias (baseado em `created_at` dos chats e `payment_date` dos payments)
+- `30d` - Últimos 30 dias
+- `month` - Mês atual
+
+**Filtro de Origens:**
+- Dropdown com checkboxes para cada origem
+- Mostra cor e tag de cada origem
+- Botão "Limpar" para resetar filtro
+- Totais recalculados baseado nas origens selecionadas
+
+### Métricas - Correção do Tempo Médio de Resposta
+
+| Bug | Solução |
+|-----|---------|
+| Tempo de Resposta mostrando 0 min | Campo `from_me` não existe, corrigido para `is_from_client` |
+
+**Correção aplicada em `Metrics.tsx`:**
+```typescript
+// Antes (errado):
+.select('chat_id, created_at, from_me')
+const firstClientMsg = msgs.find(m => !m.from_me);
+
+// Depois (correto):
+.select('chat_id, created_at, is_from_client')
+const firstClientMsg = msgs.find(m => m.is_from_client === true);
+const firstResponse = msgs.find(m => m.is_from_client === false && ...);
+```
+
+### Arquivos Modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `pages/Dashboard.tsx` | Coluna Receita Clínica, coluna Total, filtros de período e origens |
+| `pages/Metrics.tsx` | Correção do campo `from_me` para `is_from_client` |
+
+---
+
+## Análise de Melhorias Futuras - Inbox
+
+### Melhorias de UX Identificadas
+
+| Melhoria | Complexidade | Impacto | Status |
+|----------|--------------|---------|--------|
+| Busca dentro da conversa | 🟢 Baixa | 🔴 Alto | Pendente |
+| Atalhos de teclado (Esc, Ctrl+K) | 🟢 Baixa | 🟡 Médio | Pendente |
+| Paginação/Lazy loading de chats | 🟡 Média | 🔴 Alto | Pendente |
+| Indicador de digitação | 🟡 Média | 🟡 Médio | Pendente |
+| Preview de links (Open Graph) | 🔴 Alta | 🟡 Médio | Pendente |
+
+### Melhorias de Performance Identificadas
+
+| Melhoria | Descrição |
+|----------|-----------|
+| Virtualização de mensagens | Usar `react-window` para listas longas |
+| Batch de queries | Unificar queries ao selecionar chat |
+| Lazy load do emoji picker | Carregar emojis sob demanda |
+
+### Refatoração Sugerida
+
+| Item | Descrição |
+|------|-----------|
+| Dividir Inbox.tsx (5276 linhas) | Separar em ChatList, MessageArea, DetailsPane, Modals |
+| Agrupar estados com useReducer | Reduzir 60+ useState para contextos organizados |
+
+---
+
 ## Desenvolvido por
 
 **LeadCare** - CRM para Clínicas
