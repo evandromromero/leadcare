@@ -13,12 +13,27 @@ import {
   Calendar,
   Download,
   RefreshCw,
-  Filter
+  Filter,
+  Settings,
+  Trophy,
+  X
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { GlobalState } from '../types';
-import { getDataAccess } from '../lib/permissions';
+import { getDataAccess, hasPermission } from '../lib/permissions';
+
+interface AttendantStats {
+  id: string;
+  name: string;
+  role: string;
+  leads: number;
+  conversions: number;
+  revenue: number;
+  monthlyGoal: number;
+  canSeeGoal: boolean;
+  avgResponseTime: number | null;
+}
 
 interface MetricsProps {
   state: GlobalState;
@@ -94,6 +109,17 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
   
   // Gráfico diário
   const [dailyData, setDailyData] = useState<DailyData[]>([]);
+  
+  // Ranking de atendentes e metas (só para Admin)
+  const [attendantStats, setAttendantStats] = useState<AttendantStats[]>([]);
+  const [clinicUsers, setClinicUsers] = useState<Array<{ id: string; name: string; role: string; monthly_goal: number | null; can_see_goal: boolean }>>([]);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [clinicGoal, setClinicGoal] = useState(50000);
+  const [userGoals, setUserGoals] = useState<Record<string, number>>({});
+  const [userCanSeeGoal, setUserCanSeeGoal] = useState<Record<string, boolean>>({});
+  const [savingGoals, setSavingGoals] = useState(false);
+  
+  const isAdmin = user?.role === 'Admin' || user?.role === 'SuperAdmin';
 
   const getDateRange = (periodType: MetricsPeriod) => {
     const now = new Date();
@@ -432,8 +458,176 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
   useEffect(() => {
     if (clinicId) {
       fetchMetrics();
+      if (isAdmin) {
+        fetchAttendantStats();
+      }
     }
   }, [clinicId, period]);
+
+  // Buscar dados de atendentes (só para Admin)
+  const fetchAttendantStats = async () => {
+    if (!clinicId || !isAdmin) return;
+    
+    try {
+      // Buscar usuários da clínica
+      const { data: usersData } = await (supabase as any)
+        .from('users')
+        .select('id, name, role, monthly_goal, can_see_goal')
+        .eq('clinic_id', clinicId)
+        .in('role', ['Admin', 'Atendente', 'Comercial']);
+      
+      if (usersData) {
+        setClinicUsers(usersData);
+      }
+      
+      // Buscar meta da clínica
+      const { data: clinicData } = await (supabase as any)
+        .from('clinics')
+        .select('monthly_goal')
+        .eq('id', clinicId)
+        .single();
+      
+      if (clinicData?.monthly_goal) {
+        setClinicGoal(clinicData.monthly_goal);
+        setMonthlyGoal(clinicData.monthly_goal);
+      }
+      
+      // Buscar chats e pagamentos para calcular stats por atendente
+      const { data: chatsData } = await supabase
+        .from('chats')
+        .select('id, status, assigned_to, created_at')
+        .eq('clinic_id', clinicId);
+      
+      const { data: paymentsData } = await (supabase as any)
+        .from('payments')
+        .select('id, value, chat_id, created_by, payment_date')
+        .eq('clinic_id', clinicId)
+        .or('status.is.null,status.eq.active');
+      
+      // Buscar mensagens para tempo de resposta
+      const chatIds = (chatsData || []).map(c => c.id);
+      const { data: messagesData } = await (supabase as any)
+        .from('messages')
+        .select('chat_id, created_at, is_from_client, sent_by')
+        .in('chat_id', chatIds.slice(0, 200))
+        .order('created_at', { ascending: true });
+      
+      // Calcular stats por atendente
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      const stats: AttendantStats[] = (usersData || []).map((u: any) => {
+        // Leads atribuídos a este atendente
+        const userChats = (chatsData || []).filter(c => c.assigned_to === u.id);
+        const userConversions = userChats.filter(c => c.status === 'Convertido');
+        
+        // Faturamento do mês (pagamentos criados por este usuário)
+        const userPayments = (paymentsData || []).filter((p: any) => {
+          const payDate = new Date(p.payment_date);
+          return p.created_by === u.id && payDate >= monthStart;
+        });
+        const revenue = userPayments.reduce((sum: number, p: any) => sum + Number(p.value), 0);
+        
+        // Tempo médio de resposta
+        let avgResponseTime: number | null = null;
+        const userMessages = (messagesData || []).filter((m: any) => m.sent_by === u.id);
+        if (userMessages.length > 0) {
+          const responseTimes: number[] = [];
+          const messagesByChat: Record<string, any[]> = {};
+          (messagesData || []).forEach((m: any) => {
+            if (!messagesByChat[m.chat_id]) messagesByChat[m.chat_id] = [];
+            messagesByChat[m.chat_id].push(m);
+          });
+          
+          Object.values(messagesByChat).forEach((msgs: any[]) => {
+            const firstClient = msgs.find(m => m.is_from_client === true);
+            const firstResponse = msgs.find(m => m.is_from_client === false && m.sent_by === u.id && firstClient && new Date(m.created_at) > new Date(firstClient.created_at));
+            if (firstClient && firstResponse) {
+              const diff = (new Date(firstResponse.created_at).getTime() - new Date(firstClient.created_at).getTime()) / (1000 * 60);
+              if (diff > 0 && diff < 1440) responseTimes.push(diff);
+            }
+          });
+          
+          if (responseTimes.length > 0) {
+            avgResponseTime = Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length);
+          }
+        }
+        
+        return {
+          id: u.id,
+          name: u.name,
+          role: u.role,
+          leads: userChats.length,
+          conversions: userConversions.length,
+          revenue,
+          monthlyGoal: u.monthly_goal || 0,
+          canSeeGoal: u.can_see_goal || false,
+          avgResponseTime,
+        };
+      });
+      
+      // Ordenar por faturamento
+      stats.sort((a, b) => b.revenue - a.revenue);
+      setAttendantStats(stats);
+      
+    } catch (err) {
+      console.error('Error fetching attendant stats:', err);
+    }
+  };
+
+  // Abrir modal de metas
+  const openGoalsModal = () => {
+    const goals: Record<string, number> = {};
+    const canSee: Record<string, boolean> = {};
+    clinicUsers.forEach(u => {
+      goals[u.id] = u.monthly_goal || 0;
+      canSee[u.id] = u.can_see_goal || false;
+    });
+    setUserGoals(goals);
+    setUserCanSeeGoal(canSee);
+    setShowGoalsModal(true);
+  };
+
+  // Salvar metas
+  const saveGoals = async () => {
+    if (!clinicId) return;
+    setSavingGoals(true);
+    try {
+      // Salvar meta da clínica
+      await (supabase as any)
+        .from('clinics')
+        .update({ monthly_goal: clinicGoal })
+        .eq('id', clinicId);
+      
+      // Salvar metas dos usuários
+      for (const [userId, goalValue] of Object.entries(userGoals)) {
+        const goal = goalValue as number;
+        const canSee = userCanSeeGoal[userId] || false;
+        await (supabase as any)
+          .from('users')
+          .update({ 
+            monthly_goal: goal > 0 ? goal : null,
+            can_see_goal: canSee
+          })
+          .eq('id', userId);
+      }
+      
+      // Atualizar dados locais
+      setMonthlyGoal(clinicGoal);
+      setClinicUsers(clinicUsers.map(u => ({ 
+        ...u, 
+        monthly_goal: userGoals[u.id] || null,
+        can_see_goal: userCanSeeGoal[u.id] || false
+      })));
+      
+      setShowGoalsModal(false);
+      fetchAttendantStats();
+    } catch (error) {
+      console.error('Erro ao salvar metas:', error);
+    } finally {
+      setSavingGoals(false);
+    }
+  };
 
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -490,6 +684,15 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
           >
             <RefreshCw className="w-4 h-4" />
           </button>
+          {isAdmin && (
+            <button 
+              onClick={openGoalsModal}
+              className="flex items-center gap-2 px-4 py-2 bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              Configurar Metas
+            </button>
+          )}
           <button 
             onClick={exportToCSV}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors"
@@ -928,6 +1131,190 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
           </div>
         </div>
       </div>
+
+      {/* Ranking de Atendentes (só para Admin) */}
+      {isAdmin && attendantStats.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+          <div className="p-6 border-b border-slate-200">
+            <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-amber-500" />
+              Ranking de Atendentes
+            </h2>
+            <p className="text-sm text-slate-500 mt-1">Performance individual do mês atual</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">#</th>
+                  <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Atendente</th>
+                  <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Leads</th>
+                  <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Conv.</th>
+                  <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Taxa</th>
+                  <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Faturamento</th>
+                  <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Meta</th>
+                  <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Tempo Resp.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {attendantStats.map((att, idx) => {
+                  const convRate = att.leads > 0 ? ((att.conversions / att.leads) * 100).toFixed(1) : '0.0';
+                  const goalProgress = att.monthlyGoal > 0 ? (att.revenue / att.monthlyGoal) * 100 : null;
+                  return (
+                    <tr key={att.id} className="hover:bg-slate-50">
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
+                          idx === 0 ? 'bg-amber-100 text-amber-700' :
+                          idx === 1 ? 'bg-slate-200 text-slate-700' :
+                          idx === 2 ? 'bg-orange-100 text-orange-700' :
+                          'bg-slate-100 text-slate-500'
+                        }`}>
+                          {idx + 1}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div>
+                          <p className="font-medium text-slate-800">{att.name}</p>
+                          <p className="text-xs text-slate-500">{att.role}</p>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold text-slate-800">{att.leads}</td>
+                      <td className="py-3 px-4 text-center font-bold text-emerald-600">{att.conversions}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`font-bold ${Number(convRate) >= 30 ? 'text-emerald-600' : Number(convRate) >= 15 ? 'text-amber-600' : 'text-slate-500'}`}>
+                          {convRate}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-bold text-emerald-600">
+                        {formatCurrency(att.revenue)}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {goalProgress !== null ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="w-16 bg-slate-100 rounded-full h-2 overflow-hidden">
+                              <div 
+                                className={`h-2 rounded-full ${goalProgress >= 100 ? 'bg-emerald-500' : goalProgress >= 70 ? 'bg-amber-500' : 'bg-violet-500'}`}
+                                style={{ width: `${Math.min(goalProgress, 100)}%` }}
+                              ></div>
+                            </div>
+                            <span className={`text-xs font-bold ${goalProgress >= 100 ? 'text-emerald-600' : 'text-slate-500'}`}>
+                              {goalProgress.toFixed(0)}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {att.avgResponseTime !== null ? (
+                          <span className={`font-medium ${att.avgResponseTime <= 10 ? 'text-emerald-600' : att.avgResponseTime <= 30 ? 'text-amber-600' : 'text-red-600'}`}>
+                            {att.avgResponseTime > 60 
+                              ? `${Math.floor(att.avgResponseTime / 60)}h ${att.avgResponseTime % 60}min`
+                              : `${att.avgResponseTime} min`}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Configuração de Metas */}
+      {showGoalsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowGoalsModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-violet-50">
+              <div className="flex items-center gap-2">
+                <Target className="w-5 h-5 text-violet-600" />
+                <h3 className="font-bold text-slate-800">Configurar Metas</h3>
+              </div>
+              <button onClick={() => setShowGoalsModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-6 overflow-y-auto max-h-[60vh]">
+              {/* Meta da Clínica */}
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Meta Mensal da Clínica</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">R$</span>
+                  <input
+                    type="number"
+                    value={clinicGoal}
+                    onChange={(e) => setClinicGoal(Number(e.target.value))}
+                    className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                    placeholder="50000"
+                  />
+                </div>
+              </div>
+
+              {/* Metas por Atendente */}
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-3">Metas por Atendente</label>
+                <div className="space-y-3">
+                  {clinicUsers.map(u => (
+                    <div key={u.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                      <div className="flex-1">
+                        <p className="font-medium text-slate-800 text-sm">{u.name}</p>
+                        <p className="text-xs text-slate-500">{u.role}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="relative w-28">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">R$</span>
+                          <input
+                            type="number"
+                            value={userGoals[u.id] || ''}
+                            onChange={(e) => setUserGoals(prev => ({ ...prev, [u.id]: Number(e.target.value) }))}
+                            className="w-full pl-7 pr-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                            placeholder="0"
+                          />
+                        </div>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={userCanSeeGoal[u.id] || false}
+                            onChange={(e) => setUserCanSeeGoal(prev => ({ ...prev, [u.id]: e.target.checked }))}
+                            className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                          />
+                          <span className="text-xs text-slate-600">Ver meta</span>
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                onClick={() => setShowGoalsModal(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveGoals}
+                disabled={savingGoals}
+                className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {savingGoals ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar Metas'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -4513,14 +4513,18 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Descrição (opcional)</label>
-                        <input
-                          type="text"
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Descrição</label>
+                        <select
                           value={paymentForm.description}
                           onChange={(e) => setPaymentForm(prev => ({ ...prev, description: e.target.value }))}
-                          placeholder="Ex: Consulta, Preenchimento labial..."
                           className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        />
+                        >
+                          <option value="">Selecione...</option>
+                          <option value="Entrada de Procedimento">Entrada de Procedimento</option>
+                          <option value="Consulta">Consulta</option>
+                          <option value="Procedimento">Procedimento</option>
+                          <option value="Mentoria">Mentoria</option>
+                        </select>
                       </div>
                       <button
                         onClick={handleSavePayment}
