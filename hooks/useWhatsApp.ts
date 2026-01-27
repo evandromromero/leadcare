@@ -370,8 +370,65 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
     setError(null);
 
     try {
-      // Primeiro, fazer logout para garantir que a instância está desconectada
-      console.log('[useWhatsApp] reconnect: Fazendo logout primeiro...');
+      // 1. Verificar estado real na Evolution API
+      console.log('[useWhatsApp] reconnect: Verificando estado real...');
+      let currentState = 'unknown';
+      try {
+        const stateResponse = await fetch(
+          `${settings.apiUrl}/instance/connectionState/${targetInstance.instanceName}`,
+          {
+            method: 'GET',
+            headers: { 'apikey': settings.apiKey },
+          }
+        );
+        if (stateResponse.ok) {
+          const stateData = await stateResponse.json();
+          currentState = stateData.instance?.state || stateData.state || 'unknown';
+          console.log('[useWhatsApp] reconnect: Estado atual:', currentState);
+        }
+      } catch (stateErr) {
+        console.log('[useWhatsApp] reconnect: Erro ao verificar estado:', stateErr);
+      }
+
+      // 2. Se já está conectado (open), apenas sincronizar banco
+      if (currentState === 'open') {
+        console.log('[useWhatsApp] reconnect: Já conectado! Sincronizando banco...');
+        await supabase
+          .from('whatsapp_instances')
+          .update({
+            status: 'connected',
+            qr_code: null,
+            connected_at: new Date().toISOString(),
+          })
+          .eq('id', instanceId);
+        await fetchInstances();
+        setSelectedInstanceId(instanceId);
+        setLoading(false);
+        return { error: null };
+      }
+
+      // 3. Se está preso em "connecting", tentar restart primeiro
+      if (currentState === 'connecting') {
+        console.log('[useWhatsApp] reconnect: Instância presa em connecting, tentando restart...');
+        try {
+          const restartResponse = await fetch(
+            `${settings.apiUrl}/instance/restart/${targetInstance.instanceName}`,
+            {
+              method: 'PUT',
+              headers: { 'apikey': settings.apiKey },
+            }
+          );
+          if (restartResponse.ok) {
+            console.log('[useWhatsApp] reconnect: Restart OK, aguardando...');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+        } catch (restartErr) {
+          console.log('[useWhatsApp] reconnect: Restart não disponível:', restartErr);
+        }
+      }
+
+      // 4. Fazer logout para limpar sessão antiga
+      console.log('[useWhatsApp] reconnect: Fazendo logout...');
       try {
         await fetch(
           `${settings.apiUrl}/instance/logout/${targetInstance.instanceName}`,
@@ -383,21 +440,18 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
             },
           }
         );
-        // Aguardar um pouco para a Evolution processar o logout
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (logoutErr) {
         console.log('[useWhatsApp] reconnect: Logout falhou (pode ser normal):', logoutErr);
       }
-      
-      // Agora tentar conectar para gerar novo QR Code
+
+      // 5. Tentar conectar para gerar QR Code
       console.log('[useWhatsApp] reconnect: Tentando connect...');
       const connectResponse = await fetch(
         `${settings.apiUrl}/instance/connect/${targetInstance.instanceName}`,
         {
           method: 'GET',
-          headers: {
-            'apikey': settings.apiKey,
-          },
+          headers: { 'apikey': settings.apiKey },
         }
       );
 
@@ -406,10 +460,7 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
         if (errorData.message?.includes('not found') || errorData.error?.includes('not found')) {
           await supabase
             .from('whatsapp_instances')
-            .update({
-              status: 'disconnected',
-              qr_code: null,
-            })
+            .update({ status: 'disconnected', qr_code: null })
             .eq('id', instanceId);
           setLoading(false);
           return { error: 'Instância não existe mais na Evolution API. Delete e crie uma nova.' };
@@ -418,24 +469,94 @@ export function useWhatsApp(clinicId: string | undefined, userId?: string): UseW
       }
 
       const data = await connectResponse.json();
-      const qrCode = data.base64 || data.qrcode?.base64 || null;
-      
-      console.log('[useWhatsApp] reconnect: QR Code recebido:', qrCode ? 'Sim' : 'Não');
+      let qrCode = data.base64 || data.qrcode?.base64 || null;
+      console.log('[useWhatsApp] reconnect: QR Code na resposta:', qrCode ? 'Sim' : 'Não');
 
+      // 6. Se não veio QR Code, verificar estado novamente
+      if (!qrCode) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Verificar se conectou automaticamente
+        try {
+          const checkResponse = await fetch(
+            `${settings.apiUrl}/instance/connectionState/${targetInstance.instanceName}`,
+            {
+              method: 'GET',
+              headers: { 'apikey': settings.apiKey },
+            }
+          );
+          if (checkResponse.ok) {
+            const checkData = await checkResponse.json();
+            const newState = checkData.instance?.state || checkData.state || 'unknown';
+            console.log('[useWhatsApp] reconnect: Estado após connect:', newState);
+            
+            if (newState === 'open') {
+              // Conectou automaticamente (sessão ainda válida)
+              await supabase
+                .from('whatsapp_instances')
+                .update({
+                  status: 'connected',
+                  qr_code: null,
+                  connected_at: new Date().toISOString(),
+                })
+                .eq('id', instanceId);
+              await fetchInstances();
+              setSelectedInstanceId(instanceId);
+              setLoading(false);
+              return { error: null };
+            }
+            
+            if (newState === 'connecting') {
+              // Ainda preso - precisa de ação do usuário
+              await supabase
+                .from('whatsapp_instances')
+                .update({ status: 'disconnected', qr_code: null })
+                .eq('id', instanceId);
+              setLoading(false);
+              return { 
+                error: 'Sessão presa. Por favor, abra o WhatsApp no celular, vá em Aparelhos Conectados e desconecte esta sessão. Depois tente novamente.',
+                needsManualLogout: true 
+              };
+            }
+          }
+        } catch (checkErr) {
+          console.log('[useWhatsApp] reconnect: Erro ao verificar estado:', checkErr);
+        }
+
+        // Buscar QR Code do banco (pode ter chegado via webhook)
+        const { data: instanceData } = await supabase
+          .from('whatsapp_instances')
+          .select('qr_code')
+          .eq('id', instanceId)
+          .single();
+        
+        if (instanceData?.qr_code) {
+          qrCode = instanceData.qr_code;
+          console.log('[useWhatsApp] reconnect: QR Code encontrado no banco via webhook');
+        }
+      }
+
+      // 7. Atualizar banco com QR Code (se tiver)
       await supabase
         .from('whatsapp_instances')
         .update({
           qr_code: qrCode,
-          qr_code_expires_at: new Date(Date.now() + 60000).toISOString(),
+          qr_code_expires_at: qrCode ? new Date(Date.now() + 60000).toISOString() : null,
           status: 'connecting',
         })
         .eq('id', instanceId);
 
-      // Refetch para atualizar o estado local com o QR Code
       await fetchInstances();
-      
       setSelectedInstanceId(instanceId);
       setLoading(false);
+      
+      if (!qrCode) {
+        return { 
+          error: 'QR Code não gerado. Aguarde alguns segundos e tente novamente, ou desconecte a sessão no celular.',
+          needsRetry: true 
+        };
+      }
+      
       return { error: null };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';

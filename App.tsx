@@ -15,6 +15,7 @@ import Settings from './pages/Settings';
 import Receipts from './pages/Receipts';
 import Reports from './pages/Reports';
 import Metrics from './pages/Metrics';
+import Campaigns from './pages/Campaigns';
 import Support from './pages/Support';
 import SupportPanel from './pages/SupportPanel';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -24,8 +25,10 @@ import AdminLogin from './pages/admin/AdminLogin';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminPlans from './pages/admin/AdminPlans';
+import AdminWhatsApp from './pages/admin/AdminWhatsApp';
 import SupportAgents from './pages/admin/SupportAgents';
 import SupportQuickReplies from './pages/admin/SupportQuickReplies';
+import AdminIntegrations from './pages/admin/AdminIntegrations';
 import { useAuth, AuthProvider } from './hooks/useAuth';
 
 interface PrivateRouteProps {
@@ -274,6 +277,14 @@ const AppRoutes: React.FC = () => {
           </AdminRoute>
         } />
 
+        <Route path="/admin/whatsapp" element={
+          <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
+            <AdminLayout>
+              <AdminWhatsApp />
+            </AdminLayout>
+          </AdminRoute>
+        } />
+
         <Route path="/admin/support-agents" element={
           <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
             <AdminLayout>
@@ -286,6 +297,22 @@ const AppRoutes: React.FC = () => {
           <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
             <AdminLayout>
               <SupportQuickReplies />
+            </AdminLayout>
+          </AdminRoute>
+        } />
+
+        <Route path="/admin/integrations" element={
+          <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
+            <AdminLayout>
+              <AdminIntegrations />
+            </AdminLayout>
+          </AdminRoute>
+        } />
+
+        <Route path="/admin/campaigns" element={
+          <AdminRoute isAuthenticated={!!session} authLoading={authLoading} isSuperAdmin={user?.role === 'SuperAdmin'}>
+            <AdminLayout>
+              <Campaigns />
             </AdminLayout>
           </AdminRoute>
         } />

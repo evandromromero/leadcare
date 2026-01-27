@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
 import { useAuth } from '../hooks/useAuth';
@@ -37,6 +38,7 @@ const STAGE_HINTS: Record<ChatStatus, string> = {
 
 const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const clinicId = state.selectedClinic?.id;
   const { chats, loading, updateChatStatus, refetch } = useChats(clinicId, user?.id);
   const columns: ChatStatus[] = ['Novo Lead', 'Em Atendimento', 'Agendado', 'Convertido', 'Recorrente', 'Mentoria', 'Perdido'];
@@ -57,6 +59,17 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const [showEditLabelsModal, setShowEditLabelsModal] = useState(false);
   const [editingLabels, setEditingLabels] = useState<Record<string, string>>({});
   const [savingLabels, setSavingLabels] = useState(false);
+  
+  // Estado para modal de informações do cliente
+  const [selectedLeadInfo, setSelectedLeadInfo] = useState<any>(null);
+  const [showLeadInfoModal, setShowLeadInfoModal] = useState(false);
+  const [loadingLeadInfo, setLoadingLeadInfo] = useState(false);
+  
+  // Estados para filtro de período
+  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | '7d' | '15d' | '30d' | 'custom'>('all');
+  const [customDateStart, setCustomDateStart] = useState<string>('');
+  const [customDateEnd, setCustomDateEnd] = useState<string>('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Recarregar chats quando o componente é montado
   useEffect(() => {
@@ -163,6 +176,81 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     return `${Math.floor(hours / 24)}d atrás`;
   };
 
+  // Filtrar leads por período
+  const filterByPeriod = (chat: any) => {
+    if (periodFilter === 'all') return true;
+    
+    const chatDate = new Date(chat.created_at || chat.updated_at);
+    const now = new Date();
+    
+    if (periodFilter === 'today') {
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      return chatDate >= todayStart;
+    }
+    
+    if (periodFilter === '7d') {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return chatDate >= sevenDaysAgo;
+    }
+    
+    if (periodFilter === '15d') {
+      const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
+      return chatDate >= fifteenDaysAgo;
+    }
+    
+    if (periodFilter === '30d') {
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      return chatDate >= thirtyDaysAgo;
+    }
+    
+    if (periodFilter === 'custom' && customDateStart && customDateEnd) {
+      const startDate = new Date(customDateStart);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(customDateEnd);
+      endDate.setHours(23, 59, 59, 999);
+      return chatDate >= startDate && chatDate <= endDate;
+    }
+    
+    return true;
+  };
+
+  // Chats filtrados por período
+  const filteredChats = chats.filter(filterByPeriod);
+
+  // Buscar informações completas do cliente
+  const handleShowLeadInfo = async (lead: any) => {
+    setLoadingLeadInfo(true);
+    setShowLeadInfoModal(true);
+    
+    try {
+      // Buscar dados do lead vinculado se existir
+      let leadData = null;
+      if (lead.lead_id) {
+        const { data } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('id', lead.lead_id)
+          .single();
+        leadData = data;
+      }
+      
+      setSelectedLeadInfo({
+        ...lead,
+        leadData
+      });
+    } catch (err) {
+      console.error('Erro ao buscar dados do lead:', err);
+      setSelectedLeadInfo(lead);
+    } finally {
+      setLoadingLeadInfo(false);
+    }
+  };
+
+  // Ir para conversa no WhatsApp (Inbox)
+  const handleGoToChat = (chatId: string) => {
+    navigate(`/inbox?chatId=${encodeURIComponent(chatId)}`);
+  };
+
   const onDragStart = (e: React.DragEvent, id: string) => {
     if (!canMoveLead) {
       e.preventDefault();
@@ -251,6 +339,107 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
         </div>
       </div>
 
+      {/* Filtros de período */}
+      <div className="flex items-center gap-2 mb-4 shrink-0 flex-wrap">
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide mr-2">Período:</span>
+        <button
+          onClick={() => { setPeriodFilter('all'); setShowDatePicker(false); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            periodFilter === 'all' 
+              ? 'bg-cyan-600 text-white' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          Todos
+        </button>
+        <button
+          onClick={() => { setPeriodFilter('today'); setShowDatePicker(false); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            periodFilter === 'today' 
+              ? 'bg-cyan-600 text-white' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          Hoje
+        </button>
+        <button
+          onClick={() => { setPeriodFilter('7d'); setShowDatePicker(false); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            periodFilter === '7d' 
+              ? 'bg-cyan-600 text-white' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          7 dias
+        </button>
+        <button
+          onClick={() => { setPeriodFilter('15d'); setShowDatePicker(false); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            periodFilter === '15d' 
+              ? 'bg-cyan-600 text-white' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          15 dias
+        </button>
+        <button
+          onClick={() => { setPeriodFilter('30d'); setShowDatePicker(false); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            periodFilter === '30d' 
+              ? 'bg-cyan-600 text-white' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          30 dias
+        </button>
+        <button
+          onClick={() => setShowDatePicker(!showDatePicker)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 ${
+            periodFilter === 'custom' 
+              ? 'bg-cyan-600 text-white' 
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+          Personalizado
+        </button>
+        
+        {/* Date picker para período personalizado */}
+        {showDatePicker && (
+          <div className="flex items-center gap-2 ml-2 bg-white border border-slate-200 rounded-lg p-2 shadow-sm">
+            <input
+              type="date"
+              value={customDateStart}
+              onChange={(e) => setCustomDateStart(e.target.value)}
+              className="px-2 py-1 border border-slate-200 rounded text-xs"
+            />
+            <span className="text-slate-400 text-xs">até</span>
+            <input
+              type="date"
+              value={customDateEnd}
+              onChange={(e) => setCustomDateEnd(e.target.value)}
+              className="px-2 py-1 border border-slate-200 rounded text-xs"
+            />
+            <button
+              onClick={() => {
+                if (customDateStart && customDateEnd) {
+                  setPeriodFilter('custom');
+                }
+              }}
+              disabled={!customDateStart || !customDateEnd}
+              className="px-3 py-1 bg-cyan-600 text-white rounded text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-cyan-700"
+            >
+              Aplicar
+            </button>
+          </div>
+        )}
+        
+        {/* Contador de leads filtrados */}
+        <span className="ml-auto text-xs text-slate-400">
+          {filteredChats.length} lead{filteredChats.length !== 1 ? 's' : ''} encontrado{filteredChats.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
       <div className="flex-1 overflow-x-auto overflow-y-hidden flex gap-6 pb-6 no-scrollbar">
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
@@ -260,7 +449,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
             </div>
           </div>
         ) : columns.map(column => {
-          const leadsInCol = chats.filter(c => c.status === column);
+          const leadsInCol = filteredChats.filter(c => c.status === column);
           const config = columnConfig[column];
 
           return (
@@ -295,6 +484,40 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                     onDragStart={(e) => onDragStart(e, lead.id)}
                     className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-cyan-400 transition-all ${canMoveLead ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} group relative ${draggedId === lead.id ? 'opacity-50' : ''}`}
                   >
+                    {/* Ícones de ação no topo */}
+                    <div className="flex items-center justify-end gap-1 mb-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleShowLeadInfo(lead); }}
+                        className="p-1.5 rounded-lg hover:bg-cyan-50 text-slate-400 hover:text-cyan-600 transition-colors"
+                        title="Informações do cliente"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">info</span>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleGoToChat(lead.id); }}
+                        className="p-1.5 rounded-lg hover:bg-green-50 text-slate-400 hover:text-green-600 transition-colors"
+                        title="WhatsApp"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                        </svg>
+                      </button>
+                      <button
+                        disabled
+                        className="p-1.5 rounded-lg text-slate-300 cursor-not-allowed"
+                        title="Email - Em breve"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">mail</span>
+                      </button>
+                      <button
+                        disabled
+                        className="p-1.5 rounded-lg text-slate-300 cursor-not-allowed"
+                        title="SMS - Em breve"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">sms</span>
+                      </button>
+                    </div>
+                    
                     <div className="flex justify-between items-start mb-3">
                       <h4 className="font-bold text-slate-900 text-sm truncate pr-4">{lead.client_name}</h4>
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -411,6 +634,129 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Informações do Cliente */}
+      {showLeadInfoModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLeadInfoModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-[420px] max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-cyan-600 to-cyan-700">
+              <h3 className="font-bold text-lg text-white flex items-center gap-2">
+                <span className="material-symbols-outlined">person</span>
+                Informações do Cliente
+              </h3>
+              <button onClick={() => setShowLeadInfoModal(false)} className="text-white/70 hover:text-white">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            {loadingLeadInfo ? (
+              <div className="p-10 flex items-center justify-center">
+                <div className="size-8 border-3 border-cyan-200 border-t-cyan-600 rounded-full animate-spin"></div>
+              </div>
+            ) : selectedLeadInfo && (
+              <div className="p-5 overflow-y-auto max-h-[60vh]">
+                {/* Avatar e Nome */}
+                <div className="text-center mb-6">
+                  <img 
+                    src={selectedLeadInfo.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedLeadInfo.client_name)}&background=0891b2&color=fff&size=80`} 
+                    className="size-20 rounded-full mx-auto mb-3 border-4 border-slate-100 shadow-md"
+                  />
+                  <h4 className="font-bold text-xl text-slate-900">{selectedLeadInfo.client_name}</h4>
+                  <p className="text-sm text-slate-500">{selectedLeadInfo.status}</p>
+                </div>
+                
+                {/* Dados básicos */}
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                    <span className="material-symbols-outlined text-slate-400">call</span>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Telefone</p>
+                      <p className="text-sm font-medium text-slate-700">{selectedLeadInfo.phone_number || '-'}</p>
+                    </div>
+                  </div>
+                  
+                  {selectedLeadInfo.leadData?.email && (
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                      <span className="material-symbols-outlined text-slate-400">mail</span>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Email</p>
+                        <p className="text-sm font-medium text-slate-700">{selectedLeadInfo.leadData.email}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedLeadInfo.leadData?.cpf && (
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                      <span className="material-symbols-outlined text-slate-400">badge</span>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">CPF</p>
+                        <p className="text-sm font-medium text-slate-700">{selectedLeadInfo.leadData.cpf}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {(selectedLeadInfo.leadData?.city || selectedLeadInfo.leadData?.state) && (
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                      <span className="material-symbols-outlined text-slate-400">location_on</span>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Localização</p>
+                        <p className="text-sm font-medium text-slate-700">
+                          {[selectedLeadInfo.leadData.city, selectedLeadInfo.leadData.state].filter(Boolean).join(' - ')}
+                          {selectedLeadInfo.leadData.zip_code && ` (${selectedLeadInfo.leadData.zip_code})`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedLeadInfo.leadData?.gender && (
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                      <span className="material-symbols-outlined text-slate-400">wc</span>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Gênero</p>
+                        <p className="text-sm font-medium text-slate-700">
+                          {selectedLeadInfo.leadData.gender === 'm' ? 'Masculino' : selectedLeadInfo.leadData.gender === 'f' ? 'Feminino' : 'Outro'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedLeadInfo.leadData?.birth_date && (
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                      <span className="material-symbols-outlined text-slate-400">cake</span>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Data de Nascimento</p>
+                        <p className="text-sm font-medium text-slate-700">
+                          {new Date(selectedLeadInfo.leadData.birth_date).toLocaleDateString('pt-BR')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Sem cadastro completo */}
+                {!selectedLeadInfo.leadData && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-center">
+                    <span className="material-symbols-outlined text-amber-500 text-3xl mb-2">info</span>
+                    <p className="text-sm text-amber-700 font-medium">Cliente sem cadastro completo</p>
+                    <p className="text-xs text-amber-600 mt-1">Acesse a conversa para cadastrar os dados</p>
+                  </div>
+                )}
+                
+                {/* Botões de ação */}
+                <div className="flex gap-2 mt-6">
+                  <button
+                    onClick={() => { setShowLeadInfoModal(false); handleGoToChat(selectedLeadInfo.id); }}
+                    className="flex-1 py-3 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">chat</span>
+                    Ir para Conversa
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

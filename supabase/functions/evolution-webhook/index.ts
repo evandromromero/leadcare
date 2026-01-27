@@ -222,12 +222,78 @@ serve(async (req) => {
     const senderName = isGroup ? (data.pushName || 'Participante') : pushName
 
     if (!chat) {
+      // Detectar código de campanha na mensagem
+      let detectedSourceId: string | null = null
+      if (message && !isFromMe && !isGroup) {
+        // Padrões expandidos para aceitar mais formatos
+        const codePatterns = [
+          /\(([A-Za-z]{1,10}[0-9]{0,5})\)/,           // (AV7), (PROMO2025), (INSTAGRAM)
+          /\[([A-Za-z]{1,10}[0-9]{0,5})\]/,           // [AV7], [PROMO2025]
+          /#([A-Za-z]{1,10}[0-9]{0,5})\b/,            // #AV7, #PROMO2025
+          /\b([A-Z]{2,5}[0-9]{1,4})$/i,               // AV7, ALV1, ACV4 no final
+          /\b(AV[0-9]{1,2})\b/i,                      // AV7, AV15, AV19 em qualquer lugar
+          /\b(ALV[0-9]{1,2})\b/i,                     // ALV1, ALV2 em qualquer lugar
+          /\b(ACV[0-9]{1,2})\b/i,                     // ACV1, ACV4 em qualquer lugar
+          /\b(AVG[0-9]{1,2})\b/i,                     // AVG4 em qualquer lugar
+          /\b(LR[0-9]{1,2})\b/i,                      // LR01 em qualquer lugar
+        ]
+        
+        let detectedCode: string | null = null
+        for (const pattern of codePatterns) {
+          const match = message.match(pattern)
+          if (match && match[1]) {
+            detectedCode = match[1].toUpperCase()
+            break
+          }
+        }
+        
+        if (detectedCode) {
+          console.log('Código de campanha detectado:', detectedCode)
+          
+          // Buscar lead_source existente com esse código
+          const { data: existingSource } = await supabase
+            .from('lead_sources')
+            .select('id')
+            .eq('clinic_id', clinicId)
+            .ilike('code', detectedCode)
+            .single()
+          
+          if (existingSource) {
+            detectedSourceId = existingSource.id
+            console.log('Lead source encontrado:', detectedSourceId)
+          } else {
+            // Criar novo lead_source automaticamente
+            const { data: newSource } = await supabase
+              .from('lead_sources')
+              .insert({
+                clinic_id: clinicId,
+                name: detectedCode,
+                code: detectedCode,
+                color: '#6366f1' // Cor padrão (indigo)
+              })
+              .select('id')
+              .single()
+            
+            if (newSource) {
+              detectedSourceId = newSource.id
+              console.log('Novo lead source criado:', detectedCode, detectedSourceId)
+            }
+          }
+        }
+      }
+      
       // Criar chat (grupo ou individual)
+      // Se a mensagem é do atendente (isFromMe), usar o telefone como nome temporário
+      // pois o pushName seria o nome do perfil da clínica, não do cliente
+      const clientName = isGroup 
+        ? groupName 
+        : (isFromMe ? phone : (pushName || 'Cliente'))
+      
       const { data: newChat } = await supabase
         .from('chats')
         .insert({
           clinic_id: clinicId,
-          client_name: isGroup ? groupName : (pushName || 'Cliente'),
+          client_name: clientName,
           phone_number: isGroup ? phone : phone,
           group_id: groupId,
           is_group: isGroup,
@@ -235,21 +301,41 @@ serve(async (req) => {
           unread_count: isFromMe ? 0 : 1,
           last_message: isGroup ? `${senderName}: ${message}` : message,
           last_message_time: new Date().toISOString(),
-          instance_id: instance.id
+          instance_id: instance.id,
+          source_id: detectedSourceId
         })
         .select('id, unread_count')
         .single()
       chat = newChat
     } else {
       // Atualiza chat - zera unread se for mensagem enviada (fromMe), incrementa se for do cliente
+      const updateData: Record<string, unknown> = {
+        unread_count: isFromMe ? 0 : (chat.unread_count || 0) + 1,
+        last_message: isGroup ? `${senderName}: ${message}` : message,
+        last_message_time: new Date().toISOString(),
+        last_message_from_client: !isFromMe
+      }
+      
+      // Se a mensagem é do cliente e temos pushName, atualizar o nome do cliente
+      // Isso corrige casos onde o chat foi criado pelo atendente e o nome ficou como telefone
+      if (!isFromMe && !isGroup && pushName && pushName !== 'Cliente') {
+        // Buscar o nome atual do chat
+        const { data: currentChat } = await supabase
+          .from('chats')
+          .select('client_name')
+          .eq('id', chat.id)
+          .single()
+        
+        // Só atualiza se o nome atual for um número de telefone (não foi definido pelo cliente ainda)
+        const currentName = (currentChat as any)?.client_name || ''
+        if (/^\d+$/.test(currentName) || currentName === 'Cliente') {
+          updateData.client_name = pushName
+        }
+      }
+      
       await supabase
         .from('chats')
-        .update({
-          unread_count: isFromMe ? 0 : (chat.unread_count || 0) + 1,
-          last_message: isGroup ? `${senderName}: ${message}` : message,
-          last_message_time: new Date().toISOString(),
-          last_message_from_client: !isFromMe
-        })
+        .update(updateData)
         .eq('id', chat.id)
     }
 

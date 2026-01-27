@@ -16,11 +16,157 @@ import {
   Edit,
   Wifi,
   WifiOff,
-  Shield
+  Shield,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { ROLE_PERMISSIONS, getRoleDescription, UserRole } from '../../lib/permissions';
+
+interface MetaConversionLog {
+  id: string;
+  event_id: string;
+  event_name: string;
+  event_time: number;
+  value: number;
+  status: string;
+  error_message: string | null;
+  payload: any;
+  response: any;
+  created_at: string;
+  chat_id: string | null;
+}
+
+const MetaConversionLogs: React.FC<{ clinicId: string }> = ({ clinicId }) => {
+  const [logs, setLogs] = useState<MetaConversionLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedLog, setExpandedLog] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setLoading(true);
+      const { data } = await (supabase as any)
+        .from('meta_conversion_logs')
+        .select('*')
+        .eq('clinic_id', clinicId)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      setLogs(data || []);
+      setLoading(false);
+    };
+
+    fetchLogs();
+  }, [clinicId]);
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="mt-4 p-4 bg-slate-50 rounded-lg">
+        <div className="flex items-center gap-2 text-slate-500">
+          <div className="size-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
+          <span className="text-sm">Carregando logs...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (logs.length === 0) {
+    return (
+      <div className="mt-4 p-4 bg-slate-50 rounded-lg">
+        <p className="text-sm text-slate-500 text-center">Nenhum evento enviado ainda</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      <h3 className="text-sm font-medium text-slate-700 mb-2">Últimos eventos enviados</h3>
+      <div className="space-y-2">
+        {logs.map((log) => (
+          <div key={log.id} className="border border-slate-200 rounded-lg overflow-hidden">
+            <div 
+              className="flex items-center justify-between p-3 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors"
+              onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`size-2 rounded-full ${
+                  log.status === 'success' ? 'bg-green-500' : 
+                  log.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+                }`}></div>
+                <div>
+                  <span className="text-sm font-medium text-slate-700">{log.event_name}</span>
+                  <span className="text-xs text-slate-500 ml-2">
+                    R$ {log.value?.toFixed(2) || '0.00'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-500">{formatDate(log.created_at)}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  log.status === 'success' ? 'bg-green-100 text-green-700' : 
+                  log.status === 'error' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {log.status === 'success' ? 'Enviado' : log.status === 'error' ? 'Erro' : 'Pendente'}
+                </span>
+                {expandedLog === log.id ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </div>
+            </div>
+            
+            {expandedLog === log.id && (
+              <div className="p-3 border-t border-slate-200 bg-white">
+                <div className="grid grid-cols-2 gap-4 text-xs mb-3">
+                  <div>
+                    <span className="text-slate-500">Event ID:</span>
+                    <span className="ml-1 font-mono text-slate-700">{log.event_id}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Event Time:</span>
+                    <span className="ml-1 text-slate-700">{new Date(log.event_time * 1000).toLocaleString('pt-BR')}</span>
+                  </div>
+                </div>
+                
+                {log.error_message && (
+                  <div className="mb-3 p-2 bg-red-50 rounded text-xs text-red-700">
+                    <span className="font-medium">Erro:</span> {log.error_message}
+                  </div>
+                )}
+                
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-xs font-medium text-slate-600">Payload enviado:</span>
+                    <pre className="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto max-h-40">
+                      {JSON.stringify(log.payload, null, 2)}
+                    </pre>
+                  </div>
+                  
+                  {log.response && (
+                    <div>
+                      <span className="text-xs font-medium text-slate-600">Resposta do Meta:</span>
+                      <pre className="mt-1 p-2 bg-slate-100 rounded text-xs overflow-x-auto max-h-40">
+                        {JSON.stringify(log.response, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 interface ClinicDetail {
   id: string;
@@ -45,6 +191,9 @@ interface ClinicDetail {
   cloud_api_verify_token?: string | null;
   facebook_dataset_id?: string | null;
   facebook_api_token?: string | null;
+  meta_event_name?: string | null;
+  meta_action_source?: string | null;
+  meta_funnel_events?: Record<string, string> | null;
 }
 
 interface ClinicUser {
@@ -268,6 +417,9 @@ const AdminClinicDetail: React.FC = () => {
   
   // Estados para modal de metas
   const [showGoalsModal, setShowGoalsModal] = useState(false);
+  
+  // Estado para modal de ajuda Meta Conversions
+  const [showMetaHelpModal, setShowMetaHelpModal] = useState(false);
   const [clinicGoal, setClinicGoal] = useState<number>(50000);
   const [userGoals, setUserGoals] = useState<Record<string, number>>({});
   const [userCanSeeGoal, setUserCanSeeGoal] = useState<Record<string, boolean>>({});
@@ -2688,14 +2840,150 @@ const AdminClinicDetail: React.FC = () => {
               />
             </div>
           </div>
+
+          <div className="mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <label className="text-xs font-medium text-slate-600 uppercase">Fonte da Ação (para todos os eventos)</label>
+              <button
+                type="button"
+                onClick={() => setShowMetaHelpModal(true)}
+                className="text-slate-400 hover:text-blue-500 transition-colors"
+                title="Ajuda"
+              >
+                <span className="material-symbols-outlined text-sm">help</span>
+              </button>
+            </div>
+            <select
+              value={clinic.meta_action_source || 'website'}
+              onChange={async (e) => {
+                const newValue = e.target.value;
+                setClinic(prev => prev ? { ...prev, meta_action_source: newValue } : prev);
+                await (supabase as any).from('clinics').update({ meta_action_source: newValue }).eq('id', clinic.id);
+              }}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+            >
+              <option value="website">Website (CRM/Sistema)</option>
+              <option value="chat">Chat (WhatsApp)</option>
+              <option value="phone_call">Phone Call (Ligação)</option>
+              <option value="physical_store">Physical Store (Presencial)</option>
+            </select>
+          </div>
+
+          {/* Eventos por Etapa do Funil */}
+          <div className="mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <label className="text-xs font-medium text-slate-600 uppercase">Eventos por Etapa do Funil</label>
+              <span className="text-xs text-slate-400">(deixe vazio para não enviar)</span>
+            </div>
+            <div className="space-y-2">
+              {[
+                { stage: 'Novo Lead', color: '#0891b2', hint: 'Quando um novo lead entra no sistema' },
+                { stage: 'Agendado', color: '#8b5cf6', hint: 'Quando o lead agenda consulta/procedimento' },
+                { stage: 'Em Atendimento', color: '#f59e0b', hint: 'Quando inicia negociação ativa' },
+                { stage: 'Convertido', color: '#10b981', hint: 'Quando fecha negócio (envia valor)' },
+                { stage: 'Perdido', color: '#ef4444', hint: 'Quando o lead desiste' },
+              ].map(({ stage, color, hint }) => (
+                <div key={stage} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg">
+                  <div 
+                    className="w-3 h-3 rounded-full flex-shrink-0" 
+                    style={{ backgroundColor: color }}
+                  ></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-700">{stage}</p>
+                    <p className="text-xs text-slate-400 truncate">{hint}</p>
+                  </div>
+                  <select
+                    value={(clinic.meta_funnel_events as Record<string, string>)?.[stage] || ''}
+                    onChange={async (e) => {
+                      const newValue = e.target.value;
+                      const currentEvents = (clinic.meta_funnel_events as Record<string, string>) || {};
+                      const updatedEvents = { ...currentEvents };
+                      if (newValue) {
+                        updatedEvents[stage] = newValue;
+                      } else {
+                        delete updatedEvents[stage];
+                      }
+                      setClinic(prev => prev ? { ...prev, meta_funnel_events: updatedEvents } : prev);
+                      await (supabase as any).from('clinics').update({ meta_funnel_events: updatedEvents }).eq('id', clinic.id);
+                    }}
+                    className="w-40 px-2 py-1.5 border border-slate-200 rounded-lg text-sm"
+                  >
+                    <option value="">Não enviar</option>
+                    <option value="Lead">Lead</option>
+                    <option value="Contact">Contact</option>
+                    <option value="Schedule">Schedule</option>
+                    <option value="Purchase">Purchase</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
           
           <div className="mt-4 p-3 bg-blue-50 rounded-lg">
             <p className="text-xs text-blue-700">
-              <span className="font-medium">Como funciona:</span> Quando um lead for marcado como "Convertido", 
-              o sistema enviará automaticamente um evento <code className="bg-blue-100 px-1 rounded">Purchase</code> para o Facebook 
-              com o valor do orçamento/pagamento registrado.
+              <span className="font-medium">Como funciona:</span> Configure qual evento Meta será enviado em cada etapa do funil. 
+              Por exemplo: envie <code className="bg-blue-100 px-1 rounded">Lead</code> quando entrar um novo lead e 
+              <code className="bg-blue-100 px-1 rounded">Purchase</code> quando converter (com o valor do pagamento).
             </p>
           </div>
+
+          {/* Campos enviados ao Meta */}
+          <div className="mt-4 p-3 bg-slate-50 rounded-lg">
+            <p className="text-xs font-medium text-slate-700 mb-2">Campos enviados na conversão (SHA256):</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">Telefone (ph)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">Email (em)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">Nome (fn/ln)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">ID Externo</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">Cidade (ct)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">Estado (st)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">CEP (zp)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">Gênero (ge)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">Nascimento (db)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">Origem (content_name)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">Valor (value)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                <span className="text-slate-600">Event ID</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Últimos eventos enviados */}
+          <MetaConversionLogs clinicId={clinic.id} />
         </div>
 
         {/* Templates e Envio em Massa */}
@@ -4585,6 +4873,124 @@ const AdminClinicDetail: React.FC = () => {
                 className="px-6 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition-colors"
               >
                 Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Ajuda Meta Conversions API */}
+      {showMetaHelpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowMetaHelpModal(false)}></div>
+          <div className="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex-shrink-0">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <span className="material-symbols-outlined text-blue-600">help</span>
+                Configuração de Eventos Meta
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">Entenda cada opção para configurar corretamente</p>
+            </div>
+            
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+              {/* Tipo de Evento */}
+              <div>
+                <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined text-violet-500">sell</span>
+                  Tipo de Evento
+                </h4>
+                <div className="space-y-3">
+                  <div className="p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
+                    <p className="font-bold text-green-800">Purchase (Compra/Fechamento)</p>
+                    <p className="text-sm text-green-700 mt-1">
+                      <strong>Recomendado para clínicas.</strong> Enviado quando o lead fecha/paga um procedimento. 
+                      O Meta usa esse evento para otimizar campanhas de conversão e calcular ROAS.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="font-bold text-slate-800">Lead (Novo Cadastro)</p>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Enviado quando um novo lead entra no sistema. Útil para campanhas de geração de leads, 
+                      mas não rastreia o valor monetário da conversão.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="font-bold text-slate-800">Schedule (Agendamento)</p>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Enviado quando o lead agenda uma consulta ou procedimento. Ideal para clínicas que 
+                      querem rastrear agendamentos como conversão principal.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="font-bold text-slate-800">Contact (Primeiro Contato)</p>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Enviado no primeiro contato do lead. Útil para campanhas focadas em iniciar conversas, 
+                      mas não rastreia conversões monetárias.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fonte da Ação */}
+              <div>
+                <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined text-cyan-500">source</span>
+                  Fonte da Ação
+                </h4>
+                <div className="space-y-3">
+                  <div className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
+                    <p className="font-bold text-blue-800">Website (CRM/Sistema)</p>
+                    <p className="text-sm text-blue-700 mt-1">
+                      <strong>Recomendado.</strong> Indica que a conversão foi registrada via sistema web (CRM). 
+                      É o padrão mais usado para integrações server-side.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="font-bold text-slate-800">Chat (WhatsApp)</p>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Indica que a conversão veio de uma conversa de chat. Útil se quiser diferenciar 
+                      conversões que vieram especificamente do WhatsApp.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="font-bold text-slate-800">Phone Call (Ligação)</p>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Indica que a conversão foi fechada por telefone. Use se a maioria das vendas 
+                      acontece via ligação telefônica.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <p className="font-bold text-slate-800">Physical Store (Presencial)</p>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Indica que a conversão aconteceu presencialmente na clínica. Use se o fechamento 
+                      geralmente acontece na consulta presencial.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dica */}
+              <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                <div className="flex items-start gap-3">
+                  <span className="material-symbols-outlined text-amber-600">lightbulb</span>
+                  <div>
+                    <p className="font-bold text-amber-800">Dica</p>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Para a maioria das clínicas, recomendamos usar <strong>Purchase + Website</strong>. 
+                      Isso permite que o Meta otimize suas campanhas para conversões de alto valor e 
+                      calcule corretamente o retorno sobre investimento (ROAS).
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 flex-shrink-0">
+              <button 
+                onClick={() => setShowMetaHelpModal(false)}
+                className="w-full h-11 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Entendi
               </button>
             </div>
           </div>

@@ -11,6 +11,11 @@ interface Settings {
   proxy_protocol: string;
   proxy_username: string;
   proxy_password: string;
+  // EasyPanel
+  easypanel_url: string;
+  easypanel_token: string;
+  easypanel_project: string;
+  easypanel_service: string;
   // SEO
   site_title: string;
   site_description: string;
@@ -37,6 +42,11 @@ const AdminSettings: React.FC = () => {
     proxy_protocol: 'http',
     proxy_username: '',
     proxy_password: '',
+    // EasyPanel
+    easypanel_url: '',
+    easypanel_token: '',
+    easypanel_project: 'evolutionaoi',
+    easypanel_service: 'evolution-api',
     // SEO
     site_title: 'Belitx',
     site_description: 'CRM de WhatsApp completo para clínicas',
@@ -120,6 +130,11 @@ const AdminSettings: React.FC = () => {
           proxy_protocol: d.proxy_protocol || 'http',
           proxy_username: d.proxy_username || '',
           proxy_password: d.proxy_password || '',
+          // EasyPanel
+          easypanel_url: d.easypanel_url || '',
+          easypanel_token: d.easypanel_token || '',
+          easypanel_project: d.easypanel_project || 'evolutionaoi',
+          easypanel_service: d.easypanel_service || 'evolution-api',
           // SEO
           site_title: d.site_title || 'Belitx',
           site_description: d.site_description || 'CRM de WhatsApp completo para clínicas',
@@ -160,6 +175,11 @@ const AdminSettings: React.FC = () => {
           proxy_protocol: settings.proxy_protocol,
           proxy_username: settings.proxy_username,
           proxy_password: settings.proxy_password,
+          // EasyPanel
+          easypanel_url: settings.easypanel_url,
+          easypanel_token: settings.easypanel_token,
+          easypanel_project: settings.easypanel_project,
+          easypanel_service: settings.easypanel_service,
           // SEO
           site_title: settings.site_title,
           site_description: settings.site_description,
@@ -374,6 +394,79 @@ const AdminSettings: React.FC = () => {
                   <strong>Nota:</strong> O proxy será aplicado automaticamente em novas instâncias. Instâncias existentes precisam ser recriadas para usar o proxy.
                 </p>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* EasyPanel Config - Shown when API tab is active */}
+        {activeTab === 'api' && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 mt-6">
+            <div className="p-4 sm:p-6 border-b border-slate-200">
+              <h2 className="text-base sm:text-lg font-semibold text-slate-800">
+                <Globe className="w-5 h-5 inline mr-2 text-orange-600" />
+                EasyPanel (Restart Evolution)
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Configurações para reiniciar a Evolution API remotamente</p>
+            </div>
+
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    URL do EasyPanel
+                  </label>
+                  <input
+                    type="url"
+                    value={settings.easypanel_url}
+                    onChange={(e) => setSettings({ ...settings, easypanel_url: e.target.value })}
+                    placeholder="http://72.61.40.210:3000"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Token de API
+                  </label>
+                  <input
+                    type="password"
+                    value={settings.easypanel_token}
+                    onChange={(e) => setSettings({ ...settings, easypanel_token: e.target.value })}
+                    placeholder="••••••••••••••••"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Nome do Projeto
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.easypanel_project}
+                    onChange={(e) => setSettings({ ...settings, easypanel_project: e.target.value })}
+                    placeholder="evolutionaoi"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Nome do Serviço
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.easypanel_service}
+                    onChange={(e) => setSettings({ ...settings, easypanel_service: e.target.value })}
+                    placeholder="evolution-api"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Essas configurações permitem reiniciar a Evolution API diretamente do painel Admin &gt; WhatsApp.
+              </p>
             </div>
           </div>
         )}

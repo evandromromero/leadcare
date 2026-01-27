@@ -344,7 +344,19 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
                             <span className="material-symbols-outlined text-5xl">qr_code_2</span>
                             <span className="text-sm font-medium">Desconectado</span>
                             {connectError && (
-                              <span className="text-xs text-red-500">{connectError}</span>
+                              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg max-w-sm">
+                                <div className="flex items-start gap-2">
+                                  <span className="material-symbols-outlined text-red-500 text-lg flex-shrink-0">warning</span>
+                                  <div>
+                                    <p className="text-xs text-red-600 font-medium">{connectError}</p>
+                                    {connectError.includes('celular') && (
+                                      <p className="text-xs text-red-500 mt-1">
+                                        WhatsApp → Configurações → Aparelhos conectados → Desconectar
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             )}
                           </div>
                         )}

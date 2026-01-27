@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useChats, ChatWithMessages, DbTag } from '../hooks/useChats';
 import { useAuth } from '../hooks/useAuth';
@@ -33,6 +34,8 @@ const PIPELINE_STAGES = [
 
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const clinicId = state.selectedClinic?.id;
   const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages, togglePinChat } = useChats(clinicId, user?.id);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -210,9 +213,20 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     birth_date: string;
     address: string;
     notes: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    gender: string;
   } | null>(null);
   const [savingClient, setSavingClient] = useState(false);
   const [chatLeadId, setChatLeadId] = useState<string | null>(null);
+
+  // Estados para busca de mensagens na conversa
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [messageSearchResults, setMessageSearchResults] = useState<string[]>([]);
+  const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
+  const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Emojis comuns
   const commonEmojis = [
@@ -666,15 +680,28 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   };
 
-  // Função para enviar evento de conversão ao Facebook
-  const sendFacebookConversionEvent = async (chatId: string, value: number) => {
+  // Função auxiliar para normalizar e hashear em SHA256 (conforme regras da Meta)
+  const hashSHA256 = async (value: string): Promise<string | null> => {
+    if (!value || !value.trim()) return null;
+    // Normalizar: minúsculo, trim, remover acentos
+    const normalized = value
+      .toLowerCase()
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
+    return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  // Função para enviar evento de conversão ao Facebook (Payload otimizado conforme regras da Meta)
+  const sendFacebookConversionEvent = async (chatId: string, value: number, funnelStage?: string) => {
     if (!clinicId) return;
     
     try {
       // Buscar configurações do Facebook da clínica
       const { data: clinicData } = await (supabase as any)
         .from('clinics')
-        .select('facebook_dataset_id, facebook_api_token')
+        .select('facebook_dataset_id, facebook_api_token, meta_event_name, meta_action_source, meta_funnel_events')
         .eq('id', clinicId)
         .single();
       
@@ -683,32 +710,130 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         return;
       }
       
-      // Buscar dados do chat para pegar email/telefone
-      const { data: chatData } = await supabase
+      // Determinar qual evento enviar baseado na etapa do funil
+      const funnelEvents = clinicData.meta_funnel_events as Record<string, string> | null;
+      let eventName: string | null = null;
+      
+      if (funnelStage && funnelEvents && funnelEvents[funnelStage]) {
+        // Usar configuração por etapa do funil
+        eventName = funnelEvents[funnelStage];
+      } else if (!funnelStage || funnelStage === 'Convertido') {
+        // Fallback para configuração antiga (compatibilidade)
+        eventName = clinicData.meta_event_name || 'Purchase';
+      }
+      
+      // Se não há evento configurado para esta etapa, não enviar
+      if (!eventName) {
+        console.log(`Nenhum evento Meta configurado para a etapa: ${funnelStage}`);
+        return;
+      }
+      
+      const actionSource = clinicData.meta_action_source || 'website';
+      
+      // Buscar dados completos do chat (incluindo lead e origem)
+      const { data: chatData } = await (supabase as any)
         .from('chats')
-        .select('phone_number, client_name')
+        .select(`
+          id,
+          phone_number, 
+          client_name,
+          lead_id,
+          source_id,
+          leads(email, name, city, state, zip_code, gender, birth_date),
+          lead_sources(name, code)
+        `)
         .eq('id', chatId)
         .single();
       
-      // Hashear telefone em SHA256
+      // Preparar dados do usuário
       const phone = chatData?.phone_number?.replace(/\D/g, '') || '';
-      const phoneHash = phone ? await crypto.subtle.digest('SHA-256', new TextEncoder().encode(phone)).then(buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')) : null;
+      const clientName = chatData?.client_name || chatData?.leads?.name || '';
+      const nameParts = clientName.split(' ').filter((p: string) => p.trim());
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+      const email = chatData?.leads?.email || '';
+      const city = chatData?.leads?.city || '';
+      const state = chatData?.leads?.state || '';
+      const zipCode = chatData?.leads?.zip_code?.replace(/\D/g, '') || '';
+      const gender = chatData?.leads?.gender || '';
+      const birthDate = chatData?.leads?.birth_date || '';
+      const sourceName = chatData?.lead_sources?.name || chatData?.lead_sources?.code || '';
       
-      // Enviar evento para o Facebook
+      // Hashear todos os campos (SHA256, normalizado)
+      const [phoneHash, emailHash, fnHash, lnHash, externalIdHash, cityHash, stateHash, zipHash, genderHash, dobHash] = await Promise.all([
+        phone ? hashSHA256(phone) : null,
+        email ? hashSHA256(email) : null,
+        firstName ? hashSHA256(firstName) : null,
+        lastName ? hashSHA256(lastName) : null,
+        hashSHA256(chatId),
+        city ? hashSHA256(city) : null,
+        state ? hashSHA256(state.toLowerCase()) : null,
+        zipCode ? hashSHA256(zipCode) : null,
+        gender ? hashSHA256(gender) : null,
+        birthDate ? hashSHA256(birthDate.replace(/-/g, '')) : null, // YYYYMMDD
+      ]);
+      
+      // Montar user_data (só incluir campos que existem)
+      const userData: Record<string, string> = {};
+      if (phoneHash) userData.ph = phoneHash;
+      if (emailHash) userData.em = emailHash;
+      if (fnHash) userData.fn = fnHash;
+      if (lnHash) userData.ln = lnHash;
+      if (externalIdHash) userData.external_id = externalIdHash;
+      if (cityHash) userData.ct = cityHash;
+      if (stateHash) userData.st = stateHash;
+      if (zipHash) userData.zp = zipHash;
+      if (genderHash) userData.ge = genderHash;
+      if (dobHash) userData.db = dobHash;
+      
+      // Montar custom_data (incluindo origem da campanha)
+      const customData: Record<string, string | number> = {
+        currency: 'BRL',
+        value: value,
+      };
+      if (sourceName) {
+        customData.content_name = sourceName;
+        const sourceNameLower = sourceName.toLowerCase();
+        if (sourceNameLower.includes('instagram')) customData.content_category = 'Instagram';
+        else if (sourceNameLower.includes('facebook') || sourceNameLower.includes('fb')) customData.content_category = 'Facebook';
+        else if (sourceNameLower.includes('google')) customData.content_category = 'Google';
+        else if (sourceNameLower.includes('tiktok')) customData.content_category = 'TikTok';
+        else customData.content_category = 'Outros';
+      }
+      
+      // Gerar event_id único (evita duplicação)
+      const eventTime = Math.floor(Date.now() / 1000);
+      const eventId = `crm_${eventName.toLowerCase()}_${chatId.substring(0, 8)}_${eventTime}`;
+      
+      // Montar payload final
       const eventData = {
         data: [{
-          event_name: 'Purchase',
-          event_time: Math.floor(Date.now() / 1000),
-          action_source: 'website',
-          user_data: {
-            ph: phoneHash ? [phoneHash] : [],
-          },
-          custom_data: {
-            currency: 'BRL',
-            value: value.toFixed(2),
-          },
+          event_name: eventName,
+          event_time: eventTime,
+          event_id: eventId,
+          action_source: actionSource,
+          user_data: userData,
+          custom_data: customData,
         }],
       };
+      
+      console.log('Enviando evento Meta Conversions API:', JSON.stringify(eventData, null, 2));
+      
+      // Salvar log antes de enviar
+      const { data: logEntry } = await (supabase as any)
+        .from('meta_conversion_logs')
+        .insert({
+          clinic_id: clinicId,
+          chat_id: chatId,
+          event_id: eventId,
+          event_name: eventName,
+          event_time: eventTime,
+          value: value,
+          payload: eventData,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
       
       const response = await fetch(
         `https://graph.facebook.com/v18.0/${clinicData.facebook_dataset_id}/events?access_token=${clinicData.facebook_api_token}`,
@@ -720,10 +845,29 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       );
       
       if (response.ok) {
-        console.log('Evento de conversão enviado ao Facebook com sucesso');
+        const result = await response.json();
+        console.log('Evento de conversão enviado ao Facebook com sucesso:', result);
+        // Atualizar log com sucesso
+        if (logEntry?.id) {
+          await (supabase as any)
+            .from('meta_conversion_logs')
+            .update({ status: 'success', response: result })
+            .eq('id', logEntry.id);
+        }
       } else {
         const errorData = await response.json();
         console.error('Erro ao enviar evento ao Facebook:', errorData);
+        // Atualizar log com erro
+        if (logEntry?.id) {
+          await (supabase as any)
+            .from('meta_conversion_logs')
+            .update({ 
+              status: 'error', 
+              response: errorData,
+              error_message: errorData?.error?.message || 'Erro desconhecido'
+            })
+            .eq('id', logEntry.id);
+        }
       }
     } catch (err) {
       console.error('Erro ao enviar evento de conversão:', err);
@@ -744,7 +888,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       if (totalValue > 0) {
         // Tem valor, enviar evento e mudar status
         await updateChatStatus(selectedChatId, newStatus);
-        await sendFacebookConversionEvent(selectedChatId, totalValue);
+        await sendFacebookConversionEvent(selectedChatId, totalValue, newStatus);
         setShowStageDropdown(false);
       } else {
         // Não tem valor, abrir modal para pedir
@@ -757,6 +901,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
     
     await updateChatStatus(selectedChatId, newStatus);
+    // Enviar evento Meta para outras etapas (se configurado)
+    await sendFacebookConversionEvent(selectedChatId, 0, newStatus);
     setShowStageDropdown(false);
   };
 
@@ -782,7 +928,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     
     // Mudar status e enviar evento
     await updateChatStatus(pendingConversionChatId, 'Convertido');
-    await sendFacebookConversionEvent(pendingConversionChatId, value);
+    await sendFacebookConversionEvent(pendingConversionChatId, value, 'Convertido');
     
     // Recarregar pagamentos
     if (selectedChatId === pendingConversionChatId) {
@@ -1624,6 +1770,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             birth_date: (leadData as any).birth_date || '',
             address: (leadData as any).address || '',
             notes: (leadData as any).notes || '',
+            city: (leadData as any).city || '',
+            state: (leadData as any).state || '',
+            zip_code: (leadData as any).zip_code || '',
+            gender: (leadData as any).gender || '',
           });
         }
       } else {
@@ -1651,6 +1801,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         birth_date: '',
         address: '',
         notes: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        gender: '',
       });
       setShowClientModal(true);
     }
@@ -1674,8 +1828,12 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             birth_date: clientData.birth_date || null,
             address: clientData.address.trim() || null,
             notes: clientData.notes.trim() || null,
+            city: clientData.city?.trim() || null,
+            state: clientData.state?.trim() || null,
+            zip_code: clientData.zip_code?.trim() || null,
+            gender: clientData.gender || null,
             updated_at: new Date().toISOString(),
-          })
+          } as any)
           .eq('id', clientData.id);
         
         if (error) throw error;
@@ -1698,8 +1856,12 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             birth_date: clientData.birth_date || null,
             address: clientData.address.trim() || null,
             notes: clientData.notes.trim() || null,
+            city: clientData.city?.trim() || null,
+            state: clientData.state?.trim() || null,
+            zip_code: clientData.zip_code?.trim() || null,
+            gender: clientData.gender || null,
             stage: 'Novo Lead',
-          })
+          } as any)
           .select('id')
           .single();
         
@@ -1789,11 +1951,85 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   });
 
+  // Ler chatId da URL (vindo do Kanban) e selecionar automaticamente
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const chatIdFromUrl = params.get('chatId');
+    
+    if (chatIdFromUrl && chats?.length) {
+      const exists = chats.some(c => c.id === chatIdFromUrl);
+      if (exists) {
+        setSelectedChatId(chatIdFromUrl);
+        markAsRead(chatIdFromUrl);
+        // Limpar o parâmetro da URL após selecionar
+        navigate('/inbox', { replace: true });
+      }
+    }
+  }, [location.search, chats]);
+
   useEffect(() => {
     if (chats.length > 0 && !selectedChatId) {
       setSelectedChatId(chats[0].id);
     }
   }, [chats, selectedChatId]);
+
+  // Buscar mensagens na conversa
+  const handleMessageSearch = (query: string) => {
+    setMessageSearchQuery(query);
+    if (!query.trim() || !selectedChat?.messages) {
+      setMessageSearchResults([]);
+      setCurrentSearchIndex(0);
+      return;
+    }
+    
+    const results = selectedChat.messages
+      .filter(m => m.content.toLowerCase().includes(query.toLowerCase()))
+      .map(m => m.id);
+    
+    setMessageSearchResults(results);
+    setCurrentSearchIndex(results.length > 0 ? 0 : -1);
+    
+    // Scroll para primeira mensagem encontrada
+    if (results.length > 0) {
+      scrollToMessage(results[0]);
+    }
+  };
+
+  // Scroll para mensagem específica
+  const scrollToMessage = (messageId: string) => {
+    const element = messageRefs.current[messageId];
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Highlight temporário
+      element.classList.add('ring-2', 'ring-yellow-400', 'ring-offset-2');
+      setTimeout(() => {
+        element.classList.remove('ring-2', 'ring-yellow-400', 'ring-offset-2');
+      }, 2000);
+    }
+  };
+
+  // Navegar entre resultados da busca
+  const navigateSearchResults = (direction: 'prev' | 'next') => {
+    if (messageSearchResults.length === 0) return;
+    
+    let newIndex = currentSearchIndex;
+    if (direction === 'next') {
+      newIndex = (currentSearchIndex + 1) % messageSearchResults.length;
+    } else {
+      newIndex = currentSearchIndex === 0 ? messageSearchResults.length - 1 : currentSearchIndex - 1;
+    }
+    
+    setCurrentSearchIndex(newIndex);
+    scrollToMessage(messageSearchResults[newIndex]);
+  };
+
+  // Limpar busca ao trocar de chat
+  useEffect(() => {
+    setShowMessageSearch(false);
+    setMessageSearchQuery('');
+    setMessageSearchResults([]);
+    setCurrentSearchIndex(0);
+  }, [selectedChatId]);
 
   // Bloquear chat quando selecionado, desbloquear quando sair
   useEffect(() => {
@@ -3194,6 +3430,18 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* Botão de busca de mensagens */}
+                <button 
+                  onClick={() => setShowMessageSearch(!showMessageSearch)}
+                  className={`p-2 rounded-full transition-colors ${
+                    showMessageSearch 
+                      ? 'text-cyan-600 bg-cyan-50' 
+                      : 'text-slate-400 hover:text-cyan-600 hover:bg-cyan-50'
+                  }`}
+                  title="Buscar mensagens"
+                >
+                  <span className="material-symbols-outlined text-[20px]">search</span>
+                </button>
                 <button 
                   onClick={openClientModal}
                   className={`p-2 rounded-full transition-colors ${
@@ -3234,6 +3482,58 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </button>
               </div>
             </header>
+
+            {/* Barra de busca de mensagens */}
+            {showMessageSearch && (
+              <div className="bg-white border-b border-slate-200 px-4 py-2 flex items-center gap-2 shrink-0">
+                <div className="flex-1 relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 text-[18px]">search</span>
+                  <input
+                    type="text"
+                    value={messageSearchQuery}
+                    onChange={(e) => handleMessageSearch(e.target.value)}
+                    placeholder="Buscar mensagens na conversa..."
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    autoFocus
+                  />
+                </div>
+                {messageSearchResults.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-slate-500 mr-2">
+                      {currentSearchIndex + 1} de {messageSearchResults.length}
+                    </span>
+                    <button
+                      onClick={() => navigateSearchResults('prev')}
+                      className="p-1.5 rounded hover:bg-slate-100 text-slate-500"
+                      title="Anterior"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                    </button>
+                    <button
+                      onClick={() => navigateSearchResults('next')}
+                      className="p-1.5 rounded hover:bg-slate-100 text-slate-500"
+                      title="Próximo"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+                    </button>
+                  </div>
+                )}
+                {messageSearchQuery && messageSearchResults.length === 0 && (
+                  <span className="text-xs text-slate-400">Nenhum resultado</span>
+                )}
+                <button
+                  onClick={() => {
+                    setShowMessageSearch(false);
+                    setMessageSearchQuery('');
+                    setMessageSearchResults([]);
+                  }}
+                  className="p-1.5 rounded hover:bg-slate-100 text-slate-400"
+                  title="Fechar busca"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4" style={{ backgroundImage: 'radial-gradient(#cbd5e1 0.5px, transparent 0.5px)', backgroundSize: '15px 15px' }}>
               {/* Botão carregar mais mensagens */}
@@ -3286,17 +3586,47 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
               )}
 
-              <div className="flex justify-center mb-8">
-                <span className="bg-white/80 backdrop-blur-md px-4 py-1 rounded-full text-[10px] font-bold text-slate-500 shadow-sm border border-slate-100 uppercase tracking-widest">Hoje</span>
-              </div>
-              
-              {selectedChat.messages.map((m) => (
-                <div key={m.id} className={`flex ${!m.is_from_client ? 'justify-end' : 'justify-start'} w-full group`}>
+              {selectedChat.messages.map((m, index, arr) => {
+                // Função para formatar label de data
+                const getDateLabel = (dateStr: string) => {
+                  const msgDate = new Date(dateStr);
+                  const today = new Date();
+                  const yesterday = new Date(today);
+                  yesterday.setDate(yesterday.getDate() - 1);
+                  
+                  const isSameDay = (d1: Date, d2: Date) => 
+                    d1.getDate() === d2.getDate() && 
+                    d1.getMonth() === d2.getMonth() && 
+                    d1.getFullYear() === d2.getFullYear();
+                  
+                  if (isSameDay(msgDate, today)) return 'HOJE';
+                  if (isSameDay(msgDate, yesterday)) return 'ONTEM';
+                  return msgDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                };
+                
+                // Verificar se deve mostrar separador de data
+                const currentDate = new Date(m.created_at).toDateString();
+                const prevDate = index > 0 ? new Date(arr[index - 1].created_at).toDateString() : null;
+                const showDateSeparator = index === 0 || currentDate !== prevDate;
+                
+                return (
+                <React.Fragment key={m.id}>
+                  {showDateSeparator && (
+                    <div className="flex justify-center my-4">
+                      <span className="bg-white/80 backdrop-blur-md px-4 py-1 rounded-full text-[10px] font-bold text-slate-500 shadow-sm border border-slate-100 uppercase tracking-widest">
+                        {getDateLabel(m.created_at)}
+                      </span>
+                    </div>
+                  )}
+                <div 
+                  ref={(el) => { messageRefs.current[m.id] = el; }}
+                  className={`flex ${!m.is_from_client ? 'justify-end' : 'justify-start'} w-full group transition-all duration-300`}
+                >
                   <div className={`max-w-[75%] p-3 rounded-2xl shadow-sm relative ${
                     !m.is_from_client 
                       ? 'bg-cyan-600 text-white rounded-tr-none' 
                       : 'bg-white text-slate-800 rounded-tl-none'
-                  }`}>
+                  } ${messageSearchResults.includes(m.id) ? 'ring-2 ring-yellow-400' : ''}`}>
                     {/* Quote/Reply - mensagem sendo respondida */}
                     {(m as any).quoted_content && (
                       <div className={`mb-2 p-2 rounded-lg border-l-4 ${
@@ -3455,7 +3785,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     )}
                   </div>
                 </div>
-              ))}
+                </React.Fragment>
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
 
@@ -3637,15 +3969,26 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               <p className="text-sm font-bold text-slate-400">{selectedChat.phone_number}</p>
               
               <div className="flex justify-center gap-4 mt-6">
-                {[
-                  { icon: 'chat', label: 'Conversar', color: 'green' },
-                  { icon: 'call', label: 'Ligar', color: 'blue' },
-                  { icon: 'edit', label: 'Editar', color: 'slate' },
-                ].map(action => (
-                  <button key={action.label} className={`size-10 rounded-full border border-${action.color}-100 bg-${action.color}-50 text-${action.color}-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm`}>
-                    <span className="material-symbols-outlined text-[20px]">{action.icon}</span>
-                  </button>
-                ))}
+                <button 
+                  className="size-10 rounded-full border border-green-100 bg-green-50 text-green-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
+                  title="Conversar"
+                >
+                  <span className="material-symbols-outlined text-[20px]">chat</span>
+                </button>
+                <button 
+                  onClick={() => window.open(`tel:${selectedChat.phone_number}`, '_self')}
+                  className="size-10 rounded-full border border-blue-100 bg-blue-50 text-blue-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
+                  title="Ligar"
+                >
+                  <span className="material-symbols-outlined text-[20px]">call</span>
+                </button>
+                <button 
+                  onClick={openClientModal}
+                  className="size-10 rounded-full border border-cyan-100 bg-cyan-50 text-cyan-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
+                  title={chatLeadId ? 'Editar Cliente' : 'Cadastrar Cliente'}
+                >
+                  <span className="material-symbols-outlined text-[20px]">{chatLeadId ? 'edit' : 'person_add'}</span>
+                </button>
               </div>
             </div>
 
@@ -5228,8 +5571,82 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     value={clientData.address}
                     onChange={(e) => setClientData({ ...clientData, address: e.target.value })}
                     className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                    placeholder="Rua, número, bairro, cidade"
+                    placeholder="Rua, número, bairro"
                   />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Cidade</label>
+                    <input
+                      type="text"
+                      value={clientData.city}
+                      onChange={(e) => setClientData({ ...clientData, city: e.target.value })}
+                      className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                      placeholder="Ex: Campo Grande"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">Estado</label>
+                    <select
+                      value={clientData.state}
+                      onChange={(e) => setClientData({ ...clientData, state: e.target.value })}
+                      className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    >
+                      <option value="">UF</option>
+                      <option value="AC">AC</option>
+                      <option value="AL">AL</option>
+                      <option value="AP">AP</option>
+                      <option value="AM">AM</option>
+                      <option value="BA">BA</option>
+                      <option value="CE">CE</option>
+                      <option value="DF">DF</option>
+                      <option value="ES">ES</option>
+                      <option value="GO">GO</option>
+                      <option value="MA">MA</option>
+                      <option value="MT">MT</option>
+                      <option value="MS">MS</option>
+                      <option value="MG">MG</option>
+                      <option value="PA">PA</option>
+                      <option value="PB">PB</option>
+                      <option value="PR">PR</option>
+                      <option value="PE">PE</option>
+                      <option value="PI">PI</option>
+                      <option value="RJ">RJ</option>
+                      <option value="RN">RN</option>
+                      <option value="RS">RS</option>
+                      <option value="RO">RO</option>
+                      <option value="RR">RR</option>
+                      <option value="SC">SC</option>
+                      <option value="SP">SP</option>
+                      <option value="SE">SE</option>
+                      <option value="TO">TO</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">CEP</label>
+                    <input
+                      type="text"
+                      value={clientData.zip_code}
+                      onChange={(e) => setClientData({ ...clientData, zip_code: e.target.value })}
+                      className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                      placeholder="00000-000"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Gênero</label>
+                  <select
+                    value={clientData.gender}
+                    onChange={(e) => setClientData({ ...clientData, gender: e.target.value })}
+                    className="w-full h-11 px-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                  >
+                    <option value="">Selecione</option>
+                    <option value="m">Masculino</option>
+                    <option value="f">Feminino</option>
+                    <option value="o">Outro</option>
+                  </select>
                 </div>
 
                 <div>

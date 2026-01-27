@@ -9,7 +9,10 @@ import {
   Users,
   Menu,
   X,
-  CreditCard
+  CreditCard,
+  MessageSquare,
+  Plug,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
@@ -44,8 +47,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const menuItems = [
     { path: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/admin/clinics', icon: Building2, label: 'Clínicas' },
+    { path: '/admin/whatsapp', icon: MessageSquare, label: 'WhatsApp' },
+    { path: '/admin/campaigns', icon: BarChart3, label: 'Campanhas' },
     { path: '/admin/plans', icon: CreditCard, label: 'Planos' },
     { path: '/admin/users', icon: Users, label: 'SuperAdmins' },
+    { path: '/admin/integrations', icon: Plug, label: 'Integrações' },
     { path: '/admin/settings', icon: Settings, label: 'Configurações' },
   ];
 
