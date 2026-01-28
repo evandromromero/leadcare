@@ -26,12 +26,55 @@ interface Campaign {
   actions?: Array<{ action_type: string; value: string }>;
 }
 
+const DEFAULT_VISIBLE_COLUMNS = ['campaign_name', 'objective', 'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'reach'];
+
+const COLUMN_CONFIG: Record<string, { label: string; align: 'left' | 'right'; format?: 'currency' | 'number' | 'percent'; actionType?: string }> = {
+  // Identificação
+  campaign_name: { label: 'Campanha', align: 'left' },
+  objective: { label: 'Objetivo', align: 'left' },
+  
+  // Custos
+  spend: { label: 'Gasto', align: 'right', format: 'currency' },
+  cpc: { label: 'CPC', align: 'right', format: 'currency' },
+  cpm: { label: 'CPM', align: 'right', format: 'currency' },
+  cpp: { label: 'CPP', align: 'right', format: 'currency' },
+  cost_per_unique_click: { label: 'Custo/Clique Único', align: 'right', format: 'currency' },
+  
+  // Alcance
+  impressions: { label: 'Impressões', align: 'right', format: 'number' },
+  reach: { label: 'Alcance', align: 'right', format: 'number' },
+  frequency: { label: 'Frequência', align: 'right', format: 'number' },
+  
+  // Cliques
+  clicks: { label: 'Cliques', align: 'right', format: 'number' },
+  unique_clicks: { label: 'Cliques Únicos', align: 'right', format: 'number' },
+  ctr: { label: 'CTR', align: 'right', format: 'percent' },
+  unique_ctr: { label: 'CTR Único', align: 'right', format: 'percent' },
+  
+  // Conversões (baseadas em actions)
+  conversations: { label: 'Conversas', align: 'right', format: 'number', actionType: 'messaging_conversation_started_7d' },
+  link_clicks: { label: 'Cliques Link', align: 'right', format: 'number', actionType: 'link_click' },
+  landing_page_views: { label: 'Views Página', align: 'right', format: 'number', actionType: 'landing_page_view' },
+  leads: { label: 'Leads', align: 'right', format: 'number', actionType: 'lead' },
+  purchases: { label: 'Compras', align: 'right', format: 'number', actionType: 'purchase' },
+  post_engagement: { label: 'Engaj. Post', align: 'right', format: 'number', actionType: 'post_engagement' },
+  page_engagement: { label: 'Engaj. Página', align: 'right', format: 'number', actionType: 'page_engagement' },
+  actions_total: { label: 'Ações Total', align: 'right', format: 'number' },
+  
+  // Vídeo
+  video_p25: { label: 'Vídeo 25%', align: 'right', format: 'number' },
+  video_p50: { label: 'Vídeo 50%', align: 'right', format: 'number' },
+  video_p75: { label: 'Vídeo 75%', align: 'right', format: 'number' },
+  video_p100: { label: 'Vídeo 100%', align: 'right', format: 'number' },
+};
+
 const Campaigns: React.FC = () => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState('last_30d');
   const [refreshing, setRefreshing] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
 
   const datePresets = [
     { value: 'today', label: 'Hoje' },
@@ -44,8 +87,27 @@ const Campaigns: React.FC = () => {
   ];
 
   useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  useEffect(() => {
     fetchCampaigns();
   }, [datePreset]);
+
+  const fetchSettings = async () => {
+    try {
+      const { data } = await supabase
+        .from('settings')
+        .select('facebook_ads_visible_columns')
+        .single();
+      
+      if (data && (data as any).facebook_ads_visible_columns) {
+        setVisibleColumns((data as any).facebook_ads_visible_columns);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar configurações:', err);
+    }
+  };
 
   const fetchCampaigns = async () => {
     setLoading(true);
@@ -237,46 +299,106 @@ const Campaigns: React.FC = () => {
             <table className="w-full">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Campanha</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Objetivo</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Gasto</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Impressões</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Cliques</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">CTR</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">CPC</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Alcance</th>
+                  {visibleColumns.map(col => {
+                    const config = COLUMN_CONFIG[col];
+                    if (!config) return null;
+                    return (
+                      <th 
+                        key={col}
+                        className={`text-${config.align} px-4 py-3 text-xs font-semibold text-slate-500 uppercase`}
+                      >
+                        {config.label}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {campaigns.map((campaign) => (
                   <tr key={campaign.campaign_id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-800 text-sm">{campaign.campaign_name}</p>
-                      <p className="text-xs text-slate-400">ID: {campaign.campaign_id}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">
-                        {campaign.objective || '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm font-medium text-slate-800">
-                      {formatCurrency(campaign.spend || 0)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-slate-600">
-                      {formatNumber(campaign.impressions || 0)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-slate-600">
-                      {formatNumber(campaign.clicks || 0)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm font-medium text-green-600">
-                      {campaign.ctr ? formatPercent(campaign.ctr) : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-slate-600">
-                      {campaign.cpc ? formatCurrency(campaign.cpc) : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-right text-sm text-slate-600">
-                      {formatNumber(campaign.reach || 0)}
-                    </td>
+                    {visibleColumns.map(col => {
+                      const config = COLUMN_CONFIG[col];
+                      if (!config) return null;
+                      
+                      // Renderização especial para campaign_name
+                      if (col === 'campaign_name') {
+                        return (
+                          <td key={col} className="px-4 py-3">
+                            <p className="font-medium text-slate-800 text-sm">{campaign.campaign_name}</p>
+                            <p className="text-xs text-slate-400">ID: {campaign.campaign_id}</p>
+                          </td>
+                        );
+                      }
+                      
+                      // Renderização especial para objective
+                      if (col === 'objective') {
+                        return (
+                          <td key={col} className="px-4 py-3">
+                            <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+                              {campaign.objective || '-'}
+                            </span>
+                          </td>
+                        );
+                      }
+                      
+                      // Renderização para colunas baseadas em actions (conversões)
+                      if (config.actionType) {
+                        const actionValue = campaign.actions?.find(a => 
+                          a.action_type === config.actionType ||
+                          a.action_type === `onsite_conversion.${config.actionType}`
+                        )?.value || '0';
+                        return (
+                          <td key={col} className="px-4 py-3 text-right text-sm text-purple-600 font-medium">
+                            {formatNumber(actionValue)}
+                          </td>
+                        );
+                      }
+                      
+                      // Renderização especial para actions_total
+                      if (col === 'actions_total') {
+                        const actionsCount = campaign.actions?.reduce((sum, a) => sum + parseInt(a.value || '0'), 0) || 0;
+                        return (
+                          <td key={col} className="px-4 py-3 text-right text-sm text-slate-600">
+                            {formatNumber(actionsCount)}
+                          </td>
+                        );
+                      }
+                      
+                      // Renderização para métricas de vídeo
+                      if (col.startsWith('video_p')) {
+                        const videoKey = col.replace('video_p', 'video_p') + '_watched_actions';
+                        const videoData = (campaign as any)[videoKey];
+                        const videoValue = Array.isArray(videoData) ? videoData[0]?.value || '0' : '0';
+                        return (
+                          <td key={col} className="px-4 py-3 text-right text-sm text-slate-600">
+                            {formatNumber(videoValue)}
+                          </td>
+                        );
+                      }
+                      
+                      // Renderização padrão baseada no formato
+                      const value = (campaign as any)[col];
+                      let formattedValue = '-';
+                      let textClass = 'text-slate-600';
+                      
+                      if (value !== undefined && value !== null) {
+                        if (config.format === 'currency') {
+                          formattedValue = formatCurrency(value);
+                          if (col === 'spend') textClass = 'font-medium text-slate-800';
+                        } else if (config.format === 'number') {
+                          formattedValue = formatNumber(value);
+                        } else if (config.format === 'percent') {
+                          formattedValue = formatPercent(value);
+                          textClass = 'font-medium text-green-600';
+                        }
+                      }
+                      
+                      return (
+                        <td key={col} className={`px-4 py-3 text-${config.align} text-sm ${textClass}`}>
+                          {formattedValue}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>

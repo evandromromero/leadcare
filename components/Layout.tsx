@@ -30,6 +30,7 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const [logoLoaded, setLogoLoaded] = useState(false);
   const tasksDropdownRef = useRef<HTMLDivElement>(null);
   const [supportEnabled, setSupportEnabled] = useState(false);
+  const [integrationsEnabled, setIntegrationsEnabled] = useState(false);
 
   // Buscar logo e configurações de suporte do banco
   const fetchSupportStatus = async () => {
@@ -46,12 +47,14 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
       if (clinicId) {
         const { data: clinicData } = await db
           .from('clinics')
-          .select('support_enabled')
+          .select('support_enabled, email_marketing_enabled')
           .eq('id', clinicId)
           .single();
         setSupportEnabled(d.support_enabled && (clinicData?.support_enabled ?? true));
+        setIntegrationsEnabled(clinicData?.email_marketing_enabled ?? false);
       } else {
         setSupportEnabled(d.support_enabled);
+        setIntegrationsEnabled(false);
       }
     }
     setLogoLoaded(true);
@@ -122,13 +125,22 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
     { path: '/settings', label: 'Configurações', icon: 'settings', page: 'settings' as MenuPage },
   ];
 
-  // Adicionar menu de suporte se habilitado
-  const navItemsWithSupport = supportEnabled 
-    ? [...allNavItems, { path: '/support', label: 'Suporte', icon: 'support_agent', page: 'support' as MenuPage }]
-    : allNavItems;
+  // Adicionar menus dinâmicos
+  let dynamicNavItems = [...allNavItems];
+  
+  // Email Marketing (aparece se integrações estiver habilitado)
+  if (integrationsEnabled) {
+    // Inserir Email Marketing após Kanban (posição 3)
+    dynamicNavItems.splice(3, 0, { path: '/email-marketing', label: 'Email Marketing', icon: 'mail', page: 'settings' as MenuPage });
+    dynamicNavItems.push({ path: '/integrations', label: 'Integrações', icon: 'extension', page: 'settings' as MenuPage });
+  }
+  
+  if (supportEnabled) {
+    dynamicNavItems.push({ path: '/support', label: 'Suporte', icon: 'support_agent', page: 'support' as MenuPage });
+  }
 
-  const navItems = navItemsWithSupport.filter(item => 
-    item.page === 'support' || canAccessPage(user?.role, item.page as MenuPage)
+  const navItems = dynamicNavItems.filter(item => 
+    item.page === 'support' || item.path === '/integrations' || item.path === '/email-marketing' || canAccessPage(user?.role, item.page as MenuPage)
   );
 
   const statusColors = {

@@ -5,12 +5,56 @@ import { supabase } from '../../lib/supabase';
 interface IntegrationSettings {
   facebook_ads_account_id: string;
   facebook_ads_token: string;
+  facebook_ads_visible_columns: string[];
 }
+
+const ALL_CAMPAIGN_COLUMNS = [
+  // Identificação
+  { key: 'campaign_name', label: 'Nome da Campanha', required: true, category: 'Identificação' },
+  { key: 'objective', label: 'Objetivo', category: 'Identificação' },
+  
+  // Custos
+  { key: 'spend', label: 'Gasto', category: 'Custos' },
+  { key: 'cpc', label: 'CPC (Custo por Clique)', category: 'Custos' },
+  { key: 'cpm', label: 'CPM (Custo por Mil)', category: 'Custos' },
+  { key: 'cpp', label: 'CPP (Custo por Compra)', category: 'Custos' },
+  { key: 'cost_per_unique_click', label: 'Custo por Clique Único', category: 'Custos' },
+  
+  // Alcance e Impressões
+  { key: 'impressions', label: 'Impressões', category: 'Alcance' },
+  { key: 'reach', label: 'Alcance (Pessoas Únicas)', category: 'Alcance' },
+  { key: 'frequency', label: 'Frequência', category: 'Alcance' },
+  
+  // Cliques e Engajamento
+  { key: 'clicks', label: 'Cliques (Total)', category: 'Cliques' },
+  { key: 'unique_clicks', label: 'Cliques Únicos', category: 'Cliques' },
+  { key: 'ctr', label: 'CTR (%)', category: 'Cliques' },
+  { key: 'unique_ctr', label: 'CTR Único (%)', category: 'Cliques' },
+  
+  // Ações/Conversões
+  { key: 'conversations', label: 'Conversas Iniciadas', category: 'Conversões' },
+  { key: 'link_clicks', label: 'Cliques no Link', category: 'Conversões' },
+  { key: 'landing_page_views', label: 'Visualizações da Página', category: 'Conversões' },
+  { key: 'leads', label: 'Leads', category: 'Conversões' },
+  { key: 'purchases', label: 'Compras', category: 'Conversões' },
+  { key: 'post_engagement', label: 'Engajamento no Post', category: 'Conversões' },
+  { key: 'page_engagement', label: 'Engajamento na Página', category: 'Conversões' },
+  { key: 'actions_total', label: 'Ações (Total)', category: 'Conversões' },
+  
+  // Vídeo
+  { key: 'video_p25', label: 'Vídeo 25% Assistido', category: 'Vídeo' },
+  { key: 'video_p50', label: 'Vídeo 50% Assistido', category: 'Vídeo' },
+  { key: 'video_p75', label: 'Vídeo 75% Assistido', category: 'Vídeo' },
+  { key: 'video_p100', label: 'Vídeo 100% Assistido', category: 'Vídeo' },
+];
+
+const DEFAULT_VISIBLE_COLUMNS = ['campaign_name', 'objective', 'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'reach'];
 
 const AdminIntegrations: React.FC = () => {
   const [settings, setSettings] = useState<IntegrationSettings>({
     facebook_ads_account_id: '',
     facebook_ads_token: '',
+    facebook_ads_visible_columns: DEFAULT_VISIBLE_COLUMNS,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -25,7 +69,7 @@ const AdminIntegrations: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('settings')
-        .select('facebook_ads_account_id, facebook_ads_token')
+        .select('facebook_ads_account_id, facebook_ads_token, facebook_ads_visible_columns')
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
@@ -35,6 +79,7 @@ const AdminIntegrations: React.FC = () => {
         setSettings({
           facebook_ads_account_id: d.facebook_ads_account_id || '',
           facebook_ads_token: d.facebook_ads_token || '',
+          facebook_ads_visible_columns: d.facebook_ads_visible_columns || DEFAULT_VISIBLE_COLUMNS,
         });
       }
     } catch (error) {
@@ -54,6 +99,7 @@ const AdminIntegrations: React.FC = () => {
         .update({
           facebook_ads_account_id: settings.facebook_ads_account_id,
           facebook_ads_token: settings.facebook_ads_token,
+          facebook_ads_visible_columns: settings.facebook_ads_visible_columns,
           updated_at: new Date().toISOString(),
         } as any)
         .eq('id', 1 as any);
@@ -151,18 +197,42 @@ const AdminIntegrations: React.FC = () => {
             </div>
 
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-              <h4 className="text-sm font-medium text-slate-700 mb-2">Parâmetros disponíveis:</h4>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  'campaign_id', 'campaign_name', 'adset_id', 'adset_name', 
-                  'ad_id', 'ad_name', 'spend', 'impressions', 'clicks', 
-                  'cpc', 'cpm', 'cpp', 'ctr', 'objective', 'reach', 'actions', 'account_name'
-                ].map(param => (
-                  <span key={param} className="px-2 py-1 bg-white border border-slate-200 rounded text-xs text-slate-600">
-                    {param}
-                  </span>
-                ))}
-              </div>
+              <h4 className="text-sm font-medium text-slate-700 mb-4">Colunas visíveis em Campanhas:</h4>
+              
+              {/* Agrupar por categoria */}
+              {['Identificação', 'Custos', 'Alcance', 'Cliques', 'Conversões', 'Vídeo'].map(category => {
+                const categoryColumns = ALL_CAMPAIGN_COLUMNS.filter(col => col.category === category);
+                if (categoryColumns.length === 0) return null;
+                
+                return (
+                  <div key={category} className="mb-4">
+                    <h5 className="text-xs font-semibold text-slate-500 uppercase mb-2">{category}</h5>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {categoryColumns.map(col => (
+                        <label key={col.key} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.facebook_ads_visible_columns.includes(col.key)}
+                            disabled={col.required}
+                            onChange={(e) => {
+                              if (col.required) return;
+                              const newColumns = e.target.checked
+                                ? [...settings.facebook_ads_visible_columns, col.key]
+                                : settings.facebook_ads_visible_columns.filter(c => c !== col.key);
+                              setSettings({ ...settings, facebook_ads_visible_columns: newColumns });
+                            }}
+                            className="w-4 h-4 text-cyan-600 border-slate-300 rounded focus:ring-cyan-500 disabled:opacity-50"
+                          />
+                          <span className={`text-sm ${col.required ? 'text-slate-400' : 'text-slate-700'}`}>
+                            {col.label}
+                            {col.required && <span className="text-xs text-slate-400 ml-1">(obrigatório)</span>}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

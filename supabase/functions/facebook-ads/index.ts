@@ -56,7 +56,7 @@ serve(async (req) => {
     const accessToken = settings.facebook_ads_token
 
     if (action === 'get_campaigns') {
-      // Campos a buscar
+      // Campos a buscar - lista completa de métricas disponíveis
       const fields = [
         'campaign_id',
         'campaign_name',
@@ -73,7 +73,16 @@ serve(async (req) => {
         'ctr',
         'objective',
         'reach',
+        'frequency',
+        'unique_clicks',
+        'unique_ctr',
+        'cost_per_unique_click',
         'actions',
+        'cost_per_action_type',
+        'video_p25_watched_actions',
+        'video_p50_watched_actions',
+        'video_p75_watched_actions',
+        'video_p100_watched_actions',
         'account_name'
       ].join(',')
 

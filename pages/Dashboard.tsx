@@ -83,9 +83,59 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     client_name: string;
   }>>([]);
 
-  const novosLeads = chats.filter(c => c.status === 'Novo Lead').length;
-  const emAtendimento = chats.filter(c => c.status === 'Em Atendimento').length;
-  const totalChats = chats.length;
+  // Excluir grupos das métricas (is_group = false ou undefined)
+  const chatsWithoutGroups = chats.filter(c => !c.is_group);
+  const novosLeads = chatsWithoutGroups.filter(c => c.status === 'Novo Lead').length;
+  const emAtendimento = chatsWithoutGroups.filter(c => c.status === 'Em Atendimento').length;
+  const totalChats = chatsWithoutGroups.length;
+  
+  // Estado para dados do dia anterior (comparação)
+  const [yesterdayStats, setYesterdayStats] = useState<{
+    novosLeads: number;
+    emAtendimento: number;
+    vendas: number;
+    totalChats: number;
+  } | null>(null);
+  
+  // Estado para detalhes de leads (card expandível)
+  const [leadsDetails, setLeadsDetails] = useState<{
+    leadsHoje: number;
+    leadsHojeOntem: number;
+    leadsCampanhaHoje: number;
+    leadsCampanhaOntem: number;
+    codigosRecentes: string[];
+  } | null>(null);
+  
+  // Estado para detalhes de Em Atendimento
+  const [atendimentoDetails, setAtendimentoDetails] = useState<{
+    atendentesAtivos: number;
+    iniciadosHoje: number;
+    iniciadosOntem: number;
+    mediaDias: number;
+  } | null>(null);
+  
+  // Estado para detalhes de Vendas
+  const [vendasDetails, setVendasDetails] = useState<{
+    valorTotal: number;
+    ticketMedio: number;
+    vendasHoje: number;
+    vendasOntem: number;
+    valorHoje: number;
+    valorOntem: number;
+  } | null>(null);
+  
+  // Estado para detalhes de Total Conversas
+  const [conversasDetails, setConversasDetails] = useState<{
+    novosLeads: number;
+    emAtendimento: number;
+    convertidos: number;
+    perdidos: number;
+    outros: number;
+    taxaConversao: number;
+  } | null>(null);
+  
+  // Estado para controlar card expandido
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
   
   // Estado para contar pagamentos ativos (vendas concluídas)
   const [activePaymentsCount, setActivePaymentsCount] = useState(0);
@@ -176,13 +226,15 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             .or('status.is.null,status.eq.active');
           paymentsData = data as any[];
         } else {
-          // Outros perfis veem baseado nos chats (excluindo canceladas)
+          // Outros perfis: buscar todos payments da clínica e filtrar no frontend
+          // (evita erro 400 quando há muitos chat_ids na URL)
           const { data } = await supabase
             .from('payments' as any)
             .select('id, value, payment_date, chat_id, created_by, status')
-            .in('chat_id', chatIdsForStats)
+            .eq('clinic_id', clinicId)
             .or('status.is.null,status.eq.active');
-          paymentsData = data as any[];
+          // Filtrar apenas payments dos chats visíveis
+          paymentsData = (data || []).filter((p: any) => chatIdsForStats.includes(p.chat_id));
         }
         
         if (paymentsData) {
@@ -441,11 +493,267 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     fetchFollowups();
   }, [clinicId]);
 
+  // Buscar dados do dia anterior para comparação
+  useEffect(() => {
+    const fetchYesterdayStats = async () => {
+      if (!clinicId) return;
+      
+      try {
+        // Data de ontem (início e fim do dia)
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStart = new Date(yesterday.setHours(0, 0, 0, 0)).toISOString();
+        const yesterdayEnd = new Date(yesterday.setHours(23, 59, 59, 999)).toISOString();
+        
+        // Buscar chats que existiam até ontem (excluindo grupos)
+        const { data: yesterdayChats } = await supabase
+          .from('chats')
+          .select('id, status, is_group, created_at')
+          .eq('clinic_id', clinicId)
+          .eq('is_group', false)
+          .lte('created_at', yesterdayEnd);
+        
+        // Buscar payments até ontem
+        const { data: yesterdayPayments } = await supabase
+          .from('payments' as any)
+          .select('id')
+          .eq('clinic_id', clinicId)
+          .or('status.is.null,status.eq.active')
+          .lte('created_at', yesterdayEnd);
+        
+        if (yesterdayChats) {
+          setYesterdayStats({
+            novosLeads: yesterdayChats.filter((c: any) => c.status === 'Novo Lead').length,
+            emAtendimento: yesterdayChats.filter((c: any) => c.status === 'Em Atendimento').length,
+            vendas: yesterdayPayments?.length || 0,
+            totalChats: yesterdayChats.length,
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados de ontem:', error);
+      }
+    };
+    
+    fetchYesterdayStats();
+  }, [clinicId]);
+
+  // Buscar detalhes de leads (hoje, campanha, códigos recentes)
+  useEffect(() => {
+    const fetchLeadsDetails = async () => {
+      if (!clinicId) return;
+      
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStart = today.toISOString();
+        
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0, 0, 0, 0);
+        const yesterdayStart = yesterday.toISOString();
+        const yesterdayEnd = new Date(yesterday);
+        yesterdayEnd.setHours(23, 59, 59, 999);
+        const yesterdayEndStr = yesterdayEnd.toISOString();
+        
+        // Buscar leads criados HOJE
+        const { data: leadsHoje } = await supabase
+          .from('chats')
+          .select('id, source_id')
+          .eq('clinic_id', clinicId)
+          .eq('is_group', false)
+          .gte('created_at', todayStart);
+        
+        // Buscar leads criados ONTEM
+        const { data: leadsOntem } = await supabase
+          .from('chats')
+          .select('id, source_id')
+          .eq('clinic_id', clinicId)
+          .eq('is_group', false)
+          .gte('created_at', yesterdayStart)
+          .lte('created_at', yesterdayEndStr);
+        
+        // Buscar códigos de campanha recentes (últimos 5)
+        const { data: recentSources } = await supabase
+          .from('lead_sources')
+          .select('code, name')
+          .eq('clinic_id', clinicId)
+          .not('code', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        const leadsHojeCount = leadsHoje?.length || 0;
+        const leadsHojeCampanha = leadsHoje?.filter((l: any) => l.source_id !== null).length || 0;
+        const leadsOntemCount = leadsOntem?.length || 0;
+        const leadsOntemCampanha = leadsOntem?.filter((l: any) => l.source_id !== null).length || 0;
+        const codigos = recentSources?.map((s: any) => s.code || s.name).filter(Boolean) || [];
+        
+        setLeadsDetails({
+          leadsHoje: leadsHojeCount,
+          leadsHojeOntem: leadsOntemCount,
+          leadsCampanhaHoje: leadsHojeCampanha,
+          leadsCampanhaOntem: leadsOntemCampanha,
+          codigosRecentes: codigos,
+        });
+      } catch (error) {
+        console.error('Erro ao buscar detalhes de leads:', error);
+      }
+    };
+    
+    fetchLeadsDetails();
+  }, [clinicId]);
+
+  // Buscar detalhes de Em Atendimento, Vendas e Total Conversas
+  useEffect(() => {
+    const fetchCardsDetails = async () => {
+      if (!clinicId) return;
+      
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStart = today.toISOString();
+        
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0, 0, 0, 0);
+        const yesterdayStart = yesterday.toISOString();
+        const yesterdayEnd = new Date(yesterday);
+        yesterdayEnd.setHours(23, 59, 59, 999);
+        const yesterdayEndStr = yesterdayEnd.toISOString();
+        
+        // EM ATENDIMENTO - Buscar detalhes
+        const { data: atendimentoChats } = await supabase
+          .from('chats')
+          .select('id, assigned_to, updated_at')
+          .eq('clinic_id', clinicId)
+          .eq('status', 'Em Atendimento')
+          .eq('is_group', false);
+        
+        if (atendimentoChats) {
+          const atendentesUnicos = new Set(atendimentoChats.map((c: any) => c.assigned_to).filter(Boolean));
+          const iniciadosHoje = atendimentoChats.filter((c: any) => new Date(c.updated_at) >= today).length;
+          const iniciadosOntem = atendimentoChats.filter((c: any) => {
+            const d = new Date(c.updated_at);
+            return d >= yesterday && d < today;
+          }).length;
+          
+          // Calcular média de dias em atendimento
+          const now = new Date();
+          const totalDias = atendimentoChats.reduce((sum: number, c: any) => {
+            const dias = (now.getTime() - new Date(c.updated_at).getTime()) / (1000 * 60 * 60 * 24);
+            return sum + dias;
+          }, 0);
+          const mediaDias = atendimentoChats.length > 0 ? totalDias / atendimentoChats.length : 0;
+          
+          setAtendimentoDetails({
+            atendentesAtivos: atendentesUnicos.size,
+            iniciadosHoje,
+            iniciadosOntem,
+            mediaDias: Math.round(mediaDias * 10) / 10,
+          });
+        }
+        
+        // VENDAS - Buscar detalhes
+        const { data: vendasData } = await supabase
+          .from('payments' as any)
+          .select('id, value, created_at')
+          .eq('clinic_id', clinicId)
+          .or('status.is.null,status.eq.active');
+        
+        if (vendasData) {
+          const vendas = vendasData as any[];
+          const valorTotal = vendas.reduce((sum, v) => sum + parseFloat(v.value || 0), 0);
+          const ticketMedio = vendas.length > 0 ? valorTotal / vendas.length : 0;
+          
+          const vendasHoje = vendas.filter(v => new Date(v.created_at) >= today);
+          const vendasOntem = vendas.filter(v => {
+            const d = new Date(v.created_at);
+            return d >= yesterday && d < today;
+          });
+          
+          setVendasDetails({
+            valorTotal,
+            ticketMedio: Math.round(ticketMedio * 100) / 100,
+            vendasHoje: vendasHoje.length,
+            vendasOntem: vendasOntem.length,
+            valorHoje: vendasHoje.reduce((sum, v) => sum + parseFloat(v.value || 0), 0),
+            valorOntem: vendasOntem.reduce((sum, v) => sum + parseFloat(v.value || 0), 0),
+          });
+        }
+        
+        // TOTAL CONVERSAS - Buscar detalhes por status
+        const { data: allChats } = await supabase
+          .from('chats')
+          .select('id, status')
+          .eq('clinic_id', clinicId)
+          .eq('is_group', false);
+        
+        if (allChats) {
+          const chatsArr = allChats as any[];
+          const novos = chatsArr.filter(c => c.status === 'Novo Lead').length;
+          const atendimento = chatsArr.filter(c => c.status === 'Em Atendimento').length;
+          const convertidos = chatsArr.filter(c => c.status === 'Convertido').length;
+          const perdidos = chatsArr.filter(c => c.status === 'Perdido').length;
+          const outros = chatsArr.length - novos - atendimento - convertidos - perdidos;
+          const taxaConversao = chatsArr.length > 0 ? (convertidos / chatsArr.length) * 100 : 0;
+          
+          setConversasDetails({
+            novosLeads: novos,
+            emAtendimento: atendimento,
+            convertidos,
+            perdidos,
+            outros,
+            taxaConversao: Math.round(taxaConversao * 10) / 10,
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao buscar detalhes dos cards:', error);
+      }
+    };
+    
+    fetchCardsDetails();
+  }, [clinicId, chats]);
+
+  // Calcular variação percentual
+  const calcChange = (current: number, yesterday: number | undefined) => {
+    if (yesterday === undefined || yesterday === 0) return null;
+    const diff = current - yesterday;
+    const percent = Math.round((diff / yesterday) * 100);
+    return { diff, percent };
+  };
+
   const stats = [
-    { label: 'Novos Leads', value: String(novosLeads), change: '+12%', color: 'blue', icon: 'person_add', tooltip: 'Conversas com status "Novo Lead" - leads que ainda não foram atendidos' },
-    { label: 'Em Atendimento', value: String(emAtendimento), change: '+4%', color: 'orange', icon: 'forum', tooltip: 'Conversas com status "Em Atendimento" - leads sendo trabalhados ativamente' },
-    { label: 'Vendas Concluídas', value: String(activePaymentsCount), change: '+10%', color: 'green', icon: 'check_circle', tooltip: 'Total de negociações registradas (não canceladas) - vem da aba Negociações no chat' },
-    { label: 'Total Conversas', value: String(totalChats), change: '', color: 'purple', icon: 'chat', tooltip: 'Quantidade total de conversas/leads no sistema' },
+    { 
+      label: 'Novos Leads', 
+      value: String(novosLeads), 
+      yesterdayValue: yesterdayStats?.novosLeads,
+      color: 'blue', 
+      icon: 'person_add', 
+      tooltip: 'Conversas com status "Novo Lead" - leads que ainda não foram atendidos (excluindo grupos)' 
+    },
+    { 
+      label: 'Em Atendimento', 
+      value: String(emAtendimento), 
+      yesterdayValue: yesterdayStats?.emAtendimento,
+      color: 'orange', 
+      icon: 'forum', 
+      tooltip: 'Conversas com status "Em Atendimento" - leads sendo trabalhados ativamente (excluindo grupos)' 
+    },
+    { 
+      label: 'Vendas Concluídas', 
+      value: String(activePaymentsCount), 
+      yesterdayValue: yesterdayStats?.vendas,
+      color: 'green', 
+      icon: 'check_circle', 
+      tooltip: 'Total de negociações registradas (não canceladas) - vem da aba Negociações no chat' 
+    },
+    { 
+      label: 'Total Conversas', 
+      value: String(totalChats), 
+      yesterdayValue: yesterdayStats?.totalChats,
+      color: 'purple', 
+      icon: 'chat', 
+      tooltip: 'Quantidade total de conversas/leads no sistema (excluindo grupos)' 
+    },
   ];
 
   return (
@@ -459,7 +767,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map(stat => (
-            <div key={stat.label} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1">
+            <div 
+              key={stat.label} 
+              className={`bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1 transition-all duration-300 cursor-pointer hover:shadow-md ${expandedCard === stat.label ? 'ring-2 ring-blue-500' : ''}`}
+              onClick={() => setExpandedCard(expandedCard === stat.label ? null : stat.label)}
+            >
               <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</span>
@@ -470,14 +782,218 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                       <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
                     </div>
                   </div>
+                  <span className="material-symbols-outlined text-[14px] text-blue-500 ml-1">
+                    {expandedCard === stat.label ? 'expand_less' : 'expand_more'}
+                  </span>
                 </div>
                 <span className={`material-symbols-outlined text-${stat.color}-600`}>{stat.icon}</span>
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-black text-slate-900">{stat.value}</span>
-                {stat.change && <span className="text-xs font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">{stat.change}</span>}
+                {(() => {
+                  const change = calcChange(parseInt(stat.value), stat.yesterdayValue);
+                  if (!change) return null;
+                  const isPositive = change.diff >= 0;
+                  return (
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${isPositive ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+                      {isPositive ? '+' : ''}{change.percent}%
+                    </span>
+                  );
+                })()}
               </div>
-              <span className="text-xs text-slate-400">vs. ontem</span>
+              <span className="text-xs text-slate-400">
+                {stat.yesterdayValue !== undefined ? `ontem: ${stat.yesterdayValue}` : 'vs. ontem'}
+              </span>
+              
+              {/* Card expandido - Detalhes de Novos Leads */}
+              {stat.label === 'Novos Leads' && expandedCard === 'Novos Leads' && leadsDetails && (
+                <div className="mt-4 pt-4 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
+                  {/* Leads Hoje */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-emerald-500">today</span>
+                      <span className="text-sm text-slate-600">Leads Hoje</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-slate-800">{leadsDetails.leadsHoje}</span>
+                      {leadsDetails.leadsHojeOntem > 0 && (
+                        <span className="text-xs text-slate-400">(ontem: {leadsDetails.leadsHojeOntem})</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Leads de Campanha */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-purple-500">campaign</span>
+                      <span className="text-sm text-slate-600">De Campanhas</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-purple-600">{leadsDetails.leadsCampanhaHoje}</span>
+                      {leadsDetails.leadsCampanhaOntem > 0 && (
+                        <span className="text-xs text-slate-400">(ontem: {leadsDetails.leadsCampanhaOntem})</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Códigos recentes */}
+                  {leadsDetails.codigosRecentes.length > 0 && (
+                    <div className="pt-2">
+                      <span className="text-xs text-slate-500 block mb-1.5">Códigos recentes:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {leadsDetails.codigosRecentes.map((codigo, idx) => (
+                          <span key={idx} className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
+                            {codigo}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <p className="text-[10px] text-slate-400 pt-1">
+                    * Leads de campanha são identificados pelo código na primeira mensagem (ex: AV7, ACV5)
+                  </p>
+                </div>
+              )}
+              
+              {/* Card expandido - Detalhes de Em Atendimento */}
+              {stat.label === 'Em Atendimento' && expandedCard === 'Em Atendimento' && atendimentoDetails && (
+                <div className="mt-4 pt-4 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-orange-500">groups</span>
+                      <span className="text-sm text-slate-600">Atendentes ativos</span>
+                    </div>
+                    <span className="text-lg font-bold text-slate-800">{atendimentoDetails.atendentesAtivos}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-emerald-500">today</span>
+                      <span className="text-sm text-slate-600">Iniciados hoje</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-slate-800">{atendimentoDetails.iniciadosHoje}</span>
+                      {atendimentoDetails.iniciadosOntem > 0 && (
+                        <span className="text-xs text-slate-400">(ontem: {atendimentoDetails.iniciadosOntem})</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-blue-500">schedule</span>
+                      <span className="text-sm text-slate-600">Média em atendimento</span>
+                    </div>
+                    <span className="text-lg font-bold text-blue-600">{atendimentoDetails.mediaDias} dias</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Card expandido - Detalhes de Vendas Concluídas */}
+              {stat.label === 'Vendas Concluídas' && expandedCard === 'Vendas Concluídas' && vendasDetails && (
+                <div className="mt-4 pt-4 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-emerald-500">payments</span>
+                      <span className="text-sm text-slate-600">Valor total</span>
+                    </div>
+                    <span className="text-lg font-bold text-emerald-600">
+                      R$ {vendasDetails.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-purple-500">local_offer</span>
+                      <span className="text-sm text-slate-600">Ticket médio</span>
+                    </div>
+                    <span className="text-lg font-bold text-purple-600">
+                      R$ {vendasDetails.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-blue-500">today</span>
+                      <span className="text-sm text-slate-600">Vendas hoje</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-slate-800">{vendasDetails.vendasHoje}</span>
+                      <span className="text-xs text-slate-400">(ontem: {vendasDetails.vendasOntem})</span>
+                    </div>
+                  </div>
+                  
+                  {vendasDetails.valorHoje > 0 && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px] text-green-500">trending_up</span>
+                        <span className="text-sm text-slate-600">Valor hoje</span>
+                      </div>
+                      <span className="text-lg font-bold text-green-600">
+                        R$ {vendasDetails.valorHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Card expandido - Detalhes de Total Conversas */}
+              {stat.label === 'Total Conversas' && expandedCard === 'Total Conversas' && conversasDetails && (
+                <div className="mt-4 pt-4 border-t border-slate-200 space-y-2 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                      <span className="text-sm text-slate-600">Novos Leads</span>
+                    </div>
+                    <span className="text-sm font-bold text-slate-800">{conversasDetails.novosLeads}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                      <span className="text-sm text-slate-600">Em Atendimento</span>
+                    </div>
+                    <span className="text-sm font-bold text-slate-800">{conversasDetails.emAtendimento}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                      <span className="text-sm text-slate-600">Convertidos</span>
+                    </div>
+                    <span className="text-sm font-bold text-green-600">{conversasDetails.convertidos}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                      <span className="text-sm text-slate-600">Perdidos</span>
+                    </div>
+                    <span className="text-sm font-bold text-red-600">{conversasDetails.perdidos}</span>
+                  </div>
+                  
+                  {conversasDetails.outros > 0 && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                        <span className="text-sm text-slate-600">Outros</span>
+                      </div>
+                      <span className="text-sm font-bold text-slate-600">{conversasDetails.outros}</span>
+                    </div>
+                  )}
+                  
+                  <div className="pt-2 mt-2 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px] text-purple-500">analytics</span>
+                        <span className="text-sm font-medium text-slate-700">Taxa de conversão</span>
+                      </div>
+                      <span className="text-lg font-bold text-purple-600">{conversasDetails.taxaConversao}%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

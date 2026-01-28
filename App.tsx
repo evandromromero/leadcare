@@ -18,6 +18,8 @@ import Metrics from './pages/Metrics';
 import Campaigns from './pages/Campaigns';
 import Support from './pages/Support';
 import SupportPanel from './pages/SupportPanel';
+import Integrations from './pages/Integrations';
+import EmailMarketing from './pages/EmailMarketing';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminClinics from './pages/admin/AdminClinics';
 import AdminClinicDetail from './pages/admin/AdminClinicDetail';
@@ -225,6 +227,18 @@ const AppRoutes: React.FC = () => {
         <Route path="/support" element={
           <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
             <Support />
+          </PrivateRoute>
+        } />
+
+        <Route path="/integrations" element={
+          <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
+            <Integrations />
+          </PrivateRoute>
+        } />
+
+        <Route path="/email-marketing" element={
+          <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
+            <EmailMarketing />
           </PrivateRoute>
         } />
 

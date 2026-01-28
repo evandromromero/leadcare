@@ -12,6 +12,20 @@ export interface ChatWithMessages extends DbChat {
   tags: DbTag[];
 }
 
+interface OptimisticMessage {
+  id: string;
+  chat_id: string;
+  content: string;
+  type: string;
+  is_from_client: boolean;
+  sent_by: string | null;
+  created_at: string;
+  quoted_message_id?: string | null;
+  quoted_content?: string | null;
+  quoted_sender_name?: string | null;
+  _optimistic?: boolean;
+}
+
 interface UseChatsReturn {
   chats: ChatWithMessages[];
   loading: boolean;
@@ -27,6 +41,8 @@ interface UseChatsReturn {
   fetchMessages: (chatId: string, limit?: number, before?: string) => Promise<{ messages: DbMessage[]; hasMore: boolean }>;
   loadMoreMessages: (chatId: string) => Promise<void>;
   togglePinChat: (chatId: string) => Promise<void>;
+  addOptimisticMessage: (chatId: string, content: string, userId: string, replyingTo?: { id: string; content: string; senderName: string } | null) => string;
+  updateOptimisticMessage: (chatId: string, tempId: string, realMessage: DbMessage | null) => void;
 }
 
 const MESSAGES_PER_PAGE = 50;
@@ -93,22 +109,40 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
       }
 
       
-      const formattedChats: ChatWithMessages[] = (chatsData || []).map(chat => ({
-        ...chat,
-        messages: [], // Mensagens serão carregadas sob demanda
-        tags: chat.chat_tags?.map((ct: { tags: DbTag }) => ct.tags).filter(Boolean) || [],
-      }));
+      // Preservar mensagens e last_message locais se forem mais recentes
+      setChats(prevChats => {
+        const formattedChats: ChatWithMessages[] = (chatsData || []).map(chat => {
+          const existingChat = prevChats.find(c => c.id === chat.id);
+          
+          // Preservar mensagens locais
+          const messages = existingChat?.messages || [];
+          
+          // Preservar last_message local se for mais recente (evita sobrescrever otimista)
+          const localTime = new Date(existingChat?.last_message_time || 0).getTime();
+          const remoteTime = new Date(chat.last_message_time || 0).getTime();
+          const useLocalData = existingChat && localTime >= remoteTime;
+          
+          return {
+            ...chat,
+            messages,
+            tags: chat.chat_tags?.map((ct: { tags: DbTag }) => ct.tags).filter(Boolean) || [],
+            // Manter last_message local se for mais recente
+            last_message: useLocalData ? existingChat.last_message : chat.last_message,
+            last_message_time: useLocalData ? existingChat.last_message_time : chat.last_message_time,
+          };
+        });
 
-      // Ordenar: fixados primeiro, depois por last_message_time
-      const sortedChats = formattedChats.sort((a, b) => {
-        const aPinned = (a as any).is_pinned || false;
-        const bPinned = (b as any).is_pinned || false;
-        if (aPinned && !bPinned) return -1;
-        if (!aPinned && bPinned) return 1;
-        return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime();
+        // Ordenar: fixados primeiro, depois por last_message_time
+        const sortedChats = formattedChats.sort((a, b) => {
+          const aPinned = (a as any).is_pinned || false;
+          const bPinned = (b as any).is_pinned || false;
+          if (aPinned && !bPinned) return -1;
+          if (!aPinned && bPinned) return 1;
+          return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime();
+        });
+
+        return sortedChats;
       });
-
-      setChats([...sortedChats]);
     } catch (err) {
       console.error('[useChats] Exception fetching chats:', err);
       setError('Erro ao carregar conversas');
@@ -502,8 +536,18 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
                 const existingChat = prev[chatIndex];
                 const existingMessages = existingChat.messages || [];
                 
-                // Verificar se a mensagem já existe
-                const messageExists = newMessage && existingMessages.some(m => m.id === newMessage.id);
+                // Verificar se a mensagem já existe (incluindo mensagens otimistas com temp_)
+                const messageExists = newMessage && existingMessages.some(m => 
+                  m.id === newMessage.id || 
+                  (m.id.startsWith('temp_') && m.content === newMessage.content && m.chat_id === newMessage.chat_id)
+                );
+                
+                // Se mensagem já existe e dados do chat não mudaram, não atualizar
+                if (messageExists && 
+                    existingChat.last_message === chatData.last_message &&
+                    existingChat.unread_count === chatData.unread_count) {
+                  return prev;
+                }
                 
                 const updatedMessages = messageExists 
                   ? existingMessages 
@@ -511,10 +555,19 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
                     ? [...existingMessages, newMessage]
                     : existingMessages;
                 
+                // Preservar last_message local se for mais recente que o do banco
+                // (evita sobrescrever atualização otimista com dados antigos)
+                const localTime = new Date(existingChat.last_message_time || 0).getTime();
+                const remoteTime = new Date(chatData.last_message_time || 0).getTime();
+                const useLocalLastMessage = localTime >= remoteTime;
+                
                 const updatedChat = { 
                   ...existingChat, 
                   ...chatData,
-                  messages: updatedMessages
+                  messages: updatedMessages,
+                  // Manter last_message local se for mais recente
+                  last_message: useLocalLastMessage ? existingChat.last_message : chatData.last_message,
+                  last_message_time: useLocalLastMessage ? existingChat.last_message_time : chatData.last_message_time,
                 };
                 
                 // Remover chat da posição atual e reordenar
@@ -556,6 +609,17 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
                 chat.unread_count !== newData.unread_count ||
                 chat.last_message !== newData.last_message
               )) {
+                // Preservar last_message local se for mais recente (evita sobrescrever otimista)
+                const localTime = new Date(chat.last_message_time || 0).getTime();
+                const remoteTime = new Date(newData.last_message_time || 0).getTime();
+                if (localTime >= remoteTime) {
+                  // Dados locais são mais recentes, não atualizar last_message
+                  if (chat.unread_count !== newData.unread_count) {
+                    hasChanges = true;
+                    return { ...chat, unread_count: newData.unread_count };
+                  }
+                  return chat;
+                }
                 hasChanges = true;
                 return { ...chat, ...newData };
               }
@@ -812,6 +876,79 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     });
   };
 
+  // Adicionar mensagem otimista (aparece instantaneamente na UI)
+  const addOptimisticMessage = (
+    chatId: string, 
+    content: string, 
+    odUserId: string, 
+    replyingTo?: { id: string; content: string; senderName: string } | null
+  ): string => {
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now = new Date().toISOString();
+    
+    const optimisticMsg: OptimisticMessage = {
+      id: tempId,
+      chat_id: chatId,
+      content,
+      type: 'text',
+      is_from_client: false,
+      sent_by: odUserId,
+      created_at: now,
+      quoted_message_id: replyingTo?.id || null,
+      quoted_content: replyingTo?.content || null,
+      quoted_sender_name: replyingTo?.senderName || null,
+      _optimistic: true,
+    };
+
+    setChats(prev => {
+      const chatIndex = prev.findIndex(c => c.id === chatId);
+      if (chatIndex === -1) return prev;
+      
+      const updatedChat = {
+        ...prev[chatIndex],
+        messages: [...prev[chatIndex].messages, optimisticMsg as any],
+        last_message: content,
+        last_message_time: now,
+        last_message_from_client: false,
+      };
+      
+      // Mover chat para o topo (após os fixados)
+      const pinnedChats = prev.filter((c, i) => i !== chatIndex && (c as any).is_pinned);
+      const unpinnedChats = prev.filter((c, i) => i !== chatIndex && !(c as any).is_pinned);
+      
+      if ((updatedChat as any).is_pinned) {
+        return [updatedChat, ...pinnedChats, ...unpinnedChats];
+      } else {
+        return [...pinnedChats, updatedChat, ...unpinnedChats];
+      }
+    });
+
+    return tempId;
+  };
+
+  // Atualizar mensagem otimista com dados reais ou remover em caso de erro
+  const updateOptimisticMessage = (chatId: string, tempId: string, realMessage: DbMessage | null) => {
+    setChats(prev => prev.map(chat => {
+      if (chat.id !== chatId) return chat;
+      
+      if (realMessage) {
+        // Substituir mensagem otimista pela real
+        return {
+          ...chat,
+          messages: chat.messages.map(m => 
+            m.id === tempId ? realMessage : m
+          ),
+        };
+      } else {
+        // Remover mensagem otimista (erro no envio)
+        return {
+          ...chat,
+          messages: chat.messages.filter(m => m.id !== tempId),
+        };
+      }
+    }));
+  };
+
   return {
     chats,
     loading,
@@ -827,5 +964,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     fetchMessages,
     loadMoreMessages,
     togglePinChat,
+    addOptimisticMessage,
+    updateOptimisticMessage,
   };
 }

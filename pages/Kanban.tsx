@@ -70,6 +70,15 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const [customDateStart, setCustomDateStart] = useState<string>('');
   const [customDateEnd, setCustomDateEnd] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Estados para envio de email
+  const [smtpConfigured, setSmtpConfigured] = useState(false);
+  const [emailTemplates, setEmailTemplates] = useState<Array<{ id: string; name: string; subject: string; html_content: string }>>([]);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailTarget, setEmailTarget] = useState<{ leadId: string; leadName: string; leadEmail: string } | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [leadsEmailMap, setLeadsEmailMap] = useState<Record<string, string>>({});
 
   // Recarregar chats quando o componente é montado
   useEffect(() => {
@@ -101,6 +110,143 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     
     fetchPipelineLabels();
   }, [clinicId]);
+
+  // Buscar configuração SMTP e templates de email
+  useEffect(() => {
+    const fetchEmailConfig = async () => {
+      if (!clinicId) return;
+      
+      try {
+        // Verificar se SMTP está configurado
+        const { data: clinicData } = await supabase
+          .from('clinics' as any)
+          .select('smtp_host, smtp_user, email_marketing_enabled')
+          .eq('id', clinicId)
+          .single();
+        
+        const hasSmtp = (clinicData as any)?.smtp_host && (clinicData as any)?.smtp_user && (clinicData as any)?.email_marketing_enabled;
+        setSmtpConfigured(!!hasSmtp);
+        
+        // Se SMTP configurado, buscar templates
+        if (hasSmtp) {
+          const { data: templates } = await supabase
+            .from('email_templates' as any)
+            .select('id, name, subject, html_content')
+            .eq('clinic_id', clinicId)
+            .order('name');
+          
+          if (templates) {
+            setEmailTemplates(templates as any);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching email config:', err);
+      }
+    };
+    
+    fetchEmailConfig();
+  }, [clinicId]);
+
+  // Buscar emails dos leads quando chats mudam
+  useEffect(() => {
+    const fetchLeadsEmails = async () => {
+      if (!clinicId || chats.length === 0) return;
+      
+      const leadIds = chats.filter(c => c.lead_id).map(c => c.lead_id);
+      if (leadIds.length === 0) return;
+      
+      try {
+        const { data } = await supabase
+          .from('leads' as any)
+          .select('id, email')
+          .in('id', leadIds);
+        
+        if (data) {
+          const emailMap: Record<string, string> = {};
+          (data as any[]).forEach(lead => {
+            if (lead.email) {
+              emailMap[lead.id] = lead.email;
+            }
+          });
+          setLeadsEmailMap(emailMap);
+        }
+      } catch (err) {
+        console.error('Error fetching leads emails:', err);
+      }
+    };
+    
+    fetchLeadsEmails();
+  }, [clinicId, chats]);
+
+  // Função para abrir modal de email
+  const handleOpenEmailModal = (lead: any) => {
+    const email = lead.lead_id ? leadsEmailMap[lead.lead_id] : null;
+    if (!email) return;
+    
+    setEmailTarget({
+      leadId: lead.id,
+      leadName: lead.client_name,
+      leadEmail: email,
+    });
+    setSelectedTemplateId('');
+    setShowEmailModal(true);
+  };
+
+  // Função para enviar email
+  const handleSendEmail = async () => {
+    if (!emailTarget || !selectedTemplateId || !clinicId) return;
+    
+    setSendingEmail(true);
+    try {
+      const template = emailTemplates.find(t => t.id === selectedTemplateId);
+      if (!template) throw new Error('Template não encontrado');
+      
+      // Buscar dados da clínica
+      const { data: clinicData } = await supabase
+        .from('clinics' as any)
+        .select('name, email, phone')
+        .eq('id', clinicId)
+        .single();
+      
+      // Substituir variáveis no template
+      let htmlContent = template.html_content;
+      let subject = template.subject;
+      
+      const variables: Record<string, string> = {
+        '{{lead_name}}': emailTarget.leadName || 'Cliente',
+        '{{clinic_name}}': (clinicData as any)?.name || '',
+        '{{clinic_email}}': (clinicData as any)?.email || '',
+        '{{clinic_phone}}': (clinicData as any)?.phone || '',
+        '{{unsubscribe_url}}': '#',
+      };
+      
+      Object.entries(variables).forEach(([key, value]) => {
+        htmlContent = htmlContent.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+        subject = subject.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+      });
+      
+      // Chamar edge function para enviar email
+      const { error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: emailTarget.leadEmail,
+          subject: subject,
+          html: htmlContent,
+          clinic_id: clinicId,
+        }
+      });
+      
+      if (error) throw error;
+      
+      setShowEmailModal(false);
+      setEmailTarget(null);
+      setSelectedTemplateId('');
+      
+    } catch (error) {
+      console.error('Erro ao enviar email:', error);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
 
   // Salvar labels personalizados
   const handleSaveLabels = async () => {
@@ -135,15 +281,16 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
       if (!clinicId || chats.length === 0) return;
       
       const chatIds = chats.map(c => c.id);
+      // Buscar por clinic_id e filtrar no frontend para evitar erro 400 com muitos IDs
       const { data } = await supabase
         .from('quotes' as any)
         .select('chat_id, service_type, value, status')
-        .in('chat_id', chatIds)
+        .eq('clinic_id', clinicId)
         .in('status', ['approved', 'pending']);
       
       if (data) {
         const map: Record<string, Array<{ service_type: string; value: number; status: string }>> = {};
-        (data as any[]).forEach(q => {
+        (data as any[]).filter((q: any) => chatIds.includes(q.chat_id)).forEach((q: any) => {
           if (!map[q.chat_id]) map[q.chat_id] = [];
           map[q.chat_id].push({ service_type: q.service_type, value: Number(q.value), status: q.status });
         });
@@ -502,13 +649,23 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                         </svg>
                       </button>
-                      <button
-                        disabled
-                        className="p-1.5 rounded-lg text-slate-300 cursor-not-allowed"
-                        title="Email - Em breve"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">mail</span>
-                      </button>
+                      {smtpConfigured && lead.lead_id && leadsEmailMap[lead.lead_id] ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleOpenEmailModal(lead); }}
+                          className="p-1.5 rounded-lg hover:bg-purple-50 text-slate-400 hover:text-purple-600 transition-colors"
+                          title={`Enviar email para ${leadsEmailMap[lead.lead_id]}`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">mail</span>
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="p-1.5 rounded-lg text-slate-300 cursor-not-allowed"
+                          title={!smtpConfigured ? "Configure SMTP em Integrações" : "Lead sem email cadastrado"}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">mail</span>
+                        </button>
+                      )}
                       <button
                         disabled
                         className="p-1.5 rounded-lg text-slate-300 cursor-not-allowed"
@@ -807,6 +964,92 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                   <>
                     <span className="material-symbols-outlined text-[18px]">person_add</span>
                     Criar Lead
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Enviar Email */}
+      {showEmailModal && emailTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowEmailModal(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-purple-600 to-violet-600">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white">mail</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Enviar Email</h3>
+                  <p className="text-purple-100 text-sm">Para: {emailTarget.leadName}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <p className="text-xs text-slate-500 mb-1">Destinatário:</p>
+                <p className="text-sm font-medium text-slate-700">{emailTarget.leadEmail}</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Template *</label>
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                >
+                  <option value="">Selecione um template</option>
+                  {emailTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedTemplateId && (
+                <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                  <p className="text-xs text-purple-500 mb-1">Assunto:</p>
+                  <p className="text-sm font-medium text-purple-700">
+                    {emailTemplates.find(t => t.id === selectedTemplateId)?.subject
+                      .replace('{{lead_name}}', emailTarget.leadName || 'Cliente')
+                      .replace('{{clinic_name}}', state.selectedClinic?.name || '')}
+                  </p>
+                </div>
+              )}
+
+              {emailTemplates.length === 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                  <span className="material-symbols-outlined text-amber-500 text-2xl mb-2">warning</span>
+                  <p className="text-sm text-amber-700">Nenhum template de email encontrado.</p>
+                  <p className="text-xs text-amber-600 mt-1">Crie templates em Email Marketing.</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                onClick={() => setShowEmailModal(false)}
+                className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSendEmail}
+                disabled={!selectedTemplateId || sendingEmail}
+                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
+              >
+                {sendingEmail ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">send</span>
+                    Enviar Email
                   </>
                 )}
               </button>

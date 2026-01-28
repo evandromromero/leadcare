@@ -37,7 +37,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages, togglePinChat } = useChats(clinicId, user?.id);
+  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages, togglePinChat, addOptimisticMessage, updateOptimisticMessage } = useChats(clinicId, user?.id);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({});
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -2094,12 +2094,14 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
 
   // Buscar reações das mensagens
   const fetchReactions = async (messageIds: string[]) => {
-    if (!messageIds.length) return;
+    // Filtrar IDs temporários (mensagens otimistas)
+    const validIds = messageIds.filter(id => !id.startsWith('temp_'));
+    if (!validIds.length) return;
     
     const { data } = await (supabase as any)
       .from('message_reactions')
       .select('message_id, emoji, user_id')
-      .in('message_id', messageIds);
+      .in('message_id', validIds);
     
     if (data) {
       const reactionsMap: Record<string, Array<{ emoji: string; user_id: string }>> = {};
@@ -2388,6 +2390,24 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const handleSendMessage = async () => {
     if (!msgInput.trim() || !selectedChatId || !user || !selectedChat) return;
     
+    // Capturar valores antes de limpar o input
+    const messageContent = msgInput.trim();
+    const currentReplyingTo = replyingTo;
+    const currentChatId = selectedChatId;
+    
+    // ATUALIZAÇÃO OTIMISTA: Mostrar mensagem imediatamente na UI
+    const tempId = addOptimisticMessage(
+      currentChatId, 
+      messageContent, 
+      user.id, 
+      currentReplyingTo ? { id: currentReplyingTo.id, content: currentReplyingTo.content, senderName: currentReplyingTo.senderName } : null
+    );
+    
+    // Limpar input imediatamente (UX instantânea)
+    setMsgInput('');
+    setReplyingTo(null);
+    
+    // Enviar em background
     try {
       // Buscar nome do usuário para prefixar a mensagem
       let userName = '';
@@ -2402,31 +2422,20 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       }
       
       // Mensagem com nome do atendente para o WhatsApp
-      const whatsappMessage = userName ? `*${userName}:* ${msgInput.trim()}` : msgInput.trim();
+      const whatsappMessage = userName ? `*${userName}:* ${messageContent}` : messageContent;
       
-      // Buscar configurações da Evolution API
-      const { data: settings } = await supabase
-        .from('settings')
-        .select('evolution_api_url, evolution_api_key')
-        .single();
+      // Buscar configurações em paralelo para melhor performance
+      const [settingsResult, clinicConfigResult, instancesResult] = await Promise.all([
+        supabase.from('settings').select('evolution_api_url, evolution_api_key').single(),
+        supabase.from('clinics').select('whatsapp_provider, cloud_api_phone_number_id, cloud_api_access_token').eq('id', clinicId).single(),
+        supabase.from('whatsapp_instances').select('instance_name, status').eq('clinic_id', clinicId).eq('status', 'connected').limit(1),
+      ]);
       
-      // Buscar configuração de provider da clínica
-      const { data: clinicConfig } = await supabase
-        .from('clinics')
-        .select('whatsapp_provider, cloud_api_phone_number_id, cloud_api_access_token')
-        .eq('id', clinicId)
-        .single();
+      const settings = settingsResult.data;
+      const clinicConfig = clinicConfigResult.data;
+      const instances = instancesResult.data;
       
       const isCloudApi = clinicConfig?.whatsapp_provider === 'cloud_api' && clinicConfig?.cloud_api_phone_number_id;
-      
-      // Buscar instância WhatsApp conectada (para Evolution API)
-      const { data: instances } = await supabase
-        .from('whatsapp_instances')
-        .select('instance_name, status')
-        .eq('clinic_id', clinicId)
-        .eq('status', 'connected')
-        .limit(1);
-      
       const instance = instances?.[0];
       
       let remoteMessageId = null;
@@ -2474,6 +2483,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           } else {
             setConnectionError(connectionCheck.error || 'Erro de conexão');
           }
+          // Remover mensagem otimista - conexão falhou
+          updateOptimisticMessage(currentChatId, tempId, null);
           return;
         }
         
@@ -2485,6 +2496,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             message: rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.',
             waitSeconds: Math.ceil(rateLimitCheck.waitMs / 1000)
           });
+          // Remover mensagem otimista - rate limit
+          updateOptimisticMessage(currentChatId, tempId, null);
           return;
         }
 
@@ -2507,23 +2520,23 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         };
         
         // Adicionar quote se estiver respondendo uma mensagem
-        if (replyingTo) {
+        if (currentReplyingTo) {
           // Buscar remote_message_id da mensagem original
           const { data: originalMsg } = await (supabase as any)
             .from('messages')
             .select('remote_message_id')
-            .eq('id', replyingTo.id)
+            .eq('id', currentReplyingTo.id)
             .single();
           
           if (originalMsg?.remote_message_id) {
             messageBody.quoted = {
               key: {
                 remoteJid: isGroupChat ? groupId : `${formattedPhone}@s.whatsapp.net`,
-                fromMe: !replyingTo.isFromClient,
+                fromMe: !currentReplyingTo.isFromClient,
                 id: originalMsg.remote_message_id,
               },
               message: {
-                conversation: replyingTo.content,
+                conversation: currentReplyingTo.content,
               },
             };
           }
@@ -2598,47 +2611,51 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           // Se instância não existe ou está desconectada, mostrar erro amigável
           if (errorData?.response?.message?.includes('not found') || errorData?.response?.message?.includes('disconnected')) {
             alert('WhatsApp desconectado. Reconecte em Configurações > WhatsApp.');
+            // Remover mensagem otimista - WhatsApp desconectado
+            updateOptimisticMessage(currentChatId, tempId, null);
             return;
           }
         }
       }
         
       // Salvar mensagem no banco com remote_message_id
-      const { data: newMsg } = await supabase.from('messages').insert({
-        chat_id: selectedChatId,
-        content: msgInput.trim(),
+      const { data: newMsg, error: insertError } = await supabase.from('messages').insert({
+        chat_id: currentChatId,
+        content: messageContent,
         type: 'text',
         is_from_client: false,
         sent_by: user.id,
-        quoted_message_id: replyingTo?.id || null,
-        quoted_content: replyingTo?.content || null,
-        quoted_sender_name: replyingTo?.senderName || null,
+        quoted_message_id: currentReplyingTo?.id || null,
+        quoted_content: currentReplyingTo?.content || null,
+        quoted_sender_name: currentReplyingTo?.senderName || null,
         remote_message_id: remoteMessageId,
       }).select().single();
       
-      // Atualizar chat no banco
-      await supabase.from('chats').update({
-        last_message: msgInput.trim(),
+      if (insertError) {
+        console.error('Error inserting message:', insertError);
+        // Remover mensagem otimista em caso de erro
+        updateOptimisticMessage(currentChatId, tempId, null);
+        alert('Erro ao salvar mensagem');
+        return;
+      }
+      
+      // Atualizar mensagem otimista com dados reais do banco
+      if (newMsg) {
+        updateOptimisticMessage(currentChatId, tempId, newMsg as any);
+      }
+      
+      // Atualizar chat no banco (em background, não bloqueia)
+      // Não precisa de refetch - a atualização otimista já atualizou a UI
+      supabase.from('chats').update({
+        last_message: messageContent,
         last_message_time: new Date().toISOString(),
         last_message_from_client: false,
-      }).eq('id', selectedChatId);
-      
-      // Guardar o ID do chat antes de limpar
-      const chatIdToReload = selectedChatId;
-      
-      setMsgInput('');
-      setReplyingTo(null);
-      
-      // Recarregar lista de chats e mensagens do chat atual
-      await refetch();
-      
-      // Recarregar mensagens do chat que estava selecionado
-      if (chatIdToReload) {
-        await fetchMessages(chatIdToReload);
-      }
+      }).eq('id', currentChatId);
       
     } catch (err) {
       console.error('Error sending message:', err);
+      // Remover mensagem otimista em caso de erro
+      updateOptimisticMessage(currentChatId, tempId, null);
       alert('Erro ao enviar mensagem');
     }
   };

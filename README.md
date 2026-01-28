@@ -1603,6 +1603,190 @@ const firstResponse = msgs.find(m => m.is_from_client === false && ...);
 
 ---
 
+## Atualizações - 26/01/2026
+
+### O que foi feito hoje? 🚀
+
+Implementamos várias funcionalidades importantes, incluindo **integração com Facebook Ads**, **busca de mensagens**, **proxy para Easypanel** e melhorias na **Inbox**.
+
+---
+
+### 1. Integração Facebook Ads API 📊
+
+Nova página de **Integrações** no painel admin e página de **Campanhas** para visualizar dados do Facebook Ads.
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Menu "Integrações" no Admin (`/admin/integrations`) | ✅ Completo |
+| Campos: ID da Conta de Anúncios e Token de Acesso | ✅ Completo |
+| Edge Function `facebook-ads` para buscar campanhas | ✅ Completo |
+| Página "Campanhas" no Admin (`/admin/campaigns`) | ✅ Completo |
+| Cards de resumo: Gasto, Impressões, Cliques, CTR, CPC | ✅ Completo |
+| Tabela de campanhas com filtro de período | ✅ Completo |
+
+#### Novos Arquivos
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `pages/admin/AdminIntegrations.tsx` | Página de configuração de integrações |
+| `pages/Campaigns.tsx` | Página de visualização de campanhas |
+| `supabase/functions/facebook-ads/index.ts` | Edge Function para API do Facebook |
+
+#### Novos Campos na Tabela `settings`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `facebook_ads_account_id` | text | ID da conta de anúncios do Facebook |
+| `facebook_ads_token` | text | Token de acesso da API do Facebook |
+
+#### Como Configurar
+
+1. Acesse `/admin/integrations`
+2. Preencha o **ID da Conta de Anúncios** (encontre em Gerenciador de Anúncios → Configurações)
+3. Preencha o **Token de Acesso** (gere em developers.facebook.com/tools/explorer)
+   - **Importante**: Use o Access Token (começa com `EAA...`), não o Client Token
+4. Clique em "Salvar Configurações"
+5. Acesse `/admin/campaigns` para ver os dados
+
+#### Parâmetros Disponíveis da API
+
+```
+campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name,
+spend, impressions, clicks, cpc, cpm, cpp, ctr, objective, reach, actions, account_name
+```
+
+---
+
+### 2. Busca de Mensagens na Conversa 🔍
+
+Agora é possível buscar mensagens dentro de uma conversa específica.
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Botão de busca no header da conversa | ✅ Completo |
+| Barra de busca com input e navegação | ✅ Completo |
+| Highlight das mensagens encontradas | ✅ Completo |
+| Navegação entre resultados (anterior/próximo) | ✅ Completo |
+| Scroll automático para mensagem encontrada | ✅ Completo |
+
+#### Como Usar
+
+1. Abra uma conversa
+2. Clique no ícone de lupa (🔍) no header
+3. Digite o termo de busca
+4. Use as setas para navegar entre os resultados
+5. A mensagem atual fica destacada em amarelo
+
+---
+
+### 3. Proxy Easypanel para Reiniciar Evolution API 🔄
+
+Edge Function que permite reiniciar a Evolution API diretamente do painel admin, contornando problemas de CORS.
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Edge Function `easypanel-proxy` | ✅ Completo |
+| Botão "Reiniciar Evolution" em Admin → WhatsApp | ✅ Completo |
+| Configurações de Easypanel em Admin → Configurações | ✅ Completo |
+
+#### Novos Arquivos
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `supabase/functions/easypanel-proxy/index.ts` | Proxy para API do Easypanel |
+
+#### Configurações Necessárias (Admin → Configurações → API)
+
+| Campo | Descrição |
+|-------|-----------|
+| URL do EasyPanel | Ex: `http://72.61.40.210:3000` |
+| Token de API | Token de autenticação do Easypanel |
+| Nome do Projeto | Ex: `evolutionaoi` |
+| Nome do Serviço | Ex: `evolution-api` |
+
+---
+
+### 4. Melhorias na Inbox 💬
+
+| Melhoria | Descrição |
+|----------|-----------|
+| Botão "Cadastrar Cliente" | Botão no painel lateral agora abre modal de cadastro |
+| Busca de mensagens | Nova funcionalidade de busca dentro da conversa |
+
+---
+
+### 5. Menu Admin Atualizado 📋
+
+Novos itens no menu lateral do painel admin:
+
+| Menu | Rota | Descrição |
+|------|------|-----------|
+| Campanhas | `/admin/campaigns` | Dados do Facebook Ads |
+| Integrações | `/admin/integrations` | Configuração de APIs externas |
+
+#### Ordem do Menu Admin
+
+1. Dashboard
+2. Clínicas
+3. WhatsApp
+4. **Campanhas** ← Novo
+5. Planos
+6. SuperAdmins
+7. **Integrações** ← Novo
+8. Configurações
+
+---
+
+### Edge Functions Criadas/Atualizadas
+
+| Função | Versão | Descrição |
+|--------|--------|-----------|
+| `facebook-ads` | v1 | Busca dados de campanhas do Facebook Ads |
+| `easypanel-proxy` | v1 | Proxy para reiniciar Evolution API via Easypanel |
+
+---
+
+### Otimização do Envio de Mensagens - 27/01/2026
+
+| Melhoria | Descrição |
+|----------|-----------|
+| **Atualização Otimista** | Mensagem aparece instantaneamente na UI antes de enviar para o servidor |
+| **Input limpa imediatamente** | Campo de texto limpa ao pressionar Enter, sem esperar resposta |
+| **Queries em paralelo** | Busca de settings, clinicConfig e instances agora é paralela (`Promise.all`) |
+| **Preservação de dados locais** | Realtime e refetch não sobrescrevem dados otimistas mais recentes |
+| **Filtro de IDs temporários** | Evita erro 400 ao buscar reactions para mensagens otimistas |
+
+#### Arquivos Modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `hooks/useChats.ts` | Funções `addOptimisticMessage` e `updateOptimisticMessage`, preservação de `last_message` local em fetchChats, Realtime e polling |
+| `pages/Inbox.tsx` | `handleSendMessage` refatorado para atualização otimista, filtro de IDs temporários em `fetchReactions` |
+
+#### Fluxo de Envio Otimista
+
+```
+1. Enter pressionado
+2. Mensagem aparece NA HORA na UI (otimista com id temp_*)
+3. Input limpa NA HORA
+4. Em background:
+   - Busca nome do usuário
+   - Busca settings + clinicConfig + instances (paralelo)
+   - Envia para WhatsApp
+   - Salva no banco
+   - Substitui mensagem temp pela real
+5. Se erro: remove mensagem otimista e mostra alert
+```
+
+#### Proteção contra Sobrescrita
+
+O sistema agora compara timestamps antes de atualizar dados:
+- **fetchChats (refetch)**: Preserva `last_message` local se for mais recente
+- **Realtime Broadcast**: Ignora atualizações se mensagem já existe localmente
+- **Polling de backup**: Preserva dados locais mais recentes
+
+---
+
 ## Desenvolvido por
 
 **LeadCare** - CRM para Clínicas

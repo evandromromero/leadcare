@@ -420,13 +420,20 @@ const AdminClinicDetail: React.FC = () => {
   
   // Estado para modal de ajuda Meta Conversions
   const [showMetaHelpModal, setShowMetaHelpModal] = useState(false);
+  
+  // Estados para modal de teste SMTP
+  const [showSmtpTestModal, setShowSmtpTestModal] = useState(false);
+  const [smtpTestEmail, setSmtpTestEmail] = useState('');
+  const [smtpTestLoading, setSmtpTestLoading] = useState(false);
+  const [smtpTestResult, setSmtpTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showSmtpSaveSuccess, setShowSmtpSaveSuccess] = useState(false);
   const [clinicGoal, setClinicGoal] = useState<number>(50000);
   const [userGoals, setUserGoals] = useState<Record<string, number>>({});
   const [userCanSeeGoal, setUserCanSeeGoal] = useState<Record<string, boolean>>({});
   const [savingGoals, setSavingGoals] = useState(false);
   
   // Estado para abas
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'whatsapp' | 'metrics' | 'receipts' | 'subscription'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'whatsapp' | 'integrations' | 'metrics' | 'receipts' | 'subscription'>('overview');
   
   // Estados para aba de Lançamentos
   const [receiptsData, setReceiptsData] = useState<{
@@ -1956,6 +1963,7 @@ const AdminClinicDetail: React.FC = () => {
             { id: 'overview', label: 'Geral', labelFull: 'Visão Geral', icon: 'dashboard' },
             { id: 'users', label: 'Usuários', labelFull: 'Usuários', icon: 'group' },
             { id: 'whatsapp', label: 'WhatsApp', labelFull: 'WhatsApp', icon: 'chat' },
+            { id: 'integrations', label: 'Integr.', labelFull: 'Integrações', icon: 'extension' },
             { id: 'metrics', label: 'Métricas', labelFull: 'Métricas', icon: 'analytics' },
             { id: 'receipts', label: 'Lanç.', labelFull: 'Lançamentos', icon: 'receipt_long' },
             { id: 'subscription', label: 'Plano', labelFull: 'Assinatura', icon: 'credit_card' },
@@ -2521,174 +2529,6 @@ const AdminClinicDetail: React.FC = () => {
                 </button>
               </div>
 
-              {/* Permitir Cloud API para a clínica */}
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-slate-800">Permitir Cloud API</p>
-                  <p className="text-sm text-slate-500">Permite que Admin/Gerente da clínica configure a Cloud API no painel deles</p>
-                </div>
-                <button
-                  onClick={toggleCloudApiEnabled}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    clinic.cloud_api_enabled ? 'bg-emerald-600' : 'bg-slate-200'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      clinic.cloud_api_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Permitir Instagram */}
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-800">Permitir Instagram</p>
-                    <p className="text-sm text-slate-500">Habilita integração com Instagram Direct</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => toggleChannelEnabled('instagram')}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    (clinic as any).instagram_enabled ? 'bg-pink-500' : 'bg-slate-200'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      (clinic as any).instagram_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Configuração Instagram - aparece quando habilitado */}
-              {(clinic as any).instagram_enabled && (
-                <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-pink-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] flex items-center justify-center">
-                        <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                        </svg>
-                      </div>
-                      <p className="font-medium text-slate-800">Configuração Instagram</p>
-                    </div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={(clinic as any).instagram_client_can_configure || false}
-                        onChange={(e) => updateCloudApiField('instagram_client_can_configure', e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 text-pink-600 focus:ring-pink-500"
-                      />
-                      <span className="text-xs text-slate-600">Cliente pode configurar</span>
-                    </label>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 uppercase">Page ID</label>
-                      <input
-                        type="text"
-                        value={(clinic as any).instagram_page_id || ''}
-                        onChange={(e) => updateCloudApiField('instagram_page_id', e.target.value)}
-                        placeholder="ID da página do Instagram"
-                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 uppercase">Access Token</label>
-                      <input
-                        type="password"
-                        value={(clinic as any).instagram_access_token || ''}
-                        onChange={(e) => updateCloudApiField('instagram_access_token', e.target.value)}
-                        placeholder="Token de acesso do Instagram"
-                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Permitir Facebook */}
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#1877F2] flex items-center justify-center">
-                    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 0c-6.627 0-12 4.975-12 11.111 0 3.497 1.745 6.616 4.472 8.652v4.237l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111 0-6.136-5.373-11.111-12-11.111zm1.193 14.963l-3.056-3.259-5.963 3.259 6.559-6.963 3.13 3.259 5.889-3.259-6.559 6.963z"/>
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-800">Permitir Facebook</p>
-                    <p className="text-sm text-slate-500">Habilita integração com Facebook Messenger</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => toggleChannelEnabled('facebook')}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    (clinic as any).facebook_enabled ? 'bg-[#1877F2]' : 'bg-slate-200'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      (clinic as any).facebook_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Configuração Facebook - aparece quando habilitado */}
-              {(clinic as any).facebook_enabled && (
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-[#1877F2] flex items-center justify-center">
-                        <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 0c-6.627 0-12 4.975-12 11.111 0 3.497 1.745 6.616 4.472 8.652v4.237l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111 0-6.136-5.373-11.111-12-11.111zm1.193 14.963l-3.056-3.259-5.963 3.259 6.559-6.963 3.13 3.259 5.889-3.259-6.559 6.963z"/>
-                        </svg>
-                      </div>
-                      <p className="font-medium text-slate-800">Configuração Facebook</p>
-                    </div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={(clinic as any).facebook_client_can_configure || false}
-                        onChange={(e) => updateCloudApiField('facebook_client_can_configure', e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-xs text-slate-600">Cliente pode configurar</span>
-                    </label>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 uppercase">Page ID</label>
-                      <input
-                        type="text"
-                        value={(clinic as any).facebook_page_id || ''}
-                        onChange={(e) => updateCloudApiField('facebook_page_id', e.target.value)}
-                        placeholder="ID da página do Facebook"
-                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 uppercase">Access Token</label>
-                      <input
-                        type="password"
-                        value={(clinic as any).facebook_access_token || ''}
-                        onChange={(e) => updateCloudApiField('facebook_access_token', e.target.value)}
-                        placeholder="Token de acesso do Facebook"
-                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* WhatsApp Provider Selection */}
               <div className="p-4 bg-slate-50 rounded-lg">
                 <p className="font-medium text-slate-800 mb-2">Provedor WhatsApp</p>
@@ -2725,265 +2565,23 @@ const AdminClinicDetail: React.FC = () => {
                 </div>
               </div>
 
-              {/* Cloud API Configuration */}
+              
+              {/* Aviso para configurar Cloud API na aba Integrações */}
               {clinic.whatsapp_provider === 'cloud_api' && (
                 <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="material-symbols-outlined text-emerald-600">settings</span>
-                    <p className="font-medium text-emerald-800">Configuração Cloud API</p>
-                  </div>
-                  <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <span className="material-symbols-outlined text-emerald-600 mt-0.5">info</span>
                     <div>
-                      <label className="text-xs font-medium text-slate-600 uppercase">Phone Number ID *</label>
-                      <input
-                        type="text"
-                        value={clinic.cloud_api_phone_number_id || ''}
-                        onChange={(e) => updateCloudApiField('cloud_api_phone_number_id', e.target.value)}
-                        placeholder="Ex: 123456789012345"
-                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 uppercase">Access Token *</label>
-                      <input
-                        type="password"
-                        value={clinic.cloud_api_access_token || ''}
-                        onChange={(e) => updateCloudApiField('cloud_api_access_token', e.target.value)}
-                        placeholder="Token do System User"
-                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 uppercase">WABA ID</label>
-                      <input
-                        type="text"
-                        value={clinic.cloud_api_waba_id || ''}
-                        onChange={(e) => updateCloudApiField('cloud_api_waba_id', e.target.value)}
-                        placeholder="WhatsApp Business Account ID"
-                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 uppercase">App ID</label>
-                      <input
-                        type="text"
-                        value={clinic.cloud_api_app_id || ''}
-                        onChange={(e) => updateCloudApiField('cloud_api_app_id', e.target.value)}
-                        placeholder="ID do App no Meta for Developers"
-                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-slate-600 uppercase">Verify Token (Webhook)</label>
-                      <input
-                        type="text"
-                        value={clinic.cloud_api_verify_token || ''}
-                        onChange={(e) => updateCloudApiField('cloud_api_verify_token', e.target.value)}
-                        placeholder="Token para verificação do webhook"
-                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                      />
-                    </div>
-                    <div className="pt-2 border-t border-emerald-200">
-                      <p className="text-xs text-emerald-700 mb-2">
-                        <span className="font-medium">Webhook URL:</span>
+                      <p className="font-medium text-emerald-800">Cloud API selecionada</p>
+                      <p className="text-sm text-emerald-700 mt-1">
+                        Configure as credenciais da Cloud API na aba <strong>"Integrações"</strong>.
                       </p>
-                      <code className="block p-2 bg-white rounded text-xs text-slate-600 break-all">
-                        {`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-cloud-webhook`}
-                      </code>
                     </div>
                   </div>
                 </div>
               )}
             </div>
           </div>
-        </div>
-
-        {/* Facebook Conversions API */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mt-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <span className="material-symbols-outlined text-blue-600">campaign</span>
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-slate-800">Facebook Conversions API</h2>
-              <p className="text-sm text-slate-500">Enviar eventos de conversão para o Facebook Ads</p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-medium text-slate-600 uppercase">Dataset ID (Pixel ID)</label>
-              <input
-                type="text"
-                value={clinic.facebook_dataset_id || ''}
-                onChange={async (e) => {
-                  const newValue = e.target.value;
-                  setClinic(prev => prev ? { ...prev, facebook_dataset_id: newValue } : prev);
-                  await (supabase as any).from('clinics').update({ facebook_dataset_id: newValue || null }).eq('id', clinic.id);
-                }}
-                placeholder="Ex: 1610564503295321"
-                className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600 uppercase">Token da API</label>
-              <input
-                type="password"
-                value={clinic.facebook_api_token || ''}
-                onChange={async (e) => {
-                  const newValue = e.target.value;
-                  setClinic(prev => prev ? { ...prev, facebook_api_token: newValue } : prev);
-                  await (supabase as any).from('clinics').update({ facebook_api_token: newValue || null }).eq('id', clinic.id);
-                }}
-                placeholder="Token de acesso do Facebook"
-                className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <label className="text-xs font-medium text-slate-600 uppercase">Fonte da Ação (para todos os eventos)</label>
-              <button
-                type="button"
-                onClick={() => setShowMetaHelpModal(true)}
-                className="text-slate-400 hover:text-blue-500 transition-colors"
-                title="Ajuda"
-              >
-                <span className="material-symbols-outlined text-sm">help</span>
-              </button>
-            </div>
-            <select
-              value={clinic.meta_action_source || 'website'}
-              onChange={async (e) => {
-                const newValue = e.target.value;
-                setClinic(prev => prev ? { ...prev, meta_action_source: newValue } : prev);
-                await (supabase as any).from('clinics').update({ meta_action_source: newValue }).eq('id', clinic.id);
-              }}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-            >
-              <option value="website">Website (CRM/Sistema)</option>
-              <option value="chat">Chat (WhatsApp)</option>
-              <option value="phone_call">Phone Call (Ligação)</option>
-              <option value="physical_store">Physical Store (Presencial)</option>
-            </select>
-          </div>
-
-          {/* Eventos por Etapa do Funil */}
-          <div className="mt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <label className="text-xs font-medium text-slate-600 uppercase">Eventos por Etapa do Funil</label>
-              <span className="text-xs text-slate-400">(deixe vazio para não enviar)</span>
-            </div>
-            <div className="space-y-2">
-              {[
-                { stage: 'Novo Lead', color: '#0891b2', hint: 'Quando um novo lead entra no sistema' },
-                { stage: 'Agendado', color: '#8b5cf6', hint: 'Quando o lead agenda consulta/procedimento' },
-                { stage: 'Em Atendimento', color: '#f59e0b', hint: 'Quando inicia negociação ativa' },
-                { stage: 'Convertido', color: '#10b981', hint: 'Quando fecha negócio (envia valor)' },
-                { stage: 'Perdido', color: '#ef4444', hint: 'Quando o lead desiste' },
-              ].map(({ stage, color, hint }) => (
-                <div key={stage} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg">
-                  <div 
-                    className="w-3 h-3 rounded-full flex-shrink-0" 
-                    style={{ backgroundColor: color }}
-                  ></div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-700">{stage}</p>
-                    <p className="text-xs text-slate-400 truncate">{hint}</p>
-                  </div>
-                  <select
-                    value={(clinic.meta_funnel_events as Record<string, string>)?.[stage] || ''}
-                    onChange={async (e) => {
-                      const newValue = e.target.value;
-                      const currentEvents = (clinic.meta_funnel_events as Record<string, string>) || {};
-                      const updatedEvents = { ...currentEvents };
-                      if (newValue) {
-                        updatedEvents[stage] = newValue;
-                      } else {
-                        delete updatedEvents[stage];
-                      }
-                      setClinic(prev => prev ? { ...prev, meta_funnel_events: updatedEvents } : prev);
-                      await (supabase as any).from('clinics').update({ meta_funnel_events: updatedEvents }).eq('id', clinic.id);
-                    }}
-                    className="w-40 px-2 py-1.5 border border-slate-200 rounded-lg text-sm"
-                  >
-                    <option value="">Não enviar</option>
-                    <option value="Lead">Lead</option>
-                    <option value="Contact">Contact</option>
-                    <option value="Schedule">Schedule</option>
-                    <option value="Purchase">Purchase</option>
-                  </select>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-            <p className="text-xs text-blue-700">
-              <span className="font-medium">Como funciona:</span> Configure qual evento Meta será enviado em cada etapa do funil. 
-              Por exemplo: envie <code className="bg-blue-100 px-1 rounded">Lead</code> quando entrar um novo lead e 
-              <code className="bg-blue-100 px-1 rounded">Purchase</code> quando converter (com o valor do pagamento).
-            </p>
-          </div>
-
-          {/* Campos enviados ao Meta */}
-          <div className="mt-4 p-3 bg-slate-50 rounded-lg">
-            <p className="text-xs font-medium text-slate-700 mb-2">Campos enviados na conversão (SHA256):</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">Telefone (ph)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">Email (em)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">Nome (fn/ln)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">ID Externo</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">Cidade (ct)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">Estado (st)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">CEP (zp)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">Gênero (ge)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">Nascimento (db)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">Origem (content_name)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">Valor (value)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span>
-                <span className="text-slate-600">Event ID</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Últimos eventos enviados */}
-          <MetaConversionLogs clinicId={clinic.id} />
         </div>
 
         {/* Templates e Envio em Massa */}
@@ -3164,6 +2762,611 @@ const AdminClinicDetail: React.FC = () => {
           </div>
         )}
         </>
+      )}
+
+      {/* Tab: Integrações */}
+      {activeTab === 'integrations' && (
+        <div className="space-y-6">
+          {/* WhatsApp Cloud API */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                    <span className="material-symbols-outlined text-emerald-600">verified</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800">WhatsApp Cloud API</h3>
+                    <p className="text-sm text-slate-500">API Oficial do Meta para WhatsApp Business</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={clinic.cloud_api_enabled || false}
+                    onChange={async (e) => {
+                      const enabled = e.target.checked;
+                      await toggleCloudApiEnabled();
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+            </div>
+            
+            {clinic.cloud_api_enabled && (
+              <div className="p-6 space-y-4">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="material-symbols-outlined text-emerald-600 mt-0.5">info</span>
+                    <div>
+                      <p className="text-sm font-medium text-emerald-800">Habilitado para o cliente</p>
+                      <p className="text-sm text-emerald-700 mt-1">
+                        O cliente pode configurar a Cloud API no painel dele. Configure abaixo as credenciais ou deixe o cliente configurar.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Configuração Cloud API */}
+                <div className="border border-slate-200 rounded-lg p-4 space-y-3">
+                  <h4 className="text-sm font-medium text-slate-700 mb-3">Configuração Cloud API</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Phone Number ID *</label>
+                      <input
+                        type="text"
+                        value={clinic.cloud_api_phone_number_id || ''}
+                        onChange={(e) => updateCloudApiField('cloud_api_phone_number_id', e.target.value)}
+                        placeholder="Ex: 123456789012345"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Access Token *</label>
+                      <input
+                        type="password"
+                        value={clinic.cloud_api_access_token || ''}
+                        onChange={(e) => updateCloudApiField('cloud_api_access_token', e.target.value)}
+                        placeholder="Token do System User"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">WABA ID</label>
+                      <input
+                        type="text"
+                        value={clinic.cloud_api_waba_id || ''}
+                        onChange={(e) => updateCloudApiField('cloud_api_waba_id', e.target.value)}
+                        placeholder="WhatsApp Business Account ID"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">App ID</label>
+                      <input
+                        type="text"
+                        value={clinic.cloud_api_app_id || ''}
+                        onChange={(e) => updateCloudApiField('cloud_api_app_id', e.target.value)}
+                        placeholder="ID do App no Meta for Developers"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-medium text-slate-600 uppercase">Verify Token (Webhook)</label>
+                      <input
+                        type="text"
+                        value={clinic.cloud_api_verify_token || ''}
+                        onChange={(e) => updateCloudApiField('cloud_api_verify_token', e.target.value)}
+                        placeholder="Token para verificação do webhook"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-slate-200">
+                    <p className="text-xs text-slate-600 mb-2"><span className="font-medium">Webhook URL:</span></p>
+                    <code className="block p-2 bg-slate-50 rounded text-xs text-slate-600 break-all">
+                      {`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-cloud-webhook`}
+                    </code>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Instagram Direct */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800">Instagram Direct</h3>
+                    <p className="text-sm text-slate-500">Integração com mensagens do Instagram</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={(clinic as any).instagram_enabled || false}
+                    onChange={() => toggleChannelEnabled('instagram')}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-500"></div>
+                </label>
+              </div>
+            </div>
+            
+            {(clinic as any).instagram_enabled && (
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(clinic as any).instagram_client_can_configure || false}
+                      onChange={(e) => updateCloudApiField('instagram_client_can_configure', e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-pink-600 focus:ring-pink-500"
+                    />
+                    <span className="text-sm text-slate-600">Cliente pode configurar</span>
+                  </label>
+                </div>
+                <div className="border border-slate-200 rounded-lg p-4 space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 uppercase">Page ID</label>
+                    <input
+                      type="text"
+                      value={(clinic as any).instagram_page_id || ''}
+                      onChange={(e) => updateCloudApiField('instagram_page_id', e.target.value)}
+                      placeholder="ID da página do Instagram"
+                      className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 uppercase">Access Token</label>
+                    <input
+                      type="password"
+                      value={(clinic as any).instagram_access_token || ''}
+                      onChange={(e) => updateCloudApiField('instagram_access_token', e.target.value)}
+                      placeholder="Token de acesso do Instagram"
+                      className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Facebook Messenger */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#1877F2] rounded-lg flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 0c-6.627 0-12 4.975-12 11.111 0 3.497 1.745 6.616 4.472 8.652v4.237l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111 0-6.136-5.373-11.111-12-11.111zm1.193 14.963l-3.056-3.259-5.963 3.259 6.559-6.963 3.13 3.259 5.889-3.259-6.559 6.963z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800">Facebook Messenger</h3>
+                    <p className="text-sm text-slate-500">Integração com mensagens do Facebook</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={(clinic as any).facebook_enabled || false}
+                    onChange={() => toggleChannelEnabled('facebook')}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1877F2]"></div>
+                </label>
+              </div>
+            </div>
+            
+            {(clinic as any).facebook_enabled && (
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={(clinic as any).facebook_client_can_configure || false}
+                      onChange={(e) => updateCloudApiField('facebook_client_can_configure', e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-slate-600">Cliente pode configurar</span>
+                  </label>
+                </div>
+                <div className="border border-slate-200 rounded-lg p-4 space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 uppercase">Page ID</label>
+                    <input
+                      type="text"
+                      value={(clinic as any).facebook_page_id || ''}
+                      onChange={(e) => updateCloudApiField('facebook_page_id', e.target.value)}
+                      placeholder="ID da página do Facebook"
+                      className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 uppercase">Access Token</label>
+                    <input
+                      type="password"
+                      value={(clinic as any).facebook_access_token || ''}
+                      onChange={(e) => updateCloudApiField('facebook_access_token', e.target.value)}
+                      placeholder="Token de acesso do Facebook"
+                      className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Facebook Conversions API */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-blue-600">campaign</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Facebook Conversions API</h3>
+                  <p className="text-sm text-slate-500">Enviar eventos de conversão para o Facebook Ads</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-slate-600 uppercase">Dataset ID (Pixel ID)</label>
+                  <input
+                    type="text"
+                    value={clinic.facebook_dataset_id || ''}
+                    onChange={async (e) => {
+                      const newValue = e.target.value;
+                      setClinic(prev => prev ? { ...prev, facebook_dataset_id: newValue } : prev);
+                      await (supabase as any).from('clinics').update({ facebook_dataset_id: newValue || null }).eq('id', clinic.id);
+                    }}
+                    placeholder="Ex: 1610564503295321"
+                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 uppercase">Token da API</label>
+                  <input
+                    type="password"
+                    value={clinic.facebook_api_token || ''}
+                    onChange={async (e) => {
+                      const newValue = e.target.value;
+                      setClinic(prev => prev ? { ...prev, facebook_api_token: newValue } : prev);
+                      await (supabase as any).from('clinics').update({ facebook_api_token: newValue || null }).eq('id', clinic.id);
+                    }}
+                    placeholder="Token de acesso do Facebook"
+                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-xs font-medium text-slate-600 uppercase">Fonte da Ação</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowMetaHelpModal(true)}
+                    className="text-slate-400 hover:text-blue-500 transition-colors"
+                    title="Ajuda"
+                  >
+                    <span className="material-symbols-outlined text-sm">help</span>
+                  </button>
+                </div>
+                <select
+                  value={clinic.meta_action_source || 'website'}
+                  onChange={async (e) => {
+                    const newValue = e.target.value;
+                    setClinic(prev => prev ? { ...prev, meta_action_source: newValue } : prev);
+                    await (supabase as any).from('clinics').update({ meta_action_source: newValue }).eq('id', clinic.id);
+                  }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                >
+                  <option value="website">Website (CRM/Sistema)</option>
+                  <option value="chat">Chat (WhatsApp)</option>
+                  <option value="phone_call">Phone Call (Ligação)</option>
+                  <option value="physical_store">Physical Store (Presencial)</option>
+                </select>
+              </div>
+
+              {/* Eventos por Etapa do Funil */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <label className="text-xs font-medium text-slate-600 uppercase">Eventos por Etapa do Funil</label>
+                  <span className="text-xs text-slate-400">(deixe vazio para não enviar)</span>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { stage: 'Novo Lead', color: '#0891b2', hint: 'Quando um novo lead entra no sistema' },
+                    { stage: 'Agendado', color: '#8b5cf6', hint: 'Quando o lead agenda consulta/procedimento' },
+                    { stage: 'Em Atendimento', color: '#f59e0b', hint: 'Quando inicia negociação ativa' },
+                    { stage: 'Convertido', color: '#10b981', hint: 'Quando fecha negócio (envia valor)' },
+                    { stage: 'Perdido', color: '#ef4444', hint: 'Quando o lead desiste' },
+                  ].map(({ stage, color, hint }) => (
+                    <div key={stage} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }}></div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700">{stage}</p>
+                        <p className="text-xs text-slate-400 truncate">{hint}</p>
+                      </div>
+                      <select
+                        value={(clinic.meta_funnel_events as Record<string, string>)?.[stage] || ''}
+                        onChange={async (e) => {
+                          const newValue = e.target.value;
+                          const currentEvents = (clinic.meta_funnel_events as Record<string, string>) || {};
+                          const updatedEvents = { ...currentEvents };
+                          if (newValue) {
+                            updatedEvents[stage] = newValue;
+                          } else {
+                            delete updatedEvents[stage];
+                          }
+                          setClinic(prev => prev ? { ...prev, meta_funnel_events: updatedEvents } : prev);
+                          await (supabase as any).from('clinics').update({ meta_funnel_events: updatedEvents }).eq('id', clinic.id);
+                        }}
+                        className="w-40 px-2 py-1.5 border border-slate-200 rounded-lg text-sm"
+                      >
+                        <option value="">Não enviar</option>
+                        <option value="Lead">Lead</option>
+                        <option value="Contact">Contact</option>
+                        <option value="Schedule">Schedule</option>
+                        <option value="Purchase">Purchase</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <p className="text-xs text-blue-700">
+                  <span className="font-medium">Como funciona:</span> Configure qual evento Meta será enviado em cada etapa do funil. 
+                  Por exemplo: envie <code className="bg-blue-100 px-1 rounded">Lead</code> quando entrar um novo lead e 
+                  <code className="bg-blue-100 px-1 rounded">Purchase</code> quando converter (com o valor do pagamento).
+                </p>
+              </div>
+
+              {/* Últimos eventos enviados */}
+              <MetaConversionLogs clinicId={clinic.id} />
+            </div>
+          </div>
+
+          {/* Email Marketing */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <span className="material-symbols-outlined text-purple-600">mail</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800">Email Marketing (SMTP)</h3>
+                    <p className="text-sm text-slate-500">Permite que o cliente configure envio de emails via SMTP</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={clinic.email_marketing_enabled || false}
+                    onChange={async (e) => {
+                      const enabled = e.target.checked;
+                      const { error } = await (supabase as any)
+                        .from('clinics')
+                        .update({ email_marketing_enabled: enabled })
+                        .eq('id', id);
+                      
+                      if (!error) {
+                        setClinic({ ...clinic, email_marketing_enabled: enabled });
+                      }
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+            </div>
+            
+            {clinic.email_marketing_enabled && (
+              <div className="p-6 space-y-4">
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="material-symbols-outlined text-purple-600 mt-0.5">info</span>
+                    <div>
+                      <p className="text-sm font-medium text-purple-800">Habilitado para o cliente</p>
+                      <p className="text-sm text-purple-700 mt-1">
+                        O cliente pode acessar a aba "Integrações" no menu. Você também pode configurar diretamente aqui.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Configuração SMTP editável */}
+                <div className="border border-slate-200 rounded-lg p-4 space-y-4">
+                  <h4 className="text-sm font-medium text-slate-700">Configuração SMTP</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Host SMTP *</label>
+                      <input
+                        type="text"
+                        value={(clinic as any).smtp_host || ''}
+                        onChange={(e) => setClinic(prev => prev ? { ...prev, smtp_host: e.target.value } : prev)}
+                        placeholder="Ex: smtp.hostinger.com"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Porta *</label>
+                      <input
+                        type="number"
+                        value={(clinic as any).smtp_port || 465}
+                        onChange={(e) => setClinic(prev => prev ? { ...prev, smtp_port: parseInt(e.target.value) || 465 } : prev)}
+                        placeholder="465"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Usuário/Email *</label>
+                      <input
+                        type="text"
+                        value={(clinic as any).smtp_user || ''}
+                        onChange={(e) => setClinic(prev => prev ? { ...prev, smtp_user: e.target.value } : prev)}
+                        placeholder="email@seudominio.com"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Senha *</label>
+                      <input
+                        type="password"
+                        value={(clinic as any).smtp_password || ''}
+                        onChange={(e) => setClinic(prev => prev ? { ...prev, smtp_password: e.target.value } : prev)}
+                        placeholder="Senha do email"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Email Remetente</label>
+                      <input
+                        type="email"
+                        value={(clinic as any).smtp_from_email || ''}
+                        onChange={(e) => setClinic(prev => prev ? { ...prev, smtp_from_email: e.target.value } : prev)}
+                        placeholder="noreply@seudominio.com"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 uppercase">Nome Remetente</label>
+                      <input
+                        type="text"
+                        value={(clinic as any).smtp_from_name || ''}
+                        onChange={(e) => setClinic(prev => prev ? { ...prev, smtp_from_name: e.target.value } : prev)}
+                        placeholder="Nome da Clínica"
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-medium text-slate-600 uppercase">Criptografia</label>
+                      <select
+                        value={(clinic as any).smtp_encryption || 'ssl'}
+                        onChange={(e) => setClinic(prev => prev ? { ...prev, smtp_encryption: e.target.value } : prev)}
+                        className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      >
+                        <option value="ssl">SSL (Porta 465)</option>
+                        <option value="tls">TLS (Porta 587)</option>
+                        <option value="none">Nenhuma (Porta 25)</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  {/* Botões de ação */}
+                  <div className="flex items-center gap-3 pt-4 border-t border-slate-200">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { error } = await (supabase as any).from('clinics').update({
+                            smtp_host: (clinic as any).smtp_host || null,
+                            smtp_port: (clinic as any).smtp_port || 465,
+                            smtp_user: (clinic as any).smtp_user || null,
+                            smtp_password: (clinic as any).smtp_password || null,
+                            smtp_from_email: (clinic as any).smtp_from_email || null,
+                            smtp_from_name: (clinic as any).smtp_from_name || null,
+                            smtp_encryption: (clinic as any).smtp_encryption || 'ssl',
+                          }).eq('id', clinic.id);
+                          
+                          if (error) throw error;
+                          setShowSmtpSaveSuccess(true);
+                          setTimeout(() => setShowSmtpSaveSuccess(false), 3000);
+                        } catch (err) {
+                          setSmtpTestResult({ success: false, message: 'Erro ao salvar: ' + (err as Error).message });
+                          setShowSmtpTestModal(true);
+                        }
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">save</span>
+                      Salvar Configurações
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSmtpTestEmail('');
+                        setSmtpTestResult(null);
+                        setShowSmtpTestModal(true);
+                      }}
+                      disabled={!(clinic as any).smtp_host || !(clinic as any).smtp_user || !(clinic as any).smtp_password}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">send</span>
+                      Testar Conexão
+                    </button>
+                  </div>
+                  
+                  {/* Toast de sucesso ao salvar */}
+                  {showSmtpSaveSuccess && (
+                    <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-4">
+                      <div className="bg-emerald-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
+                        <span className="material-symbols-outlined">check_circle</span>
+                        <span>Configurações SMTP salvas com sucesso!</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tabela de referência */}
+                <div className="border border-slate-200 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-slate-700 mb-3">Configurações Comuns</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="text-left py-2 px-2 font-medium text-slate-600">Provedor</th>
+                          <th className="text-left py-2 px-2 font-medium text-slate-600">Host</th>
+                          <th className="text-left py-2 px-2 font-medium text-slate-600">Porta</th>
+                          <th className="text-left py-2 px-2 font-medium text-slate-600">Criptografia</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-slate-600">
+                        <tr className="border-b border-slate-100">
+                          <td className="py-2 px-2 font-medium">Hostinger</td>
+                          <td className="py-2 px-2">smtp.hostinger.com</td>
+                          <td className="py-2 px-2">465</td>
+                          <td className="py-2 px-2">SSL</td>
+                        </tr>
+                        <tr className="border-b border-slate-100">
+                          <td className="py-2 px-2 font-medium">Gmail</td>
+                          <td className="py-2 px-2">smtp.gmail.com</td>
+                          <td className="py-2 px-2">587</td>
+                          <td className="py-2 px-2">TLS</td>
+                        </tr>
+                        <tr className="border-b border-slate-100">
+                          <td className="py-2 px-2 font-medium">Outlook</td>
+                          <td className="py-2 px-2">smtp.office365.com</td>
+                          <td className="py-2 px-2">587</td>
+                          <td className="py-2 px-2">TLS</td>
+                        </tr>
+                        <tr>
+                          <td className="py-2 px-2 font-medium">SendGrid</td>
+                          <td className="py-2 px-2">smtp.sendgrid.net</td>
+                          <td className="py-2 px-2">587</td>
+                          <td className="py-2 px-2">TLS</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Tab: Métricas */}
@@ -4880,6 +5083,120 @@ const AdminClinicDetail: React.FC = () => {
       )}
 
       {/* Modal de Ajuda Meta Conversions API */}
+      {/* Modal de Teste SMTP */}
+      {showSmtpTestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => !smtpTestLoading && setShowSmtpTestModal(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <span className="material-symbols-outlined text-purple-600">mail</span>
+                Testar Conexão SMTP
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">Envie um email de teste para verificar a configuração</p>
+            </div>
+            
+            <div className="p-6">
+              {!smtpTestResult ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">Email para receber o teste</label>
+                    <input
+                      type="email"
+                      value={smtpTestEmail}
+                      onChange={(e) => setSmtpTestEmail(e.target.value)}
+                      placeholder="seu@email.com"
+                      className="w-full mt-1 px-4 py-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      disabled={smtpTestLoading}
+                    />
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowSmtpTestModal(false)}
+                      disabled={smtpTestLoading}
+                      className="flex-1 px-4 py-3 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!smtpTestEmail) return;
+                        setSmtpTestLoading(true);
+                        try {
+                          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/test-smtp`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                            },
+                            body: JSON.stringify({ clinicId: clinic.id, testEmail: smtpTestEmail }),
+                          });
+                          const result = await response.json();
+                          if (result.success) {
+                            setSmtpTestResult({ success: true, message: 'Email de teste enviado com sucesso! Verifique sua caixa de entrada.' });
+                          } else {
+                            setSmtpTestResult({ success: false, message: result.error || 'Erro ao enviar email de teste' });
+                          }
+                        } catch (err) {
+                          setSmtpTestResult({ success: false, message: 'Erro ao testar conexão: ' + (err as Error).message });
+                        }
+                        setSmtpTestLoading(false);
+                      }}
+                      disabled={!smtpTestEmail || smtpTestLoading}
+                      className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {smtpTestLoading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-[18px]">send</span>
+                          Enviar Teste
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                    smtpTestResult.success ? 'bg-emerald-100' : 'bg-red-100'
+                  }`}>
+                    <span className={`material-symbols-outlined text-3xl ${
+                      smtpTestResult.success ? 'text-emerald-600' : 'text-red-600'
+                    }`}>
+                      {smtpTestResult.success ? 'check_circle' : 'error'}
+                    </span>
+                  </div>
+                  <h4 className={`text-lg font-bold mb-2 ${
+                    smtpTestResult.success ? 'text-emerald-800' : 'text-red-800'
+                  }`}>
+                    {smtpTestResult.success ? 'Sucesso!' : 'Erro'}
+                  </h4>
+                  <p className="text-slate-600 text-sm mb-6">{smtpTestResult.message}</p>
+                  <button
+                    onClick={() => {
+                      setSmtpTestResult(null);
+                      setShowSmtpTestModal(false);
+                    }}
+                    className={`w-full px-4 py-3 rounded-lg font-medium transition-colors ${
+                      smtpTestResult.success 
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
+                        : 'bg-red-600 text-white hover:bg-red-700'
+                    }`}
+                  >
+                    Fechar
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showMetaHelpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowMetaHelpModal(false)}></div>

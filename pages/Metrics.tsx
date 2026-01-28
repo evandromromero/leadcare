@@ -422,14 +422,18 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
       // Calcular tempo médio de conversão (dias entre criação e conversão)
       const convertedChats = periodChats.filter(c => c.status === 'Convertido');
       if (convertedChats.length > 0 && canSeeBilling) {
+        // Buscar por clinic_id e filtrar no frontend para evitar erro 400 com muitos IDs
         const { data: paymentsForConversion } = await supabase
           .from('payments' as any)
           .select('chat_id, payment_date')
-          .in('chat_id', convertedChats.map(c => c.id));
+          .eq('clinic_id', clinicId);
         
-        if (paymentsForConversion && paymentsForConversion.length > 0) {
+        const convertedChatIds = convertedChats.map(c => c.id);
+        const filteredPayments = (paymentsForConversion || []).filter((p: any) => convertedChatIds.includes(p.chat_id));
+        
+        if (filteredPayments.length > 0) {
           const conversionTimes: number[] = [];
-          paymentsForConversion.forEach((payment: any) => {
+          filteredPayments.forEach((payment: any) => {
             const chat = convertedChats.find(c => c.id === payment.chat_id);
             if (chat) {
               const chatDate = new Date(chat.created_at);
