@@ -264,21 +264,13 @@ serve(async (req) => {
           // Usar o título completo como código (limitado a 20 chars)
           detectedCode = metaAdInfo.title.substring(0, 20).toUpperCase().replace(/[^A-Z0-9]/g, '_')
         }
-        console.log('Código extraído do anúncio Meta:', detectedCode, 'Título:', metaAdInfo.title)
-      }
+      )
       
-      // PRIORIDADE 2: Detectar código na mensagem
-      if (!detectedCode) {
-        const codePatterns = [
-          /\(([A-Za-z]{1,10}[0-9]{0,5})\)/,           // (AV7), (PROMO2025), (INSTAGRAM)
-          /\[([A-Za-z]{1,10}[0-9]{0,5})\]/,           // [AV7], [PROMO2025], [IK]
-          /#([A-Za-z]{1,10}[0-9]{0,5})\b/,            // #AV7, #PROMO2025
-          /\b([A-Z]{2,5}[0-9]{1,4})$/i,               // AV7, ALV1, ACV4 no final
-          /\b(AV[0-9]{1,2})\b/i,                      // AV7, AV15, AV19 em qualquer lugar
-          /\b(ALV[0-9]{1,2})\b/i,                     // ALV1, ALV2 em qualquer lugar
-          /\b(ACV[0-9]{1,2})\b/i,                     // ACV1, ACV4 em qualquer lugar
-          /\b(AVG[0-9]{1,2})\b/i,                     // AVG4 em qualquer lugar
-          /\b(LR[0-9]{1,2})\b/i,                      // LR01 em qualquer lugar
+      if (mediaResponse.ok) {
+        const mediaData = await mediaResponse.json()
+        if (mediaData.base64) {
+          // Temos a mídia em base64, vamos fazer upload direto
+          tempMediaUrl = `data:${mediaData.mimetype || 'application/octet-stream'};base64,${mediaData.base64}`
           /\b(KR[0-9]{1,2})\b/i,                      // KR3, KR5 em qualquer lugar
         ]
         
@@ -297,22 +289,31 @@ serve(async (req) => {
         // PRIORIDADE 1: Buscar em trackable_links pelo código (links rastreáveis)
         const { data: trackableLink } = await supabase
           .from('trackable_links')
-          .select('source_id')
+          .select('id, source_id')
           .eq('clinic_id', clinicId)
           .ilike('code', detectedCode)
-          .single()
+          .maybeSingle()
         
-        if (trackableLink?.source_id) {
-          detectedSourceId = trackableLink.source_id
-          console.log('Source encontrado via trackable_link:', detectedCode, detectedSourceId)
-        } else {
+        if (trackableLink) {
+          // Se o link tem source_id, usar
+          if (trackableLink.source_id) {
+            detectedSourceId = trackableLink.source_id
+            console.log('Source encontrado via trackable_link:', detectedCode, detectedSourceId)
+          }
+          
+          // Associar o clique mais recente (últimos 30 min) ao chat quando ele for criado/atualizado
+          // Isso será feito após criar/atualizar o chat
+          console.log('Trackable link encontrado:', trackableLink.id, 'código:', detectedCode)
+        }
+        
+        if (!trackableLink?.source_id) {
           // PRIORIDADE 2: Buscar lead_source existente com esse código
           const { data: existingSource } = await supabase
             .from('lead_sources')
             .select('id')
             .eq('clinic_id', clinicId)
             .ilike('code', detectedCode)
-            .single()
+            .maybeSingle()
           
           if (existingSource) {
             detectedSourceId = existingSource.id
@@ -453,10 +454,30 @@ serve(async (req) => {
         last_message_from_client: !isFromMe
       }
       
-      // Se detectamos um código e o chat ainda não tem source_id, vincular agora
-      if (detectedSourceId && !chat.source_id) {
-        updateData.source_id = detectedSourceId
-        console.log('Vinculando source_id ao chat existente:', detectedSourceId, 'chat:', chat.id)
+      // Se detectamos um código de link rastreável, SEMPRE atualizar o source_id
+      // Isso permite remarketing: pessoa que veio do Facebook pode clicar em link depois
+      if (detectedSourceId) {
+        try {
+          // Verificar se o source_id detectado é de um link rastreável (tem prioridade)
+          const { data: isTrackableSource } = await supabase
+            .from('trackable_links')
+            .select('id')
+            .eq('source_id', detectedSourceId)
+            .maybeSingle()
+          
+          if (isTrackableSource) {
+            // É um link rastreável - sempre atualiza (remarketing)
+            updateData.source_id = detectedSourceId
+            console.log('Atualizando source_id para link rastreável (remarketing):', detectedSourceId, 'chat:', chat.id)
+          } else if (!chat.source_id) {
+            // Não é link rastreável e chat não tem source - vincular
+            updateData.source_id = detectedSourceId
+            console.log('Vinculando source_id ao chat existente:', detectedSourceId, 'chat:', chat.id)
+          }
+        } catch (e) {
+          console.error('Erro ao verificar trackable_links:', e)
+          // Continua sem atualizar source_id
+        }
       }
       
       // Se a mensagem é do cliente e temos pushName, atualizar o nome do cliente
@@ -480,6 +501,55 @@ serve(async (req) => {
         .from('chats')
         .update(updateData)
         .eq('id', chat.id)
+    }
+
+    // Associar clique do link rastreável ao chat (se detectamos um código de link)
+    if (chat && detectedCode && !isFromMe && !isGroup) {
+      try {
+        // Buscar o trackable_link pelo código
+        const { data: trackableLink } = await supabase
+          .from('trackable_links')
+          .select('id')
+          .eq('clinic_id', clinicId)
+          .ilike('code', detectedCode)
+          .maybeSingle()
+        
+        if (trackableLink) {
+          // Buscar o clique mais recente (últimos 30 min) deste link que ainda não tem chat_id
+          const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+          
+          const { data: recentClicks } = await supabase
+            .from('link_clicks')
+            .select('id')
+            .eq('link_id', trackableLink.id)
+            .is('chat_id', null)
+            .gte('clicked_at', thirtyMinAgo)
+            .order('clicked_at', { ascending: false })
+            .limit(1)
+          
+          const recentClick = recentClicks && recentClicks.length > 0 ? recentClicks[0] : null
+          
+          if (recentClick) {
+            // Associar o clique ao chat
+            await supabase
+              .from('link_clicks')
+              .update({ 
+                chat_id: chat.id, 
+                converted_to_lead: true,
+                converted_at: new Date().toISOString()
+              })
+              .eq('id', recentClick.id)
+            
+            console.log('Clique associado ao chat:', recentClick.id, '-> chat:', chat.id, 'código:', detectedCode)
+          } else {
+            console.log('Nenhum clique recente encontrado para associar. Link:', trackableLink.id, 'código:', detectedCode)
+          }
+        } else {
+          console.log('Trackable link não encontrado para código:', detectedCode)
+        }
+      } catch (e) {
+        console.error('Erro ao associar clique ao chat:', e)
+      }
     }
 
     // Upload media to storage if exists

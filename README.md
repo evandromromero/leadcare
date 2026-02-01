@@ -2161,6 +2161,196 @@ Melhorias implementadas:
 
 ---
 
+## Fase 14: Links Rastreáveis e Remarketing ✅ COMPLETA
+
+### Status da Implementação
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Sistema de Links Rastreáveis | ✅ Completo |
+| Página de criação/edição de links | ✅ Completo |
+| Redirect com página de loading | ✅ Completo |
+| Registro de cliques com UTMs | ✅ Completo |
+| Associação automática clique → chat | ✅ Completo |
+| Dashboard de Links (aba no Dashboard) | ✅ Completo |
+| Página LinkConversations (conversas por link) | ✅ Completo |
+| Remarketing: tempo de resposta baseado no último clique | ✅ Completo |
+| Histórico de contatos (modal com todos os cliques) | ✅ Completo |
+| Badge Instagram/Facebook na lista de conversas | ✅ Completo |
+| Regex para códigos alfanuméricos (ex: 6VME00) | ✅ Completo |
+
+### Arquitetura do Sistema
+
+```
+Usuário clica no link
+        ↓
+belitx.com.br/w/CODIGO?utm_source=...
+        ↓
+Hostinger (PHP) → Supabase Edge Function
+        ↓
+redirect-to-whatsapp (registra clique)
+        ↓
+Página de loading (5 segundos)
+        ↓
+WhatsApp abre com mensagem: "Olá! [CODIGO]"
+        ↓
+Usuário envia mensagem
+        ↓
+evolution-webhook detecta [CODIGO]
+        ↓
+Associa clique ao chat (últimos 30 min)
+```
+
+### Tabelas do Banco
+
+| Tabela | Descrição |
+|--------|-----------|
+| `trackable_links` | Links rastreáveis por clínica |
+| `link_clicks` | Cliques registrados com UTMs, dispositivo, IP |
+| `lead_sources` | Origens de lead (vinculadas aos links) |
+
+### Campos da Tabela `trackable_links`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | uuid | ID único |
+| `clinic_id` | uuid | Clínica dona do link |
+| `code` | text | Código único (ex: 6VME00) |
+| `name` | text | Nome do link |
+| `phone_number` | text | Número WhatsApp destino |
+| `message_template` | text | Mensagem pré-preenchida |
+| `source_id` | uuid | Origem de lead vinculada |
+| `utm_source` | text | UTM padrão |
+| `utm_medium` | text | UTM padrão |
+| `utm_campaign` | text | UTM padrão |
+| `clicks_count` | int | Contador de cliques |
+| `is_active` | boolean | Link ativo |
+
+### Campos da Tabela `link_clicks`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | uuid | ID único |
+| `link_id` | uuid | Link clicado |
+| `clinic_id` | uuid | Clínica |
+| `clicked_at` | timestamp | Data/hora do clique |
+| `chat_id` | uuid | Chat associado (após mensagem) |
+| `converted_to_lead` | boolean | Se virou lead |
+| `converted_at` | timestamp | Data da conversão |
+| `ip_address` | text | IP do usuário |
+| `user_agent` | text | User agent completo |
+| `browser` | text | Navegador (Chrome, Instagram, Facebook) |
+| `os` | text | Sistema operacional |
+| `device_type` | text | desktop/mobile/tablet |
+| `device_model` | text | Modelo do dispositivo |
+| `referrer` | text | Página de origem |
+| `utm_source` | text | UTM capturado |
+| `utm_medium` | text | UTM capturado |
+| `utm_campaign` | text | UTM capturado |
+| `utm_content` | text | UTM capturado |
+| `utm_term` | text | UTM capturado |
+| `fbclid` | text | Facebook Click ID |
+| `gclid` | text | Google Click ID |
+| `belitx_fbid` | text | ID customizado para Meta Ads |
+| `ad_id` | text | ID do anúncio |
+| `site_source` | text | Fonte do site (Meta) |
+| `placement` | text | Posicionamento do anúncio |
+
+### Edge Functions
+
+| Função | Versão | Descrição |
+|--------|--------|-----------|
+| `redirect-to-whatsapp` | v3 | Registra clique e redireciona para WhatsApp |
+| `evolution-webhook` | v50 | Detecta código na mensagem e associa clique |
+
+### Padrões Regex para Detecção de Código
+
+O webhook detecta códigos nos seguintes formatos:
+
+| Padrão | Exemplo | Regex |
+|--------|---------|-------|
+| Colchetes | `[6VME00]` | `/\[([A-Za-z0-9]{3,10})\]/` |
+| Parênteses | `(ABC123)` | `/\(([A-Za-z0-9]{3,10})\)/` |
+| Hashtag | `#CODIGO` | `/#([A-Za-z0-9]{3,10})\b/` |
+| Letras+Números | `AV7`, `ALV1` | `/\b([A-Z]{2,5}[0-9]{1,4})$/i` |
+| Número+Letras+Números | `6VME00` | `/\b([0-9][A-Z]{2,4}[0-9]{2})\b/i` |
+
+### URLs dos Links
+
+| Tipo | URL |
+|------|-----|
+| Link Curto | `https://belitx.com.br/w/CODIGO` |
+| Instagram Bio | `https://belitx.com.br/w/CODIGO?utm_source=instagram&utm_medium=bio` |
+| Google Ads | `https://belitx.com.br/w/CODIGO?utm_source=google&utm_medium=cpc` |
+| Meta Ads | `https://belitx.com.br/w/CODIGO` + UTMs dinâmicos |
+| Botão no Site | `https://belitx.com.br/w/CODIGO?utm_source=website&utm_medium=button` |
+| QR Code | `https://belitx.com.br/w/CODIGO?utm_source=offline&utm_medium=qrcode` |
+| Email Marketing | `https://belitx.com.br/w/CODIGO?utm_source=email&utm_medium=newsletter` |
+
+### Lógica de Remarketing
+
+1. **Clique registrado** com `chat_id = null`
+2. **Mensagem chega** com código `[CODIGO]`
+3. **Webhook busca** clique sem `chat_id` nos últimos 30 minutos
+4. **Associa clique** ao chat (`chat_id`, `converted_to_lead = true`)
+5. **Dashboard calcula** tempo de resposta baseado no último clique
+
+### Dashboard de Links
+
+| Métrica | Descrição |
+|---------|-----------|
+| Total de Cliques | Soma de todos os cliques |
+| Conversões | Cliques que viraram leads |
+| Taxa de Conversão | Conversões / Cliques × 100 |
+| Cliques Hoje | Cliques do dia atual |
+| Por Dispositivo | Desktop vs Mobile |
+| Por Navegador | Chrome, Instagram, Facebook, Safari |
+| Por Origem | utm_source agrupado |
+
+### Página LinkConversations
+
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| Lista de conversas | Leads que vieram do link |
+| Badge de origem | Instagram (rosa), Facebook (azul) |
+| Tempo de resposta | Baseado no último clique |
+| Respondido por | Quem respondeu primeiro |
+| Histórico de contatos | Modal com todos os cliques do lead |
+| Busca | Por nome ou telefone |
+| Filtros | Período, status de resposta |
+
+### Aba Leads no Dashboard
+
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| Lista de leads | Com origem, data, tempo de resposta |
+| Botão histórico | Abre modal com todos os cliques |
+| Tempo de resposta | Calculado do último clique |
+| Respondido por | Nome do atendente |
+| Status | Respondido / Não respondido |
+
+### Arquivos Principais
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `pages/TrackableLinks.tsx` | CRUD de links rastreáveis |
+| `pages/LinkConversations.tsx` | Conversas por link |
+| `components/DashboardLinksTab.tsx` | Aba Links no Dashboard |
+| `components/DashboardLeadsTab.tsx` | Aba Leads no Dashboard |
+| `hostinger-redirect/w/index.php` | Proxy PHP na Hostinger |
+| `supabase/functions/redirect-to-whatsapp/index.ts` | Edge function de redirect |
+| `supabase/functions/evolution-webhook/index.ts` | Webhook v50 com regex corrigido |
+
+### Correções Importantes
+
+| Correção | Versão | Descrição |
+|----------|--------|-----------|
+| `.single()` → `.maybeSingle()` | v48 | Evita erro quando não há clique para associar |
+| Regex alfanumérico | v50 | Aceita códigos como `6VME00` que começam com número |
+| Busca por array | v50 | Usa `.limit(1)` em vez de `.single()` para cliques |
+
+---
+
 ## Desenvolvido por
 
 **Betix** - CRM para Clínicas

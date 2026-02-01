@@ -3,12 +3,20 @@
 
 # Habilitar RewriteEngine
 <IfModule mod_rewrite.c>
+    Options +FollowSymLinks -Indexes
     RewriteEngine On
     RewriteBase /
     
+    # IMPORTANTE: /w/ deve ir para o router.php
+    RewriteCond %{REQUEST_URI} ^/w/
+    RewriteRule ^(.*)$ router.php [L,QSA]
+    
     # Redirecionar todas as requisições para index.html (SPA)
+    # Exceto /w/ e arquivos .php que são tratados pelo PHP
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} !^/w/
+    RewriteCond %{REQUEST_URI} !\.php$
     RewriteRule ^ index.html [QSA,L]
 </IfModule>
 

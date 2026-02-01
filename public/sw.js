@@ -1,4 +1,4 @@
-const CACHE_NAME = 'belitx-v4.0';
+const CACHE_NAME = 'belitx-v6.0';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -50,6 +50,11 @@ self.addEventListener('fetch', (event) => {
   if (event.request.url.includes('/rest/') || 
       event.request.url.includes('/functions/') ||
       event.request.url.includes('supabase')) {
+    return;
+  }
+  
+  // Skip /w/ routes and .php files - these are handled by PHP on the server
+  if (event.request.url.includes('/w/') || event.request.url.includes('.php')) {
     return;
   }
 

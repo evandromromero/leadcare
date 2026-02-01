@@ -1,0 +1,26 @@
+Options +FollowSymLinks -Indexes
+RewriteEngine On
+RewriteBase /
+
+# IMPORTANTE: Excluir /w/, /r/ e /pixel/ do React SPA
+# Essas pastas devem ser tratadas pelo PHP, não pelo React
+
+# Se for /w/*, usar o PHP da pasta w/
+RewriteCond %{REQUEST_URI} ^/w/
+RewriteRule ^w/(.*)$ w/index.php [L,QSA]
+
+# Se for /r/*, usar o PHP da pasta r/ (legado)
+RewriteCond %{REQUEST_URI} ^/r/
+RewriteRule ^r/(.*)$ r/index.php [L,QSA]
+
+# Se for /pixel/*, servir arquivos estáticos
+RewriteCond %{REQUEST_URI} ^/pixel/
+RewriteRule ^pixel/(.*)$ pixel/$1 [L]
+
+# Para o React SPA: se não for arquivo ou diretório existente, redirecionar para index.html
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/w/
+RewriteCond %{REQUEST_URI} !^/r/
+RewriteCond %{REQUEST_URI} !^/pixel/
+RewriteRule ^(.*)$ index.html [L]

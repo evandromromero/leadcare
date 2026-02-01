@@ -10,6 +10,31 @@ interface DashboardChartsTabProps {
   clinicId: string | undefined;
 }
 
+interface ChartConfig {
+  id: string;
+  name: string;
+  visible: boolean;
+}
+
+const DEFAULT_CHARTS: ChartConfig[] = [
+  { id: 'cards', name: 'Cards Comparativos', visible: true },
+  { id: 'funnel', name: 'Funil de Conversão', visible: true },
+  { id: 'origin', name: 'Leads por Origem', visible: true },
+  { id: 'leadsByDay', name: 'Leads por Dia', visible: true },
+  { id: 'responseTime', name: 'Tempo Médio de Resposta', visible: true },
+  { id: 'salesByDay', name: 'Vendas por Dia', visible: true },
+  { id: 'responseDistribution', name: 'Distribuição do Tempo de Resposta', visible: true },
+  { id: 'attendantPerformance', name: 'Performance por Atendente', visible: true },
+  { id: 'hourlyPeak', name: 'Horário de Pico de Leads', visible: true },
+  { id: 'weekday', name: 'Leads por Dia da Semana', visible: true },
+  { id: 'conversionRate', name: 'Taxa de Conversão por Origem', visible: true },
+  { id: 'avgTicket', name: 'Ticket Médio por Origem', visible: true },
+  { id: 'heatmap', name: 'Mapa de Calor', visible: true },
+  { id: 'weeklyEvolution', name: 'Evolução Semanal', visible: true },
+  { id: 'topCampaigns', name: 'Top Campanhas Meta Ads', visible: true },
+  { id: 'topLinks', name: 'Top Links Rastreáveis', visible: true },
+];
+
 interface FunnelData {
   name: string;
   value: number;
@@ -132,6 +157,14 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
   const [weeklyEvolution, setWeeklyEvolution] = useState<WeeklyEvolution[]>([]);
   const [topCampaigns, setTopCampaigns] = useState<TopCampaign[]>([]);
   const [topLinks, setTopLinks] = useState<TopLink[]>([]);
+  
+  // Estados para configuração de gráficos
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [chartsConfig, setChartsConfig] = useState<ChartConfig[]>(() => {
+    const saved = localStorage.getItem('dashboardChartsConfig');
+    return saved ? JSON.parse(saved) : DEFAULT_CHARTS;
+  });
+  const [tempChartsConfig, setTempChartsConfig] = useState<ChartConfig[]>([]);
 
   const getPeriodDays = () => {
     switch (period) {
@@ -577,37 +610,45 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
           );
         }
         
-        // 14. Top Links Rastreáveis
-        if (trackableLinks && chatsData) {
+        // 14. Top Links Rastreáveis - Buscar por mensagens com código [CODIGO]
+        if (trackableLinks && trackableLinks.length > 0) {
           const linksMap: Record<string, TopLink> = {};
           
-          // Inicializar com os links
-          trackableLinks.forEach((link: any) => {
-            linksMap[link.source_id] = {
-              nome: link.name || `Link ${link.code}`,
-              code: link.code || '',
-              leads: 0,
-              convertidos: 0,
-              taxa: 0
-            };
-          });
-          
-          // Contar leads por link
-          chatsData.forEach((chat: any) => {
-            if (chat.source_id && linksMap[chat.source_id]) {
-              linksMap[chat.source_id].leads++;
-              if (chat.status === 'Convertido') {
-                linksMap[chat.source_id].convertidos++;
-              }
+          // Para cada link, buscar mensagens que contêm o código
+          for (const link of trackableLinks) {
+            if (!link.code) continue;
+            
+            // Buscar mensagens com o código do link no período
+            const { data: messagesWithCode } = await (supabase as any)
+              .from('messages')
+              .select('chat_id')
+              .ilike('content', `%[${link.code}]%`)
+              .gte('created_at', startDate);
+            
+            const uniqueChatIds = [...new Set((messagesWithCode || []).map((m: any) => m.chat_id))];
+            
+            if (uniqueChatIds.length > 0) {
+              // Buscar status dos chats
+              const { data: chatsFromLink } = await (supabase as any)
+                .from('chats')
+                .select('id, status')
+                .eq('clinic_id', clinicId)
+                .in('id', uniqueChatIds);
+              
+              const convertidos = (chatsFromLink || []).filter((c: any) => c.status === 'Convertido').length;
+              
+              linksMap[link.code] = {
+                nome: link.name || `Link ${link.code}`,
+                code: link.code,
+                leads: uniqueChatIds.length,
+                convertidos: convertidos,
+                taxa: uniqueChatIds.length > 0 ? Math.round((convertidos / uniqueChatIds.length) * 1000) / 10 : 0
+              };
             }
-          });
+          }
           
-          // Calcular taxa e ordenar
+          // Ordenar por leads
           const topLinksArray = Object.values(linksMap)
-            .map(link => ({
-              ...link,
-              taxa: link.leads > 0 ? Math.round((link.convertidos / link.leads) * 1000) / 10 : 0
-            }))
             .filter(link => link.leads > 0)
             .sort((a, b) => b.leads - a.leads)
             .slice(0, 5);
@@ -644,6 +685,46 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
     </div>
   );
 
+  // Funções para configuração de gráficos
+  const openConfigModal = () => {
+    setTempChartsConfig([...chartsConfig]);
+    setShowConfigModal(true);
+  };
+
+  const saveChartsConfig = () => {
+    setChartsConfig(tempChartsConfig);
+    localStorage.setItem('dashboardChartsConfig', JSON.stringify(tempChartsConfig));
+    setShowConfigModal(false);
+  };
+
+  const toggleChartVisibility = (id: string) => {
+    setTempChartsConfig(prev => prev.map(c => 
+      c.id === id ? { ...c, visible: !c.visible } : c
+    ));
+  };
+
+  const moveChart = (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= tempChartsConfig.length) return;
+    
+    const newConfig = [...tempChartsConfig];
+    [newConfig[index], newConfig[newIndex]] = [newConfig[newIndex], newConfig[index]];
+    setTempChartsConfig(newConfig);
+  };
+
+  const resetChartsConfig = () => {
+    setTempChartsConfig([...DEFAULT_CHARTS]);
+  };
+
+  const isChartVisible = (id: string) => {
+    const chart = chartsConfig.find(c => c.id === id);
+    return chart ? chart.visible : true;
+  };
+
+  const getChartOrder = () => {
+    return chartsConfig.filter(c => c.visible).map(c => c.id);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -657,25 +738,124 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       {/* Filtro de Período */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-slate-900">Análise Comercial</h2>
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-          {(['today', '7d', '15d', '30d'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                period === p
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {p === 'today' ? 'Hoje' : p === '7d' ? '7 dias' : p === '15d' ? '15 dias' : '30 dias'}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={openConfigModal}
+            className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+            title="Configurar gráficos"
+          >
+            <span className="material-symbols-outlined text-xl">tune</span>
+          </button>
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+            {(['today', '7d', '15d', '30d'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  period === p
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {p === 'today' ? 'Hoje' : p === '7d' ? '7 dias' : p === '15d' ? '15 dias' : '30 dias'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
+      {/* Modal de Configuração de Gráficos */}
+      {showConfigModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowConfigModal(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl max-h-[80vh] flex flex-col">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Configurar Gráficos</h3>
+                <p className="text-sm text-slate-500">Escolha quais gráficos exibir e a ordem</p>
+              </div>
+              <button onClick={() => setShowConfigModal(false)} className="p-1 hover:bg-slate-100 rounded-lg">
+                <span className="material-symbols-outlined text-slate-500">close</span>
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="space-y-2">
+                {tempChartsConfig.map((chart, index) => (
+                  <div 
+                    key={chart.id}
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                      chart.visible 
+                        ? 'bg-emerald-50 border-emerald-200' 
+                        : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <button
+                      onClick={() => toggleChartVisibility(chart.id)}
+                      className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
+                        chart.visible 
+                          ? 'bg-emerald-500 text-white' 
+                          : 'bg-slate-300 text-white'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {chart.visible ? 'check' : 'remove'}
+                      </span>
+                    </button>
+                    
+                    <span className={`flex-1 text-sm font-medium ${chart.visible ? 'text-slate-900' : 'text-slate-400'}`}>
+                      {chart.name}
+                    </span>
+                    
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => moveChart(index, 'up')}
+                        disabled={index === 0}
+                        className={`p-1 rounded ${index === 0 ? 'text-slate-300' : 'text-slate-500 hover:bg-slate-200'}`}
+                      >
+                        <span className="material-symbols-outlined text-lg">keyboard_arrow_up</span>
+                      </button>
+                      <button
+                        onClick={() => moveChart(index, 'down')}
+                        disabled={index === tempChartsConfig.length - 1}
+                        className={`p-1 rounded ${index === tempChartsConfig.length - 1 ? 'text-slate-300' : 'text-slate-500 hover:bg-slate-200'}`}
+                      >
+                        <span className="material-symbols-outlined text-lg">keyboard_arrow_down</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-slate-200 flex items-center justify-between">
+              <button
+                onClick={resetChartsConfig}
+                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800"
+              >
+                Restaurar padrão
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowConfigModal(false)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={saveChartsConfig}
+                  className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                >
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cards Comparativos */}
-      {comparison && (
+      {isChartVisible('cards') && comparison && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl p-4 border border-slate-200">
             <p className="text-xs text-slate-500 mb-1">Leads Hoje</p>

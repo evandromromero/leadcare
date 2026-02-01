@@ -69,8 +69,7 @@ export default function LinkSettings() {
   });
   const [dashboardPeriod, setDashboardPeriod] = useState<'today' | '7d' | '15d' | '30d'>('7d');
 
-  const baseUrl = 'https://belitx.com.br/r';
-  const baseUrlDelay = 'https://belitx.com.br/w';
+  const baseUrl = 'https://belitx.com.br/w';
 
   useEffect(() => {
     if (linkId && clinic?.id) {
@@ -491,7 +490,7 @@ export default function LinkSettings() {
               </div>
             </div>
             <button
-              onClick={() => copyToClipboard(`${baseUrlDelay}/${link.code}?utm_source=instagram&utm_medium=bio`, 'instagram')}
+              onClick={() => copyToClipboard(`${baseUrl}/${link.code}?utm_source=instagram&utm_medium=bio`, 'instagram')}
               className={`p-2 rounded-lg transition-all ${
                 copiedCode === 'instagram' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
@@ -500,7 +499,7 @@ export default function LinkSettings() {
             </button>
           </div>
           <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all">
-            {baseUrlDelay}/{link.code}?utm_source=instagram&utm_medium=bio
+            {baseUrl}/{link.code}?utm_source=instagram&utm_medium=bio
           </code>
         </div>
 
@@ -517,7 +516,7 @@ export default function LinkSettings() {
               </div>
             </div>
             <button
-              onClick={() => copyToClipboard(`${baseUrlDelay}/${link.code}?utm_source=google&utm_medium=cpc`, 'google')}
+              onClick={() => copyToClipboard(`${baseUrl}/${link.code}?utm_source=google&utm_medium=cpc`, 'google')}
               className={`p-2 rounded-lg transition-all ${
                 copiedCode === 'google' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
@@ -526,7 +525,7 @@ export default function LinkSettings() {
             </button>
           </div>
           <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all">
-            {baseUrlDelay}/{link.code}?utm_source=google&utm_medium=cpc
+            {baseUrl}/{link.code}?utm_source=google&utm_medium=cpc
           </code>
         </div>
 
@@ -543,7 +542,7 @@ export default function LinkSettings() {
               </div>
             </div>
             <button
-              onClick={() => copyToClipboard(`${baseUrlDelay}/${link.code}`, 'meta')}
+              onClick={() => copyToClipboard(`${baseUrl}/${link.code}`, 'meta')}
               className={`p-2 rounded-lg transition-all ${
                 copiedCode === 'meta' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
@@ -552,7 +551,7 @@ export default function LinkSettings() {
             </button>
           </div>
           <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all mb-3">
-            {baseUrlDelay}/{link.code}
+            {baseUrl}/{link.code}
           </code>
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
             <p className="text-xs text-purple-800 font-medium mb-2">Parâmetros de URL (cole no Meta Ads):</p>
@@ -585,7 +584,7 @@ export default function LinkSettings() {
               </div>
             </div>
             <button
-              onClick={() => copyToClipboard(`${baseUrlDelay}/${link.code}?utm_source=website&utm_medium=button`, 'site')}
+              onClick={() => copyToClipboard(`${baseUrl}/${link.code}?utm_source=website&utm_medium=button`, 'site')}
               className={`p-2 rounded-lg transition-all ${
                 copiedCode === 'site' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
@@ -594,7 +593,7 @@ export default function LinkSettings() {
             </button>
           </div>
           <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all">
-            {baseUrlDelay}/{link.code}?utm_source=website&utm_medium=button
+            {baseUrl}/{link.code}?utm_source=website&utm_medium=button
           </code>
         </div>
 
@@ -611,7 +610,7 @@ export default function LinkSettings() {
               </div>
             </div>
             <button
-              onClick={() => copyToClipboard(`${baseUrlDelay}/${link.code}?utm_source=offline&utm_medium=qrcode`, 'qr')}
+              onClick={() => copyToClipboard(`${baseUrl}/${link.code}?utm_source=offline&utm_medium=qrcode`, 'qr')}
               className={`p-2 rounded-lg transition-all ${
                 copiedCode === 'qr' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
@@ -620,7 +619,7 @@ export default function LinkSettings() {
             </button>
           </div>
           <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all">
-            {baseUrlDelay}/{link.code}?utm_source=offline&utm_medium=qrcode
+            {baseUrl}/{link.code}?utm_source=offline&utm_medium=qrcode
           </code>
         </div>
 
@@ -637,7 +636,7 @@ export default function LinkSettings() {
               </div>
             </div>
             <button
-              onClick={() => copyToClipboard(`${baseUrlDelay}/${link.code}?utm_source=email&utm_medium=newsletter`, 'email')}
+              onClick={() => copyToClipboard(`${baseUrl}/${link.code}?utm_source=email&utm_medium=newsletter`, 'email')}
               className={`p-2 rounded-lg transition-all ${
                 copiedCode === 'email' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
@@ -646,7 +645,7 @@ export default function LinkSettings() {
             </button>
           </div>
           <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all">
-            {baseUrlDelay}/{link.code}?utm_source=email&utm_medium=newsletter
+            {baseUrl}/{link.code}?utm_source=email&utm_medium=newsletter
           </code>
         </div>
       </div>

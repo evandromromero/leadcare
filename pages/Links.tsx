@@ -60,7 +60,7 @@ export default function Links() {
     conversionRate: 0
   });
   
-  const baseUrl = 'https://belitx.com.br/r';
+  const baseUrl = 'https://belitx.com.br/w';
 
   useEffect(() => {
     if (!clinicId) return;
@@ -111,12 +111,22 @@ export default function Links() {
   };
 
   const generateCode = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    // Apenas letras maiúsculas e números para evitar confusão
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
     for (let i = 0; i < 6; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return code;
+  };
+
+  const checkCodeExists = async (code: string): Promise<boolean> => {
+    const { data } = await (supabase as any)
+      .from('trackable_links')
+      .select('id')
+      .eq('code', code.toUpperCase())
+      .maybeSingle();
+    return !!data;
   };
 
   const openNewModal = () => {
@@ -147,11 +157,24 @@ export default function Links() {
 
   const handleSave = async () => {
     if (!formData.name || !formData.phone_number) return;
+    
+    // Converter código para maiúsculas
+    const codeUpperCase = formData.code.toUpperCase();
+    
+    // Verificar se código já existe (apenas para novos links ou se código mudou)
+    if (!editingLink || editingLink.code !== codeUpperCase) {
+      const exists = await checkCodeExists(codeUpperCase);
+      if (exists) {
+        alert('Este código já está em uso. Por favor, escolha outro código.');
+        return;
+      }
+    }
+    
     setSaving(true);
 
     const linkData = {
       clinic_id: clinicId,
-      code: formData.code,
+      code: codeUpperCase,
       name: formData.name,
       phone_number: formData.phone_number,
       message_template: formData.message_template || null,
@@ -433,8 +456,10 @@ export default function Links() {
                   <input
                     type="text"
                     value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })}
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono uppercase"
+                    maxLength={10}
+                    placeholder="Ex: ABC123"
                   />
                   <button
                     type="button"

@@ -18,6 +18,8 @@ interface LeadData {
   ad_body: string | null;
   ad_source_id: string | null;
   ad_source_type: string | null;
+  ad_source_url: string | null;
+  meta_account_id: string | null;
   meta_campaign_id: string | null;
   meta_campaign_name: string | null;
   meta_adset_id: string | null;
@@ -29,6 +31,7 @@ interface LeadData {
   utm_campaign: string | null;
   utm_content: string | null;
   utm_term: string | null;
+  gclid: string | null;
   lead_sources?: { code: string; name: string; color: string } | null;
 }
 
@@ -53,8 +56,16 @@ interface LinkClickData {
   utm_source: string | null;
   utm_medium: string | null;
   utm_campaign: string | null;
+  utm_content: string | null;
+  utm_term: string | null;
   referrer: string | null;
   ip_address: string | null;
+  fbclid: string | null;
+  gclid: string | null;
+  belitx_fbid: string | null;
+  ad_id: string | null;
+  site_source: string | null;
+  placement: string | null;
 }
 
 interface MetaEvent {
@@ -78,6 +89,17 @@ interface Payment {
   created_by_name: string | null;
 }
 
+interface TimelineEvent {
+  id: string;
+  type: 'click' | 'message' | 'response' | 'status_change' | 'payment';
+  timestamp: string;
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  metadata?: Record<string, any>;
+}
+
 const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
   const { chatId } = useParams<{ chatId: string }>();
   const navigate = useNavigate();
@@ -90,6 +112,7 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [trackableLink, setTrackableLink] = useState<TrackableLinkData | null>(null);
   const [linkClick, setLinkClick] = useState<LinkClickData | null>(null);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -103,9 +126,9 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
         .from('chats')
         .select(`
           id, client_name, phone_number, status, created_at,
-          source_id, ad_title, ad_body, ad_source_id, ad_source_type,
-          meta_campaign_id, meta_campaign_name, meta_adset_id, meta_adset_name,
-          meta_ad_id, meta_ad_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+          source_id, ad_title, ad_body, ad_source_id, ad_source_type, ad_source_url,
+          meta_account_id, meta_campaign_id, meta_campaign_name, meta_adset_id, meta_adset_name,
+          meta_ad_id, meta_ad_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, gclid,
           lead_sources!chats_source_id_fkey(code, name, color)
         `)
         .eq('id', chatId)
@@ -163,8 +186,31 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
         })) as Payment[]);
       }
       
-      // Buscar dados do link rastreável se o lead veio de um link
-      if (chatData?.source_id) {
+      // ESTRATÉGIA 1: Buscar clique diretamente pelo chat_id (mais preciso)
+      const { data: clickByChat } = await (supabase as any)
+        .from('link_clicks')
+        .select('id, clicked_at, browser, os, device_type, device_model, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, ip_address, fbclid, gclid, belitx_fbid, ad_id, site_source, placement, link_id')
+        .eq('chat_id', chatId)
+        .order('clicked_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (clickByChat) {
+        setLinkClick(clickByChat as LinkClickData);
+        
+        // Buscar dados do link associado ao clique
+        const { data: linkFromClick } = await (supabase as any)
+          .from('trackable_links')
+          .select('id, name, code, clicks_count, leads_count, utm_source, utm_medium, utm_campaign')
+          .eq('id', clickByChat.link_id)
+          .single();
+        
+        if (linkFromClick) {
+          setTrackableLink(linkFromClick as TrackableLinkData);
+        }
+      } 
+      // ESTRATÉGIA 2: Buscar pelo source_id (fallback para links antigos)
+      else if (chatData?.source_id) {
         const { data: linkData } = await (supabase as any)
           .from('trackable_links')
           .select('id, name, code, clicks_count, leads_count, utm_source, utm_medium, utm_campaign')
@@ -174,11 +220,15 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
         if (linkData) {
           setTrackableLink(linkData as TrackableLinkData);
           
-          // Buscar último clique do link (mais próximo da data de criação do lead)
+          // Buscar clique mais próximo da data de criação do lead (até 5 minutos antes)
+          const leadDate = new Date(chatData.created_at);
+          const fiveMinutesBefore = new Date(leadDate.getTime() - 5 * 60 * 1000).toISOString();
+          
           const { data: clickData } = await (supabase as any)
             .from('link_clicks')
-            .select('id, clicked_at, browser, os, device_type, device_model, utm_source, utm_medium, utm_campaign, referrer, ip_address')
+            .select('id, clicked_at, browser, os, device_type, device_model, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, ip_address, fbclid, gclid, belitx_fbid, ad_id, site_source, placement')
             .eq('link_id', linkData.id)
+            .gte('clicked_at', fiveMinutesBefore)
             .lte('clicked_at', chatData.created_at)
             .order('clicked_at', { ascending: false })
             .limit(1)
@@ -186,9 +236,140 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
           
           if (clickData) {
             setLinkClick(clickData as LinkClickData);
+          } else {
+            // Se não encontrou no intervalo, buscar o último clique do link
+            const { data: lastClick } = await (supabase as any)
+              .from('link_clicks')
+              .select('id, clicked_at, browser, os, device_type, device_model, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, ip_address, fbclid, gclid, belitx_fbid, ad_id, site_source, placement')
+              .eq('link_id', linkData.id)
+              .order('clicked_at', { ascending: false })
+              .limit(1)
+              .single();
+            
+            if (lastClick) {
+              setLinkClick(lastClick as LinkClickData);
+            }
           }
         }
       }
+      
+      // Construir Timeline de Interações
+      const timelineEvents: TimelineEvent[] = [];
+      
+      // 1. Buscar TODOS os cliques do link associados a este chat
+      const { data: allClicks } = await (supabase as any)
+        .from('link_clicks')
+        .select('id, clicked_at, browser, os, device_type, device_model, utm_source')
+        .eq('chat_id', chatId)
+        .order('clicked_at', { ascending: true });
+      
+      // Determinar a data do primeiro clique (início da jornada do link)
+      let firstClickDate: Date | null = null;
+      
+      if (allClicks && allClicks.length > 0) {
+        firstClickDate = new Date(allClicks[0].clicked_at);
+        
+        allClicks.forEach((click: any, index: number) => {
+          const deviceInfo = [click.device_type, click.os, click.browser].filter(Boolean).join(' • ');
+          timelineEvents.push({
+            id: `click_${click.id}`,
+            type: 'click',
+            timestamp: click.clicked_at,
+            title: index === 0 ? 'Clique no link rastreável' : `Retorno - Clique #${index + 1}`,
+            description: deviceInfo || 'Dispositivo não identificado',
+            icon: 'ads_click',
+            color: 'cyan',
+            metadata: { utm_source: click.utm_source }
+          });
+        });
+      }
+      
+      // 2. Buscar mensagens - se tiver clique, filtrar apenas após o primeiro clique
+      let messagesQuery = (supabase as any)
+        .from('messages')
+        .select('id, content, is_from_client, created_at, sent_by')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true })
+        .limit(50);
+      
+      const { data: messages } = await messagesQuery;
+      
+      if (messages) {
+        // Buscar nomes dos usuários que responderam
+        const userIds = [...new Set(messages.filter((m: any) => !m.is_from_client && m.sent_by).map((m: any) => m.sent_by))];
+        let usersMap: Record<string, string> = {};
+        
+        if (userIds.length > 0) {
+          const { data: users } = await supabase
+            .from('users')
+            .select('id, name')
+            .in('id', userIds as string[]);
+          
+          if (users) {
+            usersMap = users.reduce((acc: Record<string, string>, u: any) => {
+              acc[u.id] = u.name;
+              return acc;
+            }, {});
+          }
+        }
+        
+        let firstClientMsgAfterClick = true;
+        let firstResponseAfterClick = true;
+        
+        messages.forEach((msg: any) => {
+          const msgDate = new Date(msg.created_at);
+          
+          // Se tiver clique, só mostrar mensagens após o primeiro clique (com margem de 5 min antes)
+          if (firstClickDate) {
+            const marginDate = new Date(firstClickDate.getTime() - 5 * 60 * 1000); // 5 min antes do clique
+            if (msgDate < marginDate) return; // Pular mensagens antigas
+          }
+          
+          const contentPreview = msg.content?.substring(0, 80) + (msg.content?.length > 80 ? '...' : '') || '[Sem conteúdo]';
+          
+          if (msg.is_from_client) {
+            timelineEvents.push({
+              id: `msg_${msg.id}`,
+              type: 'message',
+              timestamp: msg.created_at,
+              title: firstClientMsgAfterClick ? 'Mensagem com código do link' : 'Mensagem do cliente',
+              description: contentPreview,
+              icon: 'chat',
+              color: 'blue'
+            });
+            firstClientMsgAfterClick = false;
+          } else {
+            const senderName = msg.sent_by ? usersMap[msg.sent_by] || 'Atendente' : 'Sistema';
+            timelineEvents.push({
+              id: `resp_${msg.id}`,
+              type: 'response',
+              timestamp: msg.created_at,
+              title: firstResponseAfterClick ? `Primeira resposta (${senderName})` : `Resposta de ${senderName}`,
+              description: contentPreview,
+              icon: 'reply',
+              color: 'green'
+            });
+            firstResponseAfterClick = false;
+          }
+        });
+      }
+      
+      // 3. Adicionar evento de associação ao link (se tiver source_id)
+      if (chatData && (chatData as any).source_id && firstClickDate) {
+        timelineEvents.push({
+          id: 'link_associated',
+          type: 'status_change',
+          timestamp: firstClickDate.toISOString(),
+          title: 'Lead associado ao link',
+          description: `Origem: ${trackableLink?.name || 'Link Rastreável'}`,
+          icon: 'link',
+          color: 'indigo'
+        });
+      }
+      
+      // Ordenar timeline por data
+      timelineEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      setTimeline(timelineEvents);
       
       setLoading(false);
     };
@@ -370,39 +551,161 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                 {/* Dados do Clique */}
                 {linkClick && (
                   <div className="pt-4 border-t border-slate-100">
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-3">Dados do Clique</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      {linkClick.device_type && (
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-slate-400 text-sm">
-                            {linkClick.device_type === 'mobile' ? 'smartphone' : linkClick.device_type === 'tablet' ? 'tablet' : 'computer'}
-                          </span>
-                          <span className="text-sm text-slate-700 capitalize">{linkClick.device_type}</span>
+                    <p className="text-xs text-slate-500 uppercase font-medium mb-3">Dados Capturados no Clique</p>
+                    
+                    {/* Dispositivo */}
+                    <div className="bg-slate-50 rounded-xl p-4 mb-3">
+                      <p className="text-xs text-slate-500 uppercase font-medium mb-2">Dispositivo</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        {linkClick.device_type && (
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-cyan-500 text-lg">
+                              {linkClick.device_type === 'mobile' ? 'smartphone' : linkClick.device_type === 'tablet' ? 'tablet' : 'computer'}
+                            </span>
+                            <div>
+                              <p className="text-xs text-slate-500">Tipo</p>
+                              <p className="text-sm text-slate-800 font-medium capitalize">{linkClick.device_type}</p>
+                            </div>
+                          </div>
+                        )}
+                        {linkClick.os && (
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-cyan-500 text-lg">memory</span>
+                            <div>
+                              <p className="text-xs text-slate-500">Sistema</p>
+                              <p className="text-sm text-slate-800 font-medium">{linkClick.os}</p>
+                            </div>
+                          </div>
+                        )}
+                        {linkClick.browser && (
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-cyan-500 text-lg">public</span>
+                            <div>
+                              <p className="text-xs text-slate-500">Navegador</p>
+                              <p className="text-sm text-slate-800 font-medium">{linkClick.browser}</p>
+                            </div>
+                          </div>
+                        )}
+                        {linkClick.device_model && (
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-cyan-500 text-lg">phone_android</span>
+                            <div>
+                              <p className="text-xs text-slate-500">Modelo</p>
+                              <p className="text-sm text-slate-800 font-medium">{linkClick.device_model}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* UTMs do Clique */}
+                    {(linkClick.utm_source || linkClick.utm_medium || linkClick.utm_campaign) && (
+                      <div className="bg-amber-50 rounded-xl p-4 mb-3">
+                        <p className="text-xs text-amber-700 uppercase font-medium mb-2">UTMs Capturados</p>
+                        <div className="flex flex-wrap gap-2">
+                          {linkClick.utm_source && (
+                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
+                              source: {linkClick.utm_source}
+                            </span>
+                          )}
+                          {linkClick.utm_medium && (
+                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
+                              medium: {linkClick.utm_medium}
+                            </span>
+                          )}
+                          {linkClick.utm_campaign && (
+                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
+                              campaign: {linkClick.utm_campaign}
+                            </span>
+                          )}
+                          {linkClick.utm_content && (
+                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
+                              content: {linkClick.utm_content}
+                            </span>
+                          )}
+                          {linkClick.utm_term && (
+                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
+                              term: {linkClick.utm_term}
+                            </span>
+                          )}
                         </div>
-                      )}
-                      {linkClick.os && (
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-slate-400 text-sm">settings</span>
-                          <span className="text-sm text-slate-700">{linkClick.os}</span>
+                      </div>
+                    )}
+                    
+                    {/* IDs de Rastreamento (Meta/Google) */}
+                    {(linkClick.fbclid || linkClick.gclid || linkClick.belitx_fbid) && (
+                      <div className="bg-purple-50 rounded-xl p-4 mb-3">
+                        <p className="text-xs text-purple-700 uppercase font-medium mb-2">IDs de Rastreamento</p>
+                        <div className="space-y-2">
+                          {linkClick.fbclid && (
+                            <div>
+                              <p className="text-xs text-purple-600">Facebook Click ID (fbclid)</p>
+                              <code className="text-xs bg-purple-100 px-2 py-1 rounded text-purple-800 block truncate">{linkClick.fbclid}</code>
+                            </div>
+                          )}
+                          {linkClick.gclid && (
+                            <div>
+                              <p className="text-xs text-purple-600">Google Click ID (gclid)</p>
+                              <code className="text-xs bg-purple-100 px-2 py-1 rounded text-purple-800 block truncate">{linkClick.gclid}</code>
+                            </div>
+                          )}
+                          {linkClick.belitx_fbid && (
+                            <div>
+                              <p className="text-xs text-purple-600">Belitx FB ID</p>
+                              <code className="text-xs bg-purple-100 px-2 py-1 rounded text-purple-800 block truncate">{linkClick.belitx_fbid}</code>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {linkClick.browser && (
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-slate-400 text-sm">public</span>
-                          <span className="text-sm text-slate-700">{linkClick.browser}</span>
+                      </div>
+                    )}
+                    
+                    {/* Dados do Anúncio Meta */}
+                    {(linkClick.ad_id || linkClick.site_source || linkClick.placement) && (
+                      <div className="bg-pink-50 rounded-xl p-4 mb-3">
+                        <p className="text-xs text-pink-700 uppercase font-medium mb-2">Dados do Anúncio Meta</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {linkClick.ad_id && (
+                            <div>
+                              <p className="text-xs text-pink-600">ID do Anúncio</p>
+                              <p className="text-sm text-pink-800 font-medium">{linkClick.ad_id}</p>
+                            </div>
+                          )}
+                          {linkClick.site_source && (
+                            <div>
+                              <p className="text-xs text-pink-600">Origem</p>
+                              <p className="text-sm text-pink-800 font-medium">{linkClick.site_source}</p>
+                            </div>
+                          )}
+                          {linkClick.placement && (
+                            <div className="col-span-2">
+                              <p className="text-xs text-pink-600">Posicionamento</p>
+                              <p className="text-sm text-pink-800 font-medium">{linkClick.placement}</p>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
+                    )}
+                    
+                    {/* Outras Informações */}
+                    <div className="grid grid-cols-2 gap-3 text-sm">
                       {linkClick.clicked_at && (
-                        <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-slate-400 text-sm">schedule</span>
-                          <span className="text-sm text-slate-700">{new Date(linkClick.clicked_at).toLocaleString('pt-BR')}</span>
+                        <div>
+                          <p className="text-xs text-slate-500">Data do Clique</p>
+                          <p className="text-slate-800 font-medium">{new Date(linkClick.clicked_at).toLocaleString('pt-BR')}</p>
+                        </div>
+                      )}
+                      {linkClick.ip_address && (
+                        <div>
+                          <p className="text-xs text-slate-500">IP</p>
+                          <p className="text-slate-800 font-medium">{linkClick.ip_address}</p>
                         </div>
                       )}
                     </div>
+                    
                     {linkClick.referrer && (
                       <div className="mt-3">
-                        <p className="text-xs text-slate-500 mb-1">Referrer</p>
-                        <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded truncate">{linkClick.referrer}</p>
+                        <p className="text-xs text-slate-500 mb-1">Referrer (de onde veio)</p>
+                        <p className="text-xs text-slate-600 bg-slate-100 p-2 rounded truncate">{linkClick.referrer}</p>
                       </div>
                     )}
                   </div>
@@ -411,40 +714,125 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
             </div>
           )}
 
-          {/* Card: Dados do Anúncio Meta */}
+          {/* Card: Dados do Anúncio Meta (Click to WhatsApp) */}
           {lead.ad_title && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-4 bg-gradient-to-r from-pink-600 to-purple-600">
                 <h2 className="text-white font-bold flex items-center gap-2">
                   <span className="material-symbols-outlined">campaign</span>
-                  Dados do Anúncio Meta
+                  Anúncio Meta (Click to WhatsApp)
                 </h2>
               </div>
               <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-1">Campanha</p>
-                    <p className="text-slate-800 font-medium">{lead.meta_campaign_name || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-1">Conjunto de Anúncios</p>
-                    <p className="text-slate-800 font-medium">{lead.meta_adset_name || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-1">Anúncio</p>
-                    <p className="text-slate-800 font-medium">{lead.meta_ad_name || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-1">Descrição</p>
-                    <p className="text-slate-600 text-sm">{lead.ad_title}</p>
+                {/* Hierarquia da Campanha */}
+                <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-4">
+                  <p className="text-xs text-pink-700 uppercase font-medium mb-3">Hierarquia da Campanha</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-pink-100 rounded-lg flex items-center justify-center">
+                        <span className="material-symbols-outlined text-pink-600 text-sm">flag</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-slate-500">Campanha</p>
+                        <p className="text-slate-800 font-medium">{lead.meta_campaign_name || '-'}</p>
+                        {lead.meta_campaign_id && <code className="text-xs text-pink-600">ID: {lead.meta_campaign_id}</code>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 ml-4 border-l-2 border-pink-200 pl-4">
+                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <span className="material-symbols-outlined text-purple-600 text-sm">folder</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-slate-500">Conjunto de Anúncios</p>
+                        <p className="text-slate-800 font-medium">{lead.meta_adset_name || '-'}</p>
+                        {lead.meta_adset_id && <code className="text-xs text-purple-600">ID: {lead.meta_adset_id}</code>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 ml-8 border-l-2 border-purple-200 pl-4">
+                      <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                        <span className="material-symbols-outlined text-indigo-600 text-sm">ads_click</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-slate-500">Anúncio</p>
+                        <p className="text-slate-800 font-medium">{lead.meta_ad_name || '-'}</p>
+                        {lead.meta_ad_id && <code className="text-xs text-indigo-600">ID: {lead.meta_ad_id}</code>}
+                      </div>
+                    </div>
                   </div>
                 </div>
-                {lead.ad_source_id && (
-                  <div className="pt-4 border-t border-slate-100">
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-1">ID do Anúncio</p>
-                    <code className="text-xs bg-slate-100 px-2 py-1 rounded">{lead.ad_source_id}</code>
+                
+                {/* Conteúdo do Anúncio */}
+                <div>
+                  <p className="text-xs text-slate-500 uppercase font-medium mb-2">Título do Anúncio</p>
+                  <p className="text-slate-800 font-medium">{lead.ad_title}</p>
+                </div>
+                
+                {lead.ad_body && (
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase font-medium mb-2">Texto do Anúncio</p>
+                    <p className="text-slate-600 text-sm whitespace-pre-wrap bg-slate-50 p-3 rounded-lg max-h-40 overflow-y-auto">{lead.ad_body}</p>
                   </div>
                 )}
+                
+                {/* Link do Post/Anúncio */}
+                {lead.ad_source_url && (
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase font-medium mb-2">Link do Anúncio</p>
+                    <a 
+                      href={lead.ad_source_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-sm text-pink-600 hover:text-pink-700 flex items-center gap-1 truncate"
+                    >
+                      <span className="material-symbols-outlined text-sm">open_in_new</span>
+                      {lead.ad_source_url}
+                    </a>
+                  </div>
+                )}
+                
+                {/* IDs Técnicos */}
+                <div className="pt-4 border-t border-slate-100">
+                  <p className="text-xs text-slate-500 uppercase font-medium mb-2">IDs Técnicos</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {lead.ad_source_id && (
+                      <div>
+                        <p className="text-slate-500">ad_source_id</p>
+                        <code className="bg-slate-100 px-2 py-1 rounded block truncate">{lead.ad_source_id}</code>
+                      </div>
+                    )}
+                    {lead.ad_source_type && (
+                      <div>
+                        <p className="text-slate-500">ad_source_type</p>
+                        <code className="bg-slate-100 px-2 py-1 rounded block">{lead.ad_source_type}</code>
+                      </div>
+                    )}
+                    {lead.meta_account_id && (
+                      <div>
+                        <p className="text-slate-500">meta_account_id</p>
+                        <code className="bg-slate-100 px-2 py-1 rounded block truncate">{lead.meta_account_id}</code>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Card: Google Ads (gclid) */}
+          {lead.gclid && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-4 bg-gradient-to-r from-blue-500 to-green-500">
+                <h2 className="text-white font-bold flex items-center gap-2">
+                  <span className="material-symbols-outlined">ads_click</span>
+                  Google Ads
+                </h2>
+              </div>
+              <div className="p-6">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase font-medium mb-2">Google Click ID (gclid)</p>
+                  <code className="text-xs bg-slate-100 px-3 py-2 rounded-lg block break-all">{lead.gclid}</code>
+                  <p className="text-xs text-slate-500 mt-2">Este lead veio de um anúncio do Google Ads</p>
+                </div>
               </div>
             </div>
           )}
@@ -552,6 +940,64 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card: Timeline de Interações */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-violet-600 to-purple-600">
+              <h2 className="text-white font-bold flex items-center gap-2">
+                <span className="material-symbols-outlined">timeline</span>
+                Timeline de Interações
+              </h2>
+            </div>
+            <div className="p-4">
+              {timeline.length === 0 ? (
+                <div className="text-center py-6">
+                  <span className="material-symbols-outlined text-4xl text-slate-300">history</span>
+                  <p className="text-slate-500 mt-2">Nenhuma interação registrada</p>
+                </div>
+              ) : (
+                <div className="relative">
+                  <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200"></div>
+                  <div className="space-y-4">
+                    {timeline.map((event, index) => {
+                      const colorClasses: Record<string, string> = {
+                        cyan: 'bg-cyan-100 text-cyan-600 border-cyan-300',
+                        blue: 'bg-blue-100 text-blue-600 border-blue-300',
+                        green: 'bg-green-100 text-green-600 border-green-300',
+                        indigo: 'bg-indigo-100 text-indigo-600 border-indigo-300',
+                        amber: 'bg-amber-100 text-amber-600 border-amber-300',
+                      };
+                      const bgColor = colorClasses[event.color] || colorClasses.indigo;
+                      
+                      return (
+                        <div key={event.id} className="relative pl-10">
+                          <div className={`absolute left-2 w-5 h-5 rounded-full border-2 flex items-center justify-center ${bgColor}`}>
+                            <span className="material-symbols-outlined text-xs">{event.icon}</span>
+                          </div>
+                          <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-slate-800 text-sm">{event.title}</p>
+                                <p className="text-xs text-slate-500 mt-0.5 truncate">{event.description}</p>
+                              </div>
+                              <span className="text-xs text-slate-400 whitespace-nowrap">
+                                {new Date(event.timestamp).toLocaleDateString('pt-BR')} {new Date(event.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            {event.metadata?.utm_source && (
+                              <span className="inline-block mt-2 px-2 py-0.5 bg-cyan-50 text-cyan-600 text-xs rounded">
+                                {event.metadata.utm_source}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

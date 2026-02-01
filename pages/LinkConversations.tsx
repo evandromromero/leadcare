@@ -15,6 +15,8 @@ interface Conversation {
   responded_by_name: string | null;
   response_time_seconds: number | null;
   click_count: number;
+  first_click_at: string | null;
+  last_click_at: string | null;
   utm_source: string | null;
   utm_medium: string | null;
   utm_campaign: string | null;
@@ -35,6 +37,23 @@ interface OriginStats {
   naoRastreada: number;
 }
 
+interface ClickInteraction {
+  id: string;
+  clicked_at: string;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  device_type: string | null;
+  browser: string | null;
+  os: string | null;
+  referrer: string | null;
+  ip_address: string | null;
+  first_message_after?: string | null;
+  response_time_seconds?: number | null;
+  responded_by_name?: string | null;
+}
+
 export default function LinkConversations() {
   const { linkId } = useParams<{ linkId: string }>();
   const navigate = useNavigate();
@@ -53,6 +72,11 @@ export default function LinkConversations() {
   
   // Filtro de data
   const [dateFilter, setDateFilter] = useState<'today' | '7d' | '15d' | '30d'>('30d');
+  
+  // Modal de histórico
+  const [historyModal, setHistoryModal] = useState<{ open: boolean; chatId: string | null; clientName: string }>({ open: false, chatId: null, clientName: '' });
+  const [historyData, setHistoryData] = useState<ClickInteraction[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     if (linkId && clinic?.id) {
@@ -77,14 +101,14 @@ export default function LinkConversations() {
   const fetchConversations = async () => {
     setLoading(true);
     
-    // Buscar o link para pegar o source_id
+    // Buscar o link para pegar o código e source_id
     const { data: linkData } = await supabase
       .from('trackable_links')
-      .select('source_id')
+      .select('code, source_id')
       .eq('id', linkId)
       .single();
     
-    if (!linkData?.source_id) {
+    if (!linkData) {
       setLoading(false);
       return;
     }
@@ -99,7 +123,48 @@ export default function LinkConversations() {
       startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
     }
 
-    // Buscar chats que vieram deste link (pelo source_id)
+    // Estratégia 1: Buscar mensagens com o código do link [CODIGO] no período selecionado
+    // Isso captura tanto clientes novos quanto antigos que viram uma publicação
+    const { data: messagesWithCode } = await (supabase as any)
+      .from('messages')
+      .select('chat_id, created_at')
+      .ilike('content', `%[${linkData.code}]%`)
+      .gte('created_at', startDate.toISOString());
+    
+    const chatIdsFromMessages = [...new Set((messagesWithCode || []).map((m: any) => m.chat_id))];
+    
+    // Estratégia 2: Buscar chats pelo source_id (se existir) - criados no período
+    let chatIdsFromSource: string[] = [];
+    if (linkData.source_id) {
+      const { data: chatsFromSource } = await supabase
+        .from('chats')
+        .select('id')
+        .eq('clinic_id', clinic?.id)
+        .eq('source_id', linkData.source_id)
+        .gte('created_at', startDate.toISOString());
+      chatIdsFromSource = (chatsFromSource || []).map((c: any) => c.id);
+    }
+    
+    // Estratégia 3: Buscar link_clicks no período que têm chat_id
+    const { data: clicksWithChat } = await (supabase as any)
+      .from('link_clicks')
+      .select('chat_id')
+      .eq('link_id', linkId)
+      .not('chat_id', 'is', null)
+      .gte('clicked_at', startDate.toISOString());
+    const chatIdsFromClicks = [...new Set((clicksWithChat || []).map((c: any) => c.chat_id))];
+    
+    // Combinar todos os chat_ids únicos
+    const allChatIds = [...new Set([...chatIdsFromMessages, ...chatIdsFromSource, ...chatIdsFromClicks])];
+    
+    if (allChatIds.length === 0) {
+      setConversations([]);
+      setStats({ total: 0, metaAds: 0, googleAds: 0, outras: 0, naoRastreada: 0 });
+      setLoading(false);
+      return;
+    }
+
+    // Buscar detalhes dos chats (sem filtro de data, pois o chat pode ser antigo)
     const { data: chatsData } = await supabase
       .from('chats')
       .select(`
@@ -111,9 +176,8 @@ export default function LinkConversations() {
         updated_at
       `)
       .eq('clinic_id', clinic?.id)
-      .eq('source_id', linkData.source_id)
-      .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: false });
+      .in('id', allChatIds)
+      .order('updated_at', { ascending: false });
 
     if (!chatsData || chatsData.length === 0) {
       setConversations([]);
@@ -125,55 +189,84 @@ export default function LinkConversations() {
     // Para cada chat, buscar informações adicionais
     const conversationsWithDetails = await Promise.all(
       chatsData.map(async (chat: any) => {
-        // Buscar cliques do link para este telefone
-        const { data: clicksData } = await supabase
+        // Buscar cliques do link para este chat (por chat_id OU phone_number)
+        const { data: clicksByChat } = await (supabase as any)
           .from('link_clicks')
           .select('id, utm_source, utm_medium, utm_campaign, clicked_at')
           .eq('link_id', linkId)
-          .ilike('phone_number', `%${chat.phone_number.replace(/\D/g, '').slice(-8)}%`)
+          .eq('chat_id', chat.id)
           .order('clicked_at', { ascending: true });
+        
+        // Se não encontrou por chat_id, tentar por phone_number (fallback)
+        let clicksData = clicksByChat;
+        if ((!clicksData || clicksData.length === 0) && chat.phone_number) {
+          const { data: clicksByPhone } = await (supabase as any)
+            .from('link_clicks')
+            .select('id, utm_source, utm_medium, utm_campaign, clicked_at')
+            .eq('link_id', linkId)
+            .ilike('phone_number', `%${chat.phone_number.replace(/\D/g, '').slice(-8)}%`)
+            .order('clicked_at', { ascending: true });
+          clicksData = clicksByPhone;
+        }
 
         const clickCount = clicksData?.length || 0;
         const firstClick = clicksData?.[0];
+        const lastClick = clicksData && clicksData.length > 0 ? clicksData[clicksData.length - 1] : null;
         
-        // Buscar primeira mensagem do cliente
-        const { data: firstClientMsg } = await supabase
-          .from('messages')
-          .select('created_at')
-          .eq('chat_id', chat.id)
-          .eq('is_from_me', false)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .single();
-
-        // Buscar primeira resposta da clínica
-        const { data: firstResponse } = await supabase
-          .from('messages')
-          .select('created_at, sender_id')
-          .eq('chat_id', chat.id)
-          .eq('is_from_me', true)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .single();
-
+        // Para remarketing: usar dados do ÚLTIMO clique, não do primeiro
+        // Buscar primeira mensagem do cliente APÓS o último clique
         let respondedByName = null;
         let responseTimeSeconds = null;
-
-        if (firstResponse?.sender_id) {
-          // Buscar nome do usuário que respondeu
-          const { data: userData } = await supabase
-            .from('users')
-            .select('name')
-            .eq('id', firstResponse.sender_id)
+        let firstMsgAfterLastClick = null;
+        let firstResponseAfterLastClick = null;
+        
+        if (lastClick) {
+          const lastClickTime = new Date(lastClick.clicked_at);
+          // Margem de 1 minuto antes do clique para compensar delay
+          const marginTime = new Date(lastClickTime.getTime() - 60 * 1000);
+          
+          // Buscar primeira mensagem do cliente após o último clique
+          const { data: clientMsg } = await (supabase as any)
+            .from('messages')
+            .select('created_at')
+            .eq('chat_id', chat.id)
+            .eq('is_from_client', true)
+            .gte('created_at', marginTime.toISOString())
+            .order('created_at', { ascending: true })
+            .limit(1)
             .single();
           
-          respondedByName = userData?.name || null;
-        }
-
-        if (firstClientMsg?.created_at && firstResponse?.created_at) {
-          const clientMsgTime = new Date(firstClientMsg.created_at).getTime();
-          const responseTime = new Date(firstResponse.created_at).getTime();
-          responseTimeSeconds = Math.floor((responseTime - clientMsgTime) / 1000);
+          firstMsgAfterLastClick = clientMsg;
+          
+          if (clientMsg) {
+            // Buscar primeira resposta APÓS essa mensagem do cliente
+            const { data: response } = await (supabase as any)
+              .from('messages')
+              .select('created_at, sent_by')
+              .eq('chat_id', chat.id)
+              .eq('is_from_client', false)
+              .gte('created_at', clientMsg.created_at)
+              .order('created_at', { ascending: true })
+              .limit(1)
+              .single();
+            
+            firstResponseAfterLastClick = response;
+            
+            if (response?.sent_by) {
+              const { data: userData } = await supabase
+                .from('users')
+                .select('name')
+                .eq('id', response.sent_by)
+                .single();
+              respondedByName = (userData as any)?.name || null;
+            }
+            
+            if (response?.created_at) {
+              const clientMsgTime = new Date(clientMsg.created_at).getTime();
+              const responseTime = new Date(response.created_at).getTime();
+              responseTimeSeconds = Math.floor((responseTime - clientMsgTime) / 1000);
+            }
+          }
         }
 
         return {
@@ -183,15 +276,17 @@ export default function LinkConversations() {
           status: chat.status,
           created_at: chat.created_at,
           updated_at: chat.updated_at,
-          first_message_at: firstClientMsg?.created_at || null,
-          first_response_at: firstResponse?.created_at || null,
-          responded_by: firstResponse?.sender_id || null,
+          first_message_at: firstMsgAfterLastClick?.created_at || null,
+          first_response_at: firstResponseAfterLastClick?.created_at || null,
+          responded_by: firstResponseAfterLastClick?.sent_by || null,
           responded_by_name: respondedByName,
           response_time_seconds: responseTimeSeconds,
           click_count: clickCount,
-          utm_source: firstClick?.utm_source || null,
-          utm_medium: firstClick?.utm_medium || null,
-          utm_campaign: firstClick?.utm_campaign || null,
+          first_click_at: firstClick?.clicked_at || null,
+          last_click_at: lastClick?.clicked_at || null,
+          utm_source: lastClick?.utm_source || null,
+          utm_medium: lastClick?.utm_medium || null,
+          utm_campaign: lastClick?.utm_campaign || null,
         };
       })
     );
@@ -233,14 +328,128 @@ export default function LinkConversations() {
     return `${Math.floor(seconds / 86400)}d`;
   };
 
+  // Buscar histórico de interações (cliques) de um contato
+  const fetchContactHistory = async (chatId: string, clientName: string) => {
+    setHistoryModal({ open: true, chatId, clientName });
+    setLoadingHistory(true);
+    setHistoryData([]);
+    
+    try {
+      // Buscar todos os cliques deste chat
+      const { data: clicks } = await (supabase as any)
+        .from('link_clicks')
+        .select('id, clicked_at, utm_source, utm_medium, utm_campaign, utm_content, device_type, browser, os, referrer, ip_address')
+        .eq('link_id', linkId)
+        .eq('chat_id', chatId)
+        .order('clicked_at', { ascending: false });
+      
+      if (!clicks || clicks.length === 0) {
+        setHistoryData([]);
+        setLoadingHistory(false);
+        return;
+      }
+      
+      // Para cada clique, buscar a primeira mensagem após o clique e a resposta
+      const clicksWithDetails = await Promise.all(
+        clicks.map(async (click: any) => {
+          const clickTime = new Date(click.clicked_at);
+          
+          // Buscar primeira mensagem do cliente após o clique (com margem de 1 min antes para compensar delay)
+          const marginTime = new Date(clickTime.getTime() - 60 * 1000);
+          const { data: firstMsg } = await (supabase as any)
+            .from('messages')
+            .select('id, created_at, content')
+            .eq('chat_id', chatId)
+            .eq('is_from_client', true)
+            .gte('created_at', marginTime.toISOString())
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .single();
+          
+          let responseTimeSeconds = null;
+          let respondedByName = null;
+          
+          if (firstMsg) {
+            // Buscar primeira resposta após a mensagem do cliente
+            const { data: firstResponse } = await (supabase as any)
+              .from('messages')
+              .select('id, created_at, sent_by')
+              .eq('chat_id', chatId)
+              .eq('is_from_client', false)
+              .gte('created_at', firstMsg.created_at)
+              .order('created_at', { ascending: true })
+              .limit(1)
+              .single();
+            
+            if (firstResponse) {
+              const msgTime = new Date(firstMsg.created_at).getTime();
+              const respTime = new Date(firstResponse.created_at).getTime();
+              responseTimeSeconds = Math.floor((respTime - msgTime) / 1000);
+              
+              if (firstResponse.sent_by) {
+                const { data: userData } = await supabase
+                  .from('users')
+                  .select('name')
+                  .eq('id', firstResponse.sent_by)
+                  .single();
+                respondedByName = (userData as any)?.name || null;
+              }
+            }
+          }
+          
+          return {
+            ...click,
+            first_message_after: firstMsg?.created_at || null,
+            response_time_seconds: responseTimeSeconds,
+            responded_by_name: respondedByName
+          };
+        })
+      );
+      
+      setHistoryData(clicksWithDetails);
+    } catch (error) {
+      console.error('Erro ao buscar histórico:', error);
+    }
+    
+    setLoadingHistory(false);
+  };
+
+  const getSourceBadge = (source: string | null) => {
+    const s = (source || '').toLowerCase();
+    if (s.includes('instagram') || s === 'ig') {
+      return <span className="px-2 py-0.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded text-xs">Instagram</span>;
+    }
+    if (s.includes('facebook') || s === 'fb') {
+      return <span className="px-2 py-0.5 bg-blue-600 text-white rounded text-xs">Facebook</span>;
+    }
+    if (s.includes('google')) {
+      return <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">Google</span>;
+    }
+    if (source) {
+      return <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">{source}</span>;
+    }
+    return <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">Direto</span>;
+  };
+
   const getOriginBadge = (conv: Conversation) => {
     const source = (conv.utm_source || '').toLowerCase();
-    if (source.includes('facebook') || source.includes('instagram') || source.includes('fb') || source.includes('ig')) {
-      return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">Meta Ads</span>;
-    } else if (source.includes('google') || source.includes('gclid')) {
+    const medium = (conv.utm_medium || '').toLowerCase();
+    
+    // Instagram específico
+    if (source.includes('instagram') || source === 'ig') {
+      return <span className="px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded text-xs font-medium">Instagram</span>;
+    }
+    // Facebook específico
+    if (source.includes('facebook') || source === 'fb') {
+      return <span className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium">Facebook</span>;
+    }
+    // Google Ads
+    if (source.includes('google') || source.includes('gclid')) {
       return <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-medium">Google Ads</span>;
-    } else if (conv.utm_source || conv.utm_medium || conv.utm_campaign) {
-      return <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">Outras</span>;
+    }
+    // Outras origens rastreadas
+    if (conv.utm_source || conv.utm_medium || conv.utm_campaign) {
+      return <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">{conv.utm_source || medium || 'Outras'}</span>;
     }
     return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-medium">Não Rastreada</span>;
   };
@@ -314,7 +523,7 @@ export default function LinkConversations() {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-slate-800">Conversas do Link</h1>
-            {link && <p className="text-sm text-slate-500">{link.name} • belitx.com.br/r/{link.code}</p>}
+            {link && <p className="text-sm text-slate-500">{link.name} • belitx.com.br/w/{link.code}</p>}
           </div>
         </div>
       </div>
@@ -454,8 +663,8 @@ export default function LinkConversations() {
                     <th className="text-left py-3 px-4 font-medium text-slate-500 text-sm">Respondido por</th>
                     <th className="text-center py-3 px-4 font-medium text-slate-500 text-sm">Tempo Resp.</th>
                     <th className="text-center py-3 px-4 font-medium text-slate-500 text-sm">Cliques</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-500 text-sm">Primeira Msg</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-500 text-sm">Última Msg</th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-500 text-sm">1º Clique</th>
+                    <th className="text-left py-3 px-4 font-medium text-slate-500 text-sm">Último Clique</th>
                     <th className="text-center py-3 px-4 font-medium text-slate-500 text-sm">Ações</th>
                   </tr>
                 </thead>
@@ -494,10 +703,20 @@ export default function LinkConversations() {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-sm text-slate-600">
-                        {conv.first_message_at ? new Date(conv.first_message_at).toLocaleDateString('pt-BR') : '-'}
+                        {conv.first_click_at ? (
+                          <div>
+                            <p>{new Date(conv.first_click_at).toLocaleDateString('pt-BR')}</p>
+                            <p className="text-xs text-slate-400">{new Date(conv.first_click_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                        ) : '-'}
                       </td>
                       <td className="py-3 px-4 text-sm text-slate-600">
-                        {new Date(conv.updated_at).toLocaleDateString('pt-BR')}
+                        {conv.last_click_at ? (
+                          <div>
+                            <p>{new Date(conv.last_click_at).toLocaleDateString('pt-BR')}</p>
+                            <p className="text-xs text-slate-400">{new Date(conv.last_click_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                        ) : '-'}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-center gap-1">
@@ -509,6 +728,13 @@ export default function LinkConversations() {
                             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                             </svg>
+                          </button>
+                          <button
+                            onClick={() => fetchContactHistory(conv.id, conv.client_name)}
+                            className="p-1.5 hover:bg-cyan-50 rounded text-cyan-600"
+                            title="Ver histórico de contatos"
+                          >
+                            <span className="material-symbols-outlined text-lg">history</span>
                           </button>
                           <button
                             onClick={() => navigate(`/lead/${conv.id}`)}
@@ -563,6 +789,111 @@ export default function LinkConversations() {
           </>
         )}
       </div>
+
+      {/* Modal de Histórico de Contatos */}
+      {historyModal.open && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Histórico de Contatos</h3>
+                <p className="text-sm text-slate-500">{historyModal.clientName}</p>
+              </div>
+              <button
+                onClick={() => setHistoryModal({ open: false, chatId: null, clientName: '' })}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              {loadingHistory ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
+                </div>
+              ) : historyData.length === 0 ? (
+                <div className="text-center py-12">
+                  <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">history</span>
+                  <p className="text-slate-500">Nenhum clique registrado para este contato.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {historyData.map((click, index) => (
+                    <div 
+                      key={click.id} 
+                      className={`border rounded-xl p-4 ${index === 0 ? 'border-cyan-300 bg-cyan-50/50' : 'border-slate-200'}`}
+                    >
+                      {/* Header do clique */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${index === 0 ? 'bg-cyan-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                            {historyData.length - index}
+                          </span>
+                          <span className="font-medium text-slate-900">
+                            {index === 0 ? 'Último Contato' : `Contato #${historyData.length - index}`}
+                          </span>
+                          {index === 0 && (
+                            <span className="px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded text-xs font-medium">Mais recente</span>
+                          )}
+                        </div>
+                        {getSourceBadge(click.utm_source)}
+                      </div>
+                      
+                      {/* Dados do clique */}
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-slate-500 text-xs mb-0.5">Data do Clique</p>
+                          <p className="font-medium text-slate-900">
+                            {new Date(click.clicked_at).toLocaleDateString('pt-BR')} às {new Date(click.clicked_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-500 text-xs mb-0.5">Tempo de Resposta</p>
+                          <p className={`font-medium ${click.response_time_seconds !== null ? (click.response_time_seconds <= 300 ? 'text-green-600' : click.response_time_seconds <= 1800 ? 'text-amber-600' : 'text-red-600') : 'text-slate-400'}`}>
+                            {click.response_time_seconds !== null ? formatResponseTime(click.response_time_seconds) : 'Sem resposta'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-slate-500 text-xs mb-0.5">Respondido por</p>
+                          <p className="font-medium text-slate-900">{click.responded_by_name || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-500 text-xs mb-0.5">Dispositivo</p>
+                          <p className="font-medium text-slate-900">{click.device_type || '-'} {click.os ? `(${click.os})` : ''}</p>
+                        </div>
+                      </div>
+                      
+                      {/* UTMs */}
+                      {(click.utm_medium || click.utm_campaign || click.utm_content) && (
+                        <div className="mt-3 pt-3 border-t border-slate-100">
+                          <p className="text-slate-500 text-xs mb-1">UTMs Capturados</p>
+                          <div className="flex flex-wrap gap-1">
+                            {click.utm_source && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">source: {click.utm_source}</span>}
+                            {click.utm_medium && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">medium: {click.utm_medium}</span>}
+                            {click.utm_campaign && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">campaign: {click.utm_campaign}</span>}
+                            {click.utm_content && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">content: {click.utm_content}</span>}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Referrer */}
+                      {click.referrer && (
+                        <div className="mt-2">
+                          <p className="text-slate-500 text-xs mb-0.5">Referrer</p>
+                          <p className="text-xs text-slate-600 truncate">{click.referrer}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

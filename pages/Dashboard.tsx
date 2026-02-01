@@ -53,7 +53,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const [loadingStats, setLoadingStats] = useState(true);
   
   // Filtro de período para Leads por Origem
-  const [sourcesPeriodFilter, setSourcesPeriodFilter] = useState<'today' | 'all' | '7d' | '30d' | 'month'>('7d');
+  const [sourcesPeriodFilter, setSourcesPeriodFilter] = useState<'today' | 'yesterday' | 'all' | '7d' | '30d' | 'month'>('7d');
   
   // Paginação para Leads por Origem
   const [sourcesPage, setSourcesPage] = useState(1);
@@ -406,17 +406,40 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             .eq('clinic_id', clinicId)
             .is('payment_id', null);
           
+          // Buscar cliques de links para identificar atividade recente (remarketing)
+          const { data: linkClicksData } = await (supabase as any)
+            .from('link_clicks')
+            .select('chat_id, clicked_at')
+            .eq('clinic_id', clinicId)
+            .not('chat_id', 'is', null);
+          
+          // Criar mapa de último clique por chat_id
+          const lastClickByChat: Record<string, Date> = {};
+          if (linkClicksData) {
+            linkClicksData.forEach((click: any) => {
+              const clickDate = new Date(click.clicked_at);
+              if (!lastClickByChat[click.chat_id] || clickDate > lastClickByChat[click.chat_id]) {
+                lastClickByChat[click.chat_id] = clickDate;
+              }
+            });
+          }
+          
           if (sourcesData && sourcesData.length > 0) {
-            // Função para filtrar chats por período
-            const getFilteredChats = (allChats: any[], period: 'today' | 'all' | '7d' | '30d' | 'month') => {
+            // Função para filtrar chats por período (considera criação OU último clique)
+            const getFilteredChats = (allChats: any[], period: 'today' | 'yesterday' | 'all' | '7d' | '30d' | 'month') => {
               if (period === 'all') return allChats;
               
               const now = new Date();
               let startDate: Date;
+              let endDate: Date | null = null;
               
               switch (period) {
                 case 'today':
                   startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  break;
+                case 'yesterday':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+                  endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                   break;
                 case '7d':
                   startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -431,19 +454,40 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                   return allChats;
               }
               
-              return allChats.filter(c => new Date(c.created_at) >= startDate);
+              // Filtrar por criação OU último clique no período (remarketing)
+              return allChats.filter(c => {
+                const createdAt = new Date(c.created_at);
+                const lastClick = lastClickByChat[c.id];
+                
+                if (endDate) {
+                  // Para períodos com fim (ex: ontem)
+                  const createdInPeriod = createdAt >= startDate && createdAt < endDate;
+                  const clickedInPeriod = lastClick && lastClick >= startDate && lastClick < endDate;
+                  return createdInPeriod || clickedInPeriod;
+                } else {
+                  // Para períodos abertos (ex: hoje, 7d, 30d)
+                  const createdInPeriod = createdAt >= startDate;
+                  const clickedInPeriod = lastClick && lastClick >= startDate;
+                  return createdInPeriod || clickedInPeriod;
+                }
+              });
             };
             
             // Função para filtrar payments por período
-            const getFilteredPayments = (allPayments: any[], period: 'today' | 'all' | '7d' | '30d' | 'month') => {
+            const getFilteredPayments = (allPayments: any[], period: 'today' | 'yesterday' | 'all' | '7d' | '30d' | 'month') => {
               if (period === 'all') return allPayments;
               
               const now = new Date();
               let startDate: Date;
+              let endDate: Date | null = null;
               
               switch (period) {
                 case 'today':
                   startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  break;
+                case 'yesterday':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+                  endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                   break;
                 case '7d':
                   startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -458,6 +502,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                   return allPayments;
               }
               
+              if (endDate) {
+                return allPayments.filter(p => {
+                  const d = new Date(p.payment_date);
+                  return d >= startDate && d < endDate;
+                });
+              }
               return allPayments.filter(p => new Date(p.payment_date) >= startDate);
             };
             
@@ -2087,6 +2137,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                   }`}
                 >
                   Hoje
+                </button>
+                <button
+                  onClick={() => { setSourcesPeriodFilter('yesterday'); setSourcesPage(1); }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    sourcesPeriodFilter === 'yesterday' 
+                      ? 'bg-cyan-100 text-cyan-700' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Ontem
                 </button>
                 <button
                   onClick={() => { setSourcesPeriodFilter('7d'); setSourcesPage(1); }}
