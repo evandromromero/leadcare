@@ -1,0 +1,1088 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+
+interface LeadItem {
+  id: string;
+  client_name: string;
+  phone_number: string;
+  status: string;
+  created_at: string;
+  ad_source_id: string | null;
+  meta_ad_name: string | null;
+  meta_campaign_name: string | null;
+  source_id: string | null;
+  assigned_to: string | null;
+  lead_sources?: { id: string; name: string; code: string } | null;
+  users?: { id: string; name: string } | null;
+  total_payments?: number;
+  // Novos campos para resposta
+  responded_by_name?: string | null;
+  response_time_seconds?: number | null;
+  is_remarketing?: boolean;
+  is_returning_client?: boolean;
+}
+
+interface Props {
+  clinicId: string;
+}
+
+type OriginType = 'all' | 'meta' | 'link' | 'source' | 'organic';
+type PeriodType = 'today' | 'yesterday' | '7d' | '30d' | 'custom';
+
+export default function DashboardLeadsTab({ clinicId }: Props) {
+  const [leads, setLeads] = useState<LeadItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<PeriodType>('today');
+  const [originFilter, setOriginFilter] = useState<OriginType>('all');
+  const [selectedLead, setSelectedLead] = useState<LeadItem | null>(null);
+  const [customDate, setCustomDate] = useState<string>('');
+  const [trackableLinkSourceIds, setTrackableLinkSourceIds] = useState<Set<string>>(new Set());
+  const [paymentsMap, setPaymentsMap] = useState<Record<string, number>>({});
+  const [paymentCreatorsMap, setPaymentCreatorsMap] = useState<Record<string, string>>({});
+  const [tagsMap, setTagsMap] = useState<Record<string, Array<{ name: string; color: string }>>>({});
+  const [selectedLeadPayments, setSelectedLeadPayments] = useState<Array<{
+    id: string;
+    value: number;
+    description: string | null;
+    payment_date: string;
+    payment_method: string | null;
+    status: string;
+    created_at: string;
+    created_by_name: string | null;
+  }>>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const [responseDataMap, setResponseDataMap] = useState<Record<string, { responded_by: string | null; response_time: number | null }>>({});
+
+  // Buscar links rastreáveis para identificar tipo 'link'
+  useEffect(() => {
+    if (!clinicId) return;
+    
+    const fetchTrackableLinks = async () => {
+      const { data } = await (supabase as any)
+        .from('trackable_links')
+        .select('source_id')
+        .eq('clinic_id', clinicId);
+      
+      if (data) {
+        setTrackableLinkSourceIds(new Set(data.map((l: any) => l.source_id).filter(Boolean)));
+      }
+    };
+    
+    fetchTrackableLinks();
+  }, [clinicId]);
+
+  useEffect(() => {
+    if (!clinicId) return;
+    
+    const fetchLeads = async () => {
+      setLoading(true);
+      
+      // Calcular data de início e fim baseado no período
+      const now = new Date();
+      let startDate: Date;
+      let endDate: Date | null = null;
+      
+      if (period === 'today') {
+        startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+      } else if (period === 'yesterday') {
+        startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - 1);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(startDate);
+        endDate.setHours(23, 59, 59, 999);
+      } else if (period === '7d') {
+        startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - 7);
+      } else if (period === '30d') {
+        startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - 30);
+      } else if (period === 'custom' && customDate) {
+        startDate = new Date(customDate + 'T00:00:00');
+        endDate = new Date(customDate + 'T23:59:59');
+      } else {
+        startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+      }
+      
+      let query = (supabase as any)
+        .from('chats')
+        .select('id, client_name, phone_number, status, created_at, ad_source_id, meta_ad_name, meta_campaign_name, source_id, assigned_to, lead_sources(id, name, code), users:assigned_to(id, name)')
+        .eq('clinic_id', clinicId)
+        .eq('is_group', false)
+        .gte('created_at', startDate.toISOString());
+      
+      if (endDate) {
+        query = query.lte('created_at', endDate.toISOString());
+      }
+      
+      const { data } = await query.order('created_at', { ascending: false });
+      
+      if (data) {
+        setLeads(data);
+        
+        // Buscar pagamentos de todos os leads com o criador (em lotes para evitar URL muito longa)
+        const chatIds = data.map((l: LeadItem) => l.id);
+        if (chatIds.length > 0) {
+          const valueMap: Record<string, number> = {};
+          const creatorIds = new Set<string>();
+          const allPayments: any[] = [];
+          
+          // Dividir em lotes de 50 para evitar erro 400
+          const batchSize = 50;
+          for (let i = 0; i < chatIds.length; i += batchSize) {
+            const batch = chatIds.slice(i, i + batchSize);
+            const { data: payments } = await (supabase as any)
+              .from('payments')
+              .select('chat_id, value, created_by')
+              .in('chat_id', batch)
+              .neq('status', 'cancelled');
+            
+            if (payments) {
+              allPayments.push(...payments);
+            }
+          }
+          
+          if (allPayments.length > 0) {
+            allPayments.forEach((p: any) => {
+              const paymentValue = parseFloat(p.value) || 0;
+              valueMap[p.chat_id] = (valueMap[p.chat_id] || 0) + paymentValue;
+              if (p.created_by) {
+                creatorIds.add(p.created_by);
+              }
+            });
+            setPaymentsMap(valueMap);
+            
+            // Buscar nomes dos usuários separadamente
+            if (creatorIds.size > 0) {
+              const { data: usersData } = await (supabase as any)
+                .from('users')
+                .select('id, name')
+                .in('id', Array.from(creatorIds));
+              
+              if (usersData) {
+                const usersMap: Record<string, string> = {};
+                usersData.forEach((u: any) => {
+                  usersMap[u.id] = u.name;
+                });
+                
+                const creatorMap: Record<string, string> = {};
+                allPayments.forEach((p: any) => {
+                  if (p.created_by && usersMap[p.created_by]) {
+                    creatorMap[p.chat_id] = usersMap[p.created_by];
+                  }
+                });
+                setPaymentCreatorsMap(creatorMap);
+              }
+            }
+          }
+          
+          // Buscar tags de todos os leads (em lotes)
+          const tagsMapTemp: Record<string, Array<{ name: string; color: string }>> = {};
+          for (let i = 0; i < chatIds.length; i += batchSize) {
+            const batch = chatIds.slice(i, i + batchSize);
+            const { data: chatTags } = await (supabase as any)
+              .from('chat_tags')
+              .select('chat_id, tags(name, color)')
+              .in('chat_id', batch);
+            
+            if (chatTags) {
+              chatTags.forEach((ct: any) => {
+                if (ct.tags) {
+                  if (!tagsMapTemp[ct.chat_id]) {
+                    tagsMapTemp[ct.chat_id] = [];
+                  }
+                  tagsMapTemp[ct.chat_id].push({ name: ct.tags.name, color: ct.tags.color });
+                }
+              });
+            }
+          }
+          setTagsMap(tagsMapTemp);
+          
+          // Buscar dados de resposta usando RPC otimizada (uma única query)
+          const responseMap: Record<string, { responded_by: string | null; response_time: number | null }> = {};
+          
+          try {
+            // Query otimizada: buscar primeira msg do cliente e primeira resposta para todos os chats de uma vez
+            const { data: responseData } = await (supabase as any).rpc('get_response_times', {
+              chat_ids: chatIds
+            });
+            
+            if (responseData) {
+              responseData.forEach((r: any) => {
+                responseMap[r.chat_id] = {
+                  responded_by: r.responded_by_name || null,
+                  response_time: r.response_time_seconds
+                };
+              });
+            }
+          } catch (e) {
+            // Fallback: usar assigned_to como "respondido por"
+            data.forEach((lead: any) => {
+              responseMap[lead.id] = {
+                responded_by: lead.users?.name || null,
+                response_time: null
+              };
+            });
+          }
+          
+          setResponseDataMap(responseMap);
+        }
+      }
+      setLoading(false);
+    };
+    
+    fetchLeads();
+  }, [clinicId, period, customDate]);
+
+  // Classificar tipo de origem
+  const getOriginType = (lead: LeadItem): 'meta' | 'link' | 'source' | 'organic' => {
+    if (lead.ad_source_id) return 'meta';
+    if (lead.source_id && trackableLinkSourceIds.has(lead.source_id)) return 'link';
+    if (lead.source_id) return 'source';
+    return 'organic';
+  };
+
+  // Obter nome da origem
+  const getOriginName = (lead: LeadItem): string => {
+    if (lead.ad_source_id) {
+      return lead.meta_ad_name || 'Anúncio Meta';
+    }
+    if (lead.source_id && lead.lead_sources) {
+      return (lead.lead_sources as any).name || (lead.lead_sources as any).code || 'Origem';
+    }
+    return '-';
+  };
+
+  // Obter código da origem
+  const getOriginCode = (lead: LeadItem): string => {
+    if (lead.ad_source_id) {
+      return lead.meta_campaign_name || '';
+    }
+    if (lead.source_id && lead.lead_sources) {
+      return (lead.lead_sources as any).code || '';
+    }
+    return '';
+  };
+
+  // Formatar tempo de resposta
+  const formatResponseTime = (seconds: number | null): string => {
+    if (seconds === null) return '-';
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}min`;
+    return `${Math.floor(seconds / 86400)}d`;
+  };
+
+  // Verificar se é remarketing (pelo nome da campanha)
+  const isRemarketing = (lead: LeadItem): boolean => {
+    const campaign = (lead.meta_campaign_name || '').toLowerCase();
+    return campaign.includes('rmkt') || campaign.includes('remarket') || campaign.includes('retarget');
+  };
+
+  // Filtrar leads
+  const filteredLeads = leads.filter(lead => {
+    // Filtro por tipo de origem
+    if (originFilter !== 'all' && getOriginType(lead) !== originFilter) return false;
+    
+    // Filtro por etapa/status
+    if (statusFilter !== 'all' && lead.status !== statusFilter) return false;
+    
+    // Filtro por busca (nome ou telefone)
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      const nameMatch = (lead.client_name || '').toLowerCase().includes(search);
+      const phoneMatch = (lead.phone_number || '').includes(search.replace(/\D/g, ''));
+      if (!nameMatch && !phoneMatch) return false;
+    }
+    
+    return true;
+  });
+
+  // Paginação
+  const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
+  const paginatedLeads = filteredLeads.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Reset página quando filtros mudam
+  const handleFilterChange = () => {
+    setCurrentPage(1);
+  };
+
+  // Verificar se é link rastreável
+  const isTrackableLink = (lead: LeadItem): boolean => {
+    return lead.source_id ? trackableLinkSourceIds.has(lead.source_id) : false;
+  };
+
+  // Contadores
+  const counts = {
+    all: leads.length,
+    meta: leads.filter(l => l.ad_source_id).length,
+    link: leads.filter(l => !l.ad_source_id && l.source_id && trackableLinkSourceIds.has(l.source_id)).length,
+    source: leads.filter(l => !l.ad_source_id && l.source_id && !trackableLinkSourceIds.has(l.source_id)).length,
+    organic: leads.filter(l => !l.ad_source_id && !l.source_id).length,
+  };
+
+  // Métricas financeiras
+  const totalNegociacoes = Object.values(paymentsMap).reduce<number>((sum, val) => sum + (val as number), 0);
+  const leadsComValor = Object.keys(paymentsMap).length;
+  const ticketMedio = leadsComValor > 0 ? totalNegociacoes / leadsComValor : 0;
+  const leadsConvertidos = leads.filter(l => l.status === 'Convertido').length;
+  const taxaConversao = leads.length > 0 ? (leadsConvertidos / leads.length) * 100 : 0;
+
+  // Leads convertidos sem negociação registrada
+  const leadsConvertidosSemNegociacao = leads.filter(l => 
+    l.status === 'Convertido' && !paymentsMap[l.id]
+  );
+
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
+
+  // Buscar histórico de pagamentos quando seleciona um lead
+  const fetchLeadPayments = async (chatId: string) => {
+    setLoadingPayments(true);
+    const { data } = await (supabase as any)
+      .from('payments')
+      .select('id, value, description, payment_date, payment_method, status, created_at, users:created_by(name)')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: false });
+    
+    if (data) {
+      setSelectedLeadPayments(data.map((p: any) => ({
+        ...p,
+        created_by_name: p.users?.name || null
+      })));
+    }
+    setLoadingPayments(false);
+  };
+
+  // Handler para selecionar lead
+  const handleSelectLead = (lead: LeadItem) => {
+    setSelectedLead(lead);
+    fetchLeadPayments(lead.id);
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const formatDateTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatPhone = (phone: string) => {
+    if (!phone) return '-';
+    const clean = phone.replace(/\D/g, '');
+    if (clean.length === 13) {
+      return `+${clean.slice(0, 2)} (${clean.slice(2, 4)}) ${clean.slice(4, 9)}-${clean.slice(9)}`;
+    }
+    return phone;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header com filtros */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Leads por Origem</h2>
+          <p className="text-sm text-slate-500">Todos os leads com identificação de origem</p>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Filtro de período */}
+          <div className="flex bg-slate-100 p-1 rounded-lg">
+            <button
+              onClick={() => setPeriod('today')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                period === 'today' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              Hoje
+            </button>
+            <button
+              onClick={() => setPeriod('yesterday')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                period === 'yesterday' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              Ontem
+            </button>
+            <button
+              onClick={() => setPeriod('7d')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                period === '7d' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              7 dias
+            </button>
+            <button
+              onClick={() => setPeriod('30d')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                period === '30d' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+              }`}
+            >
+              30 dias
+            </button>
+          </div>
+          {/* Seletor de data */}
+          <input
+            type="date"
+            value={customDate}
+            onChange={(e) => {
+              setCustomDate(e.target.value);
+              if (e.target.value) setPeriod('custom');
+            }}
+            className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+              period === 'custom' 
+                ? 'border-indigo-500 bg-indigo-50 text-indigo-700' 
+                : 'border-slate-200 bg-white text-slate-600'
+            }`}
+          />
+        </div>
+      </div>
+
+      {/* Cards de contagem por tipo */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <button
+          onClick={() => setOriginFilter('all')}
+          className={`p-4 rounded-xl border-2 transition-all relative ${
+            originFilter === 'all' 
+              ? 'border-indigo-500 bg-indigo-50' 
+              : 'border-slate-200 bg-white hover:border-slate-300'
+          }`}
+        >
+          <div className="absolute top-2 right-2 group">
+            <span className="material-symbols-outlined text-slate-400 text-sm cursor-help">info</span>
+            <div className="absolute right-0 top-6 w-48 p-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+              Total de leads no período selecionado
+            </div>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{counts.all}</p>
+          <p className="text-xs text-slate-500">Todos</p>
+        </button>
+        <button
+          onClick={() => setOriginFilter('meta')}
+          className={`p-4 rounded-xl border-2 transition-all relative ${
+            originFilter === 'meta' 
+              ? 'border-pink-500 bg-pink-50' 
+              : 'border-slate-200 bg-white hover:border-slate-300'
+          }`}
+        >
+          <div className="absolute top-2 right-2 group">
+            <span className="material-symbols-outlined text-slate-400 text-sm cursor-help">info</span>
+            <div className="absolute right-0 top-6 w-52 p-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+              Leads que vieram de anúncios Meta Ads (Click to WhatsApp)
+            </div>
+          </div>
+          <p className="text-2xl font-black text-pink-600">{counts.meta}</p>
+          <p className="text-xs text-slate-500">Meta Ads</p>
+        </button>
+        <button
+          onClick={() => setOriginFilter('link')}
+          className={`p-4 rounded-xl border-2 transition-all relative ${
+            originFilter === 'link' 
+              ? 'border-blue-500 bg-blue-50' 
+              : 'border-slate-200 bg-white hover:border-slate-300'
+          }`}
+        >
+          <div className="absolute top-2 right-2 group">
+            <span className="material-symbols-outlined text-slate-400 text-sm cursor-help">info</span>
+            <div className="absolute right-0 top-6 w-52 p-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+              Leads que vieram de links rastreáveis (Bio, Site, etc.)
+            </div>
+          </div>
+          <p className="text-2xl font-black text-blue-600">{counts.link}</p>
+          <p className="text-xs text-slate-500">Links</p>
+        </button>
+        <button
+          onClick={() => setOriginFilter('source')}
+          className={`p-4 rounded-xl border-2 transition-all relative ${
+            originFilter === 'source' 
+              ? 'border-amber-500 bg-amber-50' 
+              : 'border-slate-200 bg-white hover:border-slate-300'
+          }`}
+        >
+          <div className="absolute top-2 right-2 group">
+            <span className="material-symbols-outlined text-slate-400 text-sm cursor-help">info</span>
+            <div className="absolute right-0 top-6 w-52 p-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+              Leads com código de origem identificado na mensagem
+            </div>
+          </div>
+          <p className="text-2xl font-black text-amber-600">{counts.source}</p>
+          <p className="text-xs text-slate-500">Origens</p>
+        </button>
+        <button
+          onClick={() => setOriginFilter('organic')}
+          className={`p-4 rounded-xl border-2 transition-all relative ${
+            originFilter === 'organic' 
+              ? 'border-slate-500 bg-slate-50' 
+              : 'border-slate-200 bg-white hover:border-slate-300'
+          }`}
+        >
+          <div className="absolute top-2 right-2 group">
+            <span className="material-symbols-outlined text-slate-400 text-sm cursor-help">info</span>
+            <div className="absolute right-0 top-6 w-48 p-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+              Leads sem origem identificada (orgânico)
+            </div>
+          </div>
+          <p className="text-2xl font-black text-slate-600">{counts.organic}</p>
+          <p className="text-xs text-slate-500">Orgânico</p>
+        </button>
+      </div>
+
+      {/* Cards de métricas financeiras */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-emerald-200">payments</span>
+            <p className="text-xs text-emerald-100">Valor Total em Negociações</p>
+          </div>
+          <p className="text-2xl font-black">{formatCurrency(totalNegociacoes)}</p>
+        </div>
+        <div className="p-4 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 text-white">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-violet-200">receipt_long</span>
+            <p className="text-xs text-violet-100">Ticket Médio</p>
+          </div>
+          <p className="text-2xl font-black">{formatCurrency(ticketMedio)}</p>
+        </div>
+        <div className="p-4 rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 text-white">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-cyan-200">trending_up</span>
+            <p className="text-xs text-cyan-100">Taxa de Conversão</p>
+          </div>
+          <p className="text-2xl font-black">{taxaConversao.toFixed(1)}%</p>
+          <p className="text-xs text-cyan-200">{leadsConvertidos} de {leads.length} leads</p>
+        </div>
+      </div>
+
+      {/* Alerta: Leads convertidos sem negociação */}
+      {leadsConvertidosSemNegociacao.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="material-symbols-outlined text-amber-600">warning</span>
+            <h4 className="font-bold text-amber-800">
+              {leadsConvertidosSemNegociacao.length} lead{leadsConvertidosSemNegociacao.length > 1 ? 's' : ''} convertido{leadsConvertidosSemNegociacao.length > 1 ? 's' : ''} sem negociação registrada
+            </h4>
+          </div>
+          <div className="space-y-2">
+            {leadsConvertidosSemNegociacao.map((lead) => (
+              <div key={lead.id} className="flex items-center justify-between bg-white rounded-xl p-3 border border-amber-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                    <span className="material-symbols-outlined text-amber-600">person</span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-900">{lead.client_name || 'Sem nome'}</p>
+                    <p className="text-xs text-slate-500">{formatPhone(lead.phone_number)} • {formatDate(lead.created_at)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`https://wa.me/${lead.phone_number}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                    title="Abrir WhatsApp"
+                  >
+                    <span className="material-symbols-outlined text-lg">chat</span>
+                  </a>
+                  <button
+                    onClick={() => handleSelectLead(lead)}
+                    className="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-xs font-medium"
+                  >
+                    Lançar Venda
+                  </button>
+                  <button
+                    onClick={() => window.location.href = `/inbox?chat=${lead.id}`}
+                    className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors text-xs font-medium"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tabela de leads */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-indigo-600">group</span>
+              <h3 className="font-bold text-slate-900">Leads</h3>
+              <span className="text-xs text-slate-400">({filteredLeads.length})</span>
+            </div>
+            
+            {/* Controles de busca e filtro */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              {/* Busca */}
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+                <input
+                  type="text"
+                  placeholder="Buscar nome ou telefone..."
+                  value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); handleFilterChange(); }}
+                  className="pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm w-full sm:w-56 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+              
+              {/* Filtro por etapa */}
+              <select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value); handleFilterChange(); }}
+                className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              >
+                <option value="all">Todas as etapas</option>
+                <option value="Novo Lead">Novo Lead</option>
+                <option value="Em Atendimento">Em Atendimento</option>
+                <option value="Agendado">Agendado</option>
+                <option value="Convertido">Convertido</option>
+                <option value="Perdido">Perdido</option>
+                <option value="Recorrente">Recorrente</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        {filteredLeads.length === 0 ? (
+          <div className="p-8 text-center">
+            <span className="material-symbols-outlined text-4xl text-slate-300">person_off</span>
+            <p className="text-slate-500 mt-2">Nenhum lead encontrado</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="text-left py-3 px-4 font-medium text-slate-500">Cliente</th>
+                  <th className="text-left py-3 px-4 font-medium text-slate-500">Origem</th>
+                  <th className="text-center py-3 px-4 font-medium text-slate-500">Tipo</th>
+                  <th className="text-left py-3 px-4 font-medium text-slate-500">Respondido por</th>
+                  <th className="text-center py-3 px-4 font-medium text-slate-500">Tempo Resp.</th>
+                  <th className="text-right py-3 px-4 font-medium text-slate-500">Valor</th>
+                  <th className="text-left py-3 px-4 font-medium text-slate-500">Resp. Venda</th>
+                  <th className="text-center py-3 px-4 font-medium text-slate-500">Etapa</th>
+                  <th className="text-center py-3 px-4 font-medium text-slate-500">Data</th>
+                  <th className="text-center py-3 px-4 font-medium text-slate-500">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {paginatedLeads.map((lead) => {
+                  const originType = getOriginType(lead);
+                  const originName = getOriginName(lead);
+                  const originCode = getOriginCode(lead);
+                  
+                  const responseData = responseDataMap[lead.id];
+                  const isRmkt = isRemarketing(lead);
+                  
+                  return (
+                    <tr 
+                      key={lead.id} 
+                      className="hover:bg-slate-50 transition-colors"
+                    >
+                      <td className="py-3 px-4">
+                        <p className="font-medium text-slate-900">{lead.client_name || 'Sem nome'}</p>
+                        <p className="text-xs text-slate-400">{formatPhone(lead.phone_number)}</p>
+                        {tagsMap[lead.id] && tagsMap[lead.id].length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {tagsMap[lead.id].map((tag, idx) => (
+                              <span 
+                                key={idx}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                style={{ 
+                                  backgroundColor: tag.color + '20', 
+                                  color: tag.color,
+                                  border: `1px solid ${tag.color}40`
+                                }}
+                              >
+                                {tag.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div>
+                          <p className="font-medium text-slate-900">{originName}</p>
+                          {originCode && (
+                            <p className="text-xs text-slate-400 truncate max-w-[150px]">{originCode}</p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            originType === 'meta' ? 'bg-pink-100 text-pink-700' :
+                            originType === 'link' ? 'bg-blue-100 text-blue-700' :
+                            originType === 'source' ? 'bg-amber-100 text-amber-700' :
+                            'bg-slate-100 text-slate-600'
+                          }`}>
+                            {originType === 'meta' ? 'Meta Ads' :
+                             originType === 'link' ? 'Link' :
+                             originType === 'source' ? 'Origem' :
+                             'Orgânico'}
+                          </span>
+                          {isRmkt && (
+                            <span className="px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded text-[10px] font-bold">
+                              RMKT
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        {responseData?.responded_by ? (
+                          <span className="text-xs text-slate-700">{responseData.responded_by}</span>
+                        ) : (
+                          <span className="text-xs text-amber-600 font-medium">Aguardando...</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {responseData?.response_time !== null && responseData?.response_time !== undefined ? (
+                          <span className={`text-xs font-medium ${
+                            responseData.response_time <= 300 ? 'text-green-600' : 
+                            responseData.response_time <= 1800 ? 'text-amber-600' : 
+                            'text-red-600'
+                          }`}>
+                            {formatResponseTime(responseData.response_time)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {paymentsMap[lead.id] ? (
+                          <span className="font-bold text-emerald-600">{formatCurrency(paymentsMap[lead.id])}</span>
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {paymentCreatorsMap[lead.id] ? (
+                          <span className="text-xs text-slate-700">{paymentCreatorsMap[lead.id]}</span>
+                        ) : (
+                          <span className="text-xs text-slate-300">-</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          lead.status === 'Novo Lead' ? 'bg-blue-100 text-blue-700' :
+                          lead.status === 'Em Atendimento' ? 'bg-amber-100 text-amber-700' :
+                          lead.status === 'Agendado' ? 'bg-purple-100 text-purple-700' :
+                          lead.status === 'Convertido' ? 'bg-emerald-100 text-emerald-700' :
+                          lead.status === 'Perdido' ? 'bg-red-100 text-red-700' :
+                          lead.status === 'Recorrente' ? 'bg-cyan-100 text-cyan-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {lead.status || 'Novo Lead'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center text-slate-500 text-xs">
+                        {formatDate(lead.created_at)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); window.location.href = `/inbox?chat=${lead.id}`; }}
+                            className="p-1.5 hover:bg-green-50 rounded text-green-600"
+                            title="Ir para conversa"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleSelectLead(lead); }}
+                            className="p-1.5 hover:bg-emerald-50 rounded text-emerald-600"
+                            title="Lançar venda"
+                          >
+                            <span className="material-symbols-outlined text-lg">payments</span>
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); window.location.href = `/lead/${lead.id}`; }}
+                            className="p-1.5 hover:bg-indigo-50 rounded text-indigo-600"
+                            title="Ver detalhes"
+                          >
+                            <span className="material-symbols-outlined text-lg">visibility</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        
+        {/* Paginação */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-slate-200 flex items-center justify-between">
+            <p className="text-sm text-slate-500">
+              Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, filteredLeads.length)} de {filteredLeads.length} leads
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Primeira página"
+              >
+                <span className="material-symbols-outlined text-lg">first_page</span>
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Página anterior"
+              >
+                <span className="material-symbols-outlined text-lg">chevron_left</span>
+              </button>
+              
+              {/* Números das páginas */}
+              <div className="flex items-center gap-1 mx-2">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === pageNum
+                          ? 'bg-indigo-600 text-white'
+                          : 'hover:bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Próxima página"
+              >
+                <span className="material-symbols-outlined text-lg">chevron_right</span>
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Última página"
+              >
+                <span className="material-symbols-outlined text-lg">last_page</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modal de detalhes do lead */}
+      {selectedLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedLead(null)}></div>
+          <div className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className={`p-5 flex-shrink-0 ${
+              getOriginType(selectedLead) === 'meta' ? 'bg-gradient-to-r from-pink-600 to-rose-600' :
+              getOriginType(selectedLead) === 'link' ? 'bg-gradient-to-r from-blue-600 to-indigo-600' :
+              getOriginType(selectedLead) === 'source' ? 'bg-gradient-to-r from-amber-500 to-orange-500' :
+              'bg-gradient-to-r from-slate-600 to-slate-700'
+            }`}>
+              <button 
+                onClick={() => setSelectedLead(null)}
+                className="absolute top-4 right-4 text-white/80 hover:text-white"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-3xl">person</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-white">{selectedLead.client_name || 'Sem nome'}</h3>
+                  <p className="text-white/80">{formatPhone(selectedLead.phone_number)}</p>
+                </div>
+              </div>
+              {/* Etiquetas no header */}
+              {tagsMap[selectedLead.id] && tagsMap[selectedLead.id].length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-3">
+                  {tagsMap[selectedLead.id].map((tag, idx) => (
+                    <span 
+                      key={idx}
+                      className="px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white"
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Conteúdo com scroll */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+              {/* Cards de resumo */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 p-3 rounded-xl">
+                  <p className="text-xs text-slate-500">Etapa Atual</p>
+                  <p className="font-bold text-slate-900">{selectedLead.status || 'Novo Lead'}</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl">
+                  <p className="text-xs text-slate-500">Tipo de Origem</p>
+                  <p className={`font-bold ${
+                    getOriginType(selectedLead) === 'meta' ? 'text-pink-600' :
+                    getOriginType(selectedLead) === 'link' ? 'text-blue-600' :
+                    getOriginType(selectedLead) === 'source' ? 'text-amber-600' :
+                    'text-slate-600'
+                  }`}>
+                    {getOriginType(selectedLead) === 'meta' ? 'Meta Ads' :
+                     getOriginType(selectedLead) === 'link' ? 'Link' :
+                     getOriginType(selectedLead) === 'source' ? 'Origem' :
+                     'Orgânico'}
+                  </p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl">
+                  <p className="text-xs text-slate-500">Origem/Campanha</p>
+                  <p className="font-bold text-indigo-600 text-sm truncate">{getOriginName(selectedLead)}</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl">
+                  <p className="text-xs text-slate-500">Data de Entrada</p>
+                  <p className="font-bold text-slate-900 text-sm">{formatDate(selectedLead.created_at)}</p>
+                </div>
+              </div>
+
+              {/* Card de valor total */}
+              {paymentsMap[selectedLead.id] > 0 && (
+                <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 rounded-xl text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-emerald-100">Valor Total em Negociações</p>
+                      <p className="text-2xl font-black">{formatCurrency(paymentsMap[selectedLead.id])}</p>
+                    </div>
+                    <span className="material-symbols-outlined text-4xl text-emerald-200">payments</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Histórico de Negociações */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined text-slate-600">receipt_long</span>
+                  <h4 className="font-bold text-slate-900">Histórico de Negociações</h4>
+                </div>
+                
+                {loadingPayments ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                  </div>
+                ) : selectedLeadPayments.length === 0 ? (
+                  <div className="bg-slate-50 rounded-xl p-4 text-center">
+                    <span className="material-symbols-outlined text-3xl text-slate-300">money_off</span>
+                    <p className="text-slate-500 text-sm mt-1">Nenhuma negociação registrada</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedLeadPayments.map((payment) => (
+                      <div 
+                        key={payment.id} 
+                        className={`bg-slate-50 rounded-xl p-3 border-l-4 ${
+                          payment.status === 'cancelled' ? 'border-red-400 opacity-60' : 'border-emerald-500'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className="font-bold text-emerald-600">{formatCurrency(payment.value)}</p>
+                            {payment.description && (
+                              <p className="text-xs text-slate-600 mt-0.5">{payment.description}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
+                              <span>{formatDate(payment.payment_date)}</span>
+                              {payment.payment_method && (
+                                <>
+                                  <span>•</span>
+                                  <span>{payment.payment_method}</span>
+                                </>
+                              )}
+                              {payment.created_by_name && (
+                                <>
+                                  <span>•</span>
+                                  <span>por {payment.created_by_name}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {payment.status === 'cancelled' && (
+                            <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">Cancelado</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer com ações */}
+            <div className="p-4 border-t border-slate-200 flex-shrink-0 space-y-2">
+              <div className="flex gap-2">
+                <a 
+                  href={`/inbox?chat=${selectedLead.id}`}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">chat</span>
+                  Abrir Conversa
+                </a>
+                <a 
+                  href={`https://wa.me/${selectedLead.phone_number}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">call</span>
+                </a>
+              </div>
+              <a 
+                href={`/lead/${selectedLead.id}`}
+                className="block w-full text-center px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-50 transition-colors"
+              >
+                Ver Detalhes Completos
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

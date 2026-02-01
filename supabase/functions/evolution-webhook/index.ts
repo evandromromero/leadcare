@@ -80,7 +80,12 @@ serve(async (req) => {
     }
 
     const isFromMe = key.fromMe === true
-    const remoteJid = key.remoteJid || ''
+    // Usar remoteJidAlt se remoteJid for do tipo @lid (novo formato do WhatsApp)
+    let remoteJid = key.remoteJid || ''
+    if (remoteJid.endsWith('@lid') && key.remoteJidAlt) {
+      remoteJid = key.remoteJidAlt
+      console.log('Using remoteJidAlt instead of @lid:', remoteJid)
+    }
     const isGroup = remoteJid.endsWith('@g.us')
     let phone = remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '')
     const groupId = isGroup ? remoteJid : null
@@ -105,6 +110,29 @@ serve(async (req) => {
     // Capturar base64 se vier no payload (quando Webhook Base64 está ativado)
     const base64Media = data.base64 || messageObj?.base64 || webhookData.base64
     const mediaMimetype = data.mimetype || messageObj?.mimetype || webhookData.mimetype
+
+    // Detectar se veio de anúncio Click to WhatsApp (Meta Ads)
+    let isFromMetaAd = false
+    let metaAdInfo: { title?: string; body?: string; sourceType?: string; sourceId?: string; sourceUrl?: string } | null = null
+    
+    // Verificar contextInfo em diferentes tipos de mensagem
+    const contextInfo = messageObj?.extendedTextMessage?.contextInfo || 
+                        messageObj?.conversation?.contextInfo ||
+                        messageObj?.imageMessage?.contextInfo ||
+                        messageObj?.videoMessage?.contextInfo ||
+                        data.contextInfo
+    
+    if (contextInfo?.externalAdReply) {
+      isFromMetaAd = true
+      metaAdInfo = {
+        title: contextInfo.externalAdReply.title,
+        body: contextInfo.externalAdReply.body,
+        sourceType: contextInfo.externalAdReply.sourceType,
+        sourceId: contextInfo.externalAdReply.sourceId,
+        sourceUrl: contextInfo.externalAdReply.sourceUrl
+      }
+      console.log('Mensagem de anúncio Meta detectada:', JSON.stringify(metaAdInfo))
+    }
 
     if (messageType === 'conversation') {
       message = messageObj?.conversation || ''
@@ -204,13 +232,13 @@ serve(async (req) => {
     let { data: chat } = isGroup 
       ? await supabase
           .from('chats')
-          .select('id, unread_count')
+          .select('id, unread_count, source_id')
           .eq('clinic_id', clinicId)
           .eq('group_id', groupId)
           .single()
       : await supabase
           .from('chats')
-          .select('id, unread_count')
+          .select('id, unread_count, source_id')
           .eq('clinic_id', clinicId)
           .eq('phone_number', phone)
           .eq('is_group', false)
@@ -221,14 +249,29 @@ serve(async (req) => {
     // Para grupos, o remetente da mensagem vem em participant
     const senderName = isGroup ? (data.pushName || 'Participante') : pushName
 
-    if (!chat) {
-      // Detectar código de campanha na mensagem
-      let detectedSourceId: string | null = null
-      if (message && !isFromMe && !isGroup) {
-        // Padrões expandidos para aceitar mais formatos
+    // Detectar código de campanha na mensagem OU anúncio Meta (para chat novo ou existente sem source)
+    let detectedSourceId: string | null = null
+    let detectedCode: string | null = null
+    
+    if (message && !isFromMe && !isGroup) {
+      // PRIORIDADE 1: Se veio de anúncio Meta, usar o título do anúncio como código
+      if (isFromMetaAd && metaAdInfo?.title) {
+        // Tentar extrair código do título do anúncio (ex: "Campanha AV1 - Dra Kamylle")
+        const titleMatch = metaAdInfo.title.match(/\b([A-Z]{2,5}[0-9]{1,4})\b/i)
+        if (titleMatch) {
+          detectedCode = titleMatch[1].toUpperCase()
+        } else {
+          // Usar o título completo como código (limitado a 20 chars)
+          detectedCode = metaAdInfo.title.substring(0, 20).toUpperCase().replace(/[^A-Z0-9]/g, '_')
+        }
+        console.log('Código extraído do anúncio Meta:', detectedCode, 'Título:', metaAdInfo.title)
+      }
+      
+      // PRIORIDADE 2: Detectar código na mensagem
+      if (!detectedCode) {
         const codePatterns = [
           /\(([A-Za-z]{1,10}[0-9]{0,5})\)/,           // (AV7), (PROMO2025), (INSTAGRAM)
-          /\[([A-Za-z]{1,10}[0-9]{0,5})\]/,           // [AV7], [PROMO2025]
+          /\[([A-Za-z]{1,10}[0-9]{0,5})\]/,           // [AV7], [PROMO2025], [IK]
           /#([A-Za-z]{1,10}[0-9]{0,5})\b/,            // #AV7, #PROMO2025
           /\b([A-Z]{2,5}[0-9]{1,4})$/i,               // AV7, ALV1, ACV4 no final
           /\b(AV[0-9]{1,2})\b/i,                      // AV7, AV15, AV19 em qualquer lugar
@@ -236,9 +279,9 @@ serve(async (req) => {
           /\b(ACV[0-9]{1,2})\b/i,                     // ACV1, ACV4 em qualquer lugar
           /\b(AVG[0-9]{1,2})\b/i,                     // AVG4 em qualquer lugar
           /\b(LR[0-9]{1,2})\b/i,                      // LR01 em qualquer lugar
+          /\b(KR[0-9]{1,2})\b/i,                      // KR3, KR5 em qualquer lugar
         ]
         
-        let detectedCode: string | null = null
         for (const pattern of codePatterns) {
           const match = message.match(pattern)
           if (match && match[1]) {
@@ -246,11 +289,24 @@ serve(async (req) => {
             break
           }
         }
+      }
+      
+      if (detectedCode) {
+        console.log('Código de campanha detectado:', detectedCode, 'isFromMetaAd:', isFromMetaAd)
         
-        if (detectedCode) {
-          console.log('Código de campanha detectado:', detectedCode)
-          
-          // Buscar lead_source existente com esse código
+        // PRIORIDADE 1: Buscar em trackable_links pelo código (links rastreáveis)
+        const { data: trackableLink } = await supabase
+          .from('trackable_links')
+          .select('source_id')
+          .eq('clinic_id', clinicId)
+          .ilike('code', detectedCode)
+          .single()
+        
+        if (trackableLink?.source_id) {
+          detectedSourceId = trackableLink.source_id
+          console.log('Source encontrado via trackable_link:', detectedCode, detectedSourceId)
+        } else {
+          // PRIORIDADE 2: Buscar lead_source existente com esse código
           const { data: existingSource } = await supabase
             .from('lead_sources')
             .select('id')
@@ -263,25 +319,31 @@ serve(async (req) => {
             console.log('Lead source encontrado:', detectedSourceId)
           } else {
             // Criar novo lead_source automaticamente
+            const sourceName = isFromMetaAd && metaAdInfo?.title 
+              ? `${metaAdInfo.title.substring(0, 30)}` 
+              : detectedCode
+            
             const { data: newSource } = await supabase
               .from('lead_sources')
               .insert({
                 clinic_id: clinicId,
-                name: detectedCode,
+                name: sourceName,
                 code: detectedCode,
-                color: '#6366f1' // Cor padrão (indigo)
+                color: isFromMetaAd ? '#E1306C' : '#6366f1' // Rosa Instagram se Meta, Indigo se código manual
               })
               .select('id')
               .single()
             
             if (newSource) {
               detectedSourceId = newSource.id
-              console.log('Novo lead source criado:', detectedCode, detectedSourceId)
+              console.log('Novo lead source criado:', detectedCode, detectedSourceId, 'isFromMetaAd:', isFromMetaAd)
             }
           }
         }
       }
-      
+    }
+
+    if (!chat) {
       // Criar chat (grupo ou individual)
       // Se a mensagem é do atendente (isFromMe), usar o telefone como nome temporário
       // pois o pushName seria o nome do perfil da clínica, não do cliente
@@ -302,11 +364,86 @@ serve(async (req) => {
           last_message: isGroup ? `${senderName}: ${message}` : message,
           last_message_time: new Date().toISOString(),
           instance_id: instance.id,
-          source_id: detectedSourceId
+          source_id: detectedSourceId,
+          // Dados do anúncio Meta (Click to WhatsApp)
+          ad_title: isFromMetaAd ? metaAdInfo?.title : null,
+          ad_body: isFromMetaAd ? metaAdInfo?.body : null,
+          ad_source_id: isFromMetaAd ? metaAdInfo?.sourceId : null,
+          ad_source_url: isFromMetaAd ? metaAdInfo?.sourceUrl : null,
+          ad_source_type: isFromMetaAd ? metaAdInfo?.sourceType : null
         })
         .select('id, unread_count')
         .single()
       chat = newChat
+      
+      // Enviar evento Contact para Meta Conversions API (novo lead)
+      if (newChat && !isFromMe && !isGroup) {
+        try {
+          // Buscar configurações do Facebook da clínica
+          const { data: clinicData } = await supabase
+            .from('clinics')
+            .select('facebook_dataset_id, facebook_api_token, meta_funnel_events')
+            .eq('id', clinicId)
+            .single()
+          
+          if (clinicData?.facebook_dataset_id && clinicData?.facebook_api_token) {
+            const funnelEvents = (clinicData as any).meta_funnel_events as Record<string, string> | null
+            const eventName = funnelEvents?.['Novo Lead'] || 'Contact'
+            
+            // Hash SHA256 do telefone
+            const encoder = new TextEncoder()
+            const phoneNormalized = phone.toLowerCase().trim()
+            const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(phoneNormalized))
+            const phoneHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+            
+            const eventTime = Math.floor(Date.now() / 1000)
+            const eventId = `webhook_${eventName.toLowerCase()}_${newChat.id.substring(0, 8)}_${eventTime}`
+            
+            const eventData = {
+              data: [{
+                event_name: eventName,
+                event_time: eventTime,
+                event_id: eventId,
+                action_source: 'website',
+                user_data: { ph: phoneHash, external_id: newChat.id },
+              }],
+            }
+            
+            // Salvar log
+            await supabase.from('meta_conversion_logs').insert({
+              clinic_id: clinicId,
+              chat_id: newChat.id,
+              event_id: eventId,
+              event_name: eventName,
+              event_time: eventTime,
+              value: 0,
+              payload: eventData,
+              status: 'pending',
+            })
+            
+            // Enviar para Meta
+            const response = await fetch(
+              `https://graph.facebook.com/v18.0/${clinicData.facebook_dataset_id}/events?access_token=${clinicData.facebook_api_token}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(eventData),
+              }
+            )
+            
+            if (response.ok) {
+              console.log('Evento Contact enviado para Meta:', eventId)
+              await supabase.from('meta_conversion_logs').update({ status: 'success' }).eq('event_id', eventId)
+            } else {
+              const errorData = await response.json()
+              console.error('Erro ao enviar evento Contact:', errorData)
+              await supabase.from('meta_conversion_logs').update({ status: 'error', response: errorData }).eq('event_id', eventId)
+            }
+          }
+        } catch (e) {
+          console.error('Erro ao enviar evento Meta:', e)
+        }
+      }
     } else {
       // Atualiza chat - zera unread se for mensagem enviada (fromMe), incrementa se for do cliente
       const updateData: Record<string, unknown> = {
@@ -314,6 +451,12 @@ serve(async (req) => {
         last_message: isGroup ? `${senderName}: ${message}` : message,
         last_message_time: new Date().toISOString(),
         last_message_from_client: !isFromMe
+      }
+      
+      // Se detectamos um código e o chat ainda não tem source_id, vincular agora
+      if (detectedSourceId && !chat.source_id) {
+        updateData.source_id = detectedSourceId
+        console.log('Vinculando source_id ao chat existente:', detectedSourceId, 'chat:', chat.id)
       }
       
       // Se a mensagem é do cliente e temos pushName, atualizar o nome do cliente

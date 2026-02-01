@@ -5,6 +5,7 @@ import { GlobalState } from '../types';
 import { assets } from '../config/assets';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import Footer from '../components/Footer';
 
 interface LoginSettings {
   login_logo_url: string;
@@ -99,7 +100,8 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
   }
 
   return (
-    <div className="flex min-h-screen bg-white">
+    <div className="flex flex-col min-h-screen bg-white">
+      <div className="flex flex-1">
       {/* Left Illustration */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-slate-900">
         <img 
@@ -194,6 +196,9 @@ const Login: React.FC<LoginProps> = ({ setState }) => {
           </div>
         </div>
       </div>
+      </div>
+      
+      <Footer />
     </div>
   );
 };

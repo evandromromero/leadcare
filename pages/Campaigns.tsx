@@ -114,30 +114,37 @@ const Campaigns: React.FC = () => {
     setError(null);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facebook-ads`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData?.session?.access_token}`,
-          },
-          body: JSON.stringify({ 
-            action: 'get_campaigns',
-            date_preset: datePreset
-          }),
+      const { data, error } = await supabase.functions.invoke('facebook-ads', {
+        body: { 
+          action: 'get_campaigns',
+          date_preset: datePreset
         }
-      );
+      });
 
-      const result = await response.json();
+      console.log('Facebook Ads response:', { data, error });
 
-      if (!response.ok || result.error) {
-        throw new Error(result.error || 'Erro ao buscar campanhas');
+      if (error) {
+        // Tentar extrair mensagem do corpo da resposta de erro
+        let errorMsg = 'Erro ao buscar campanhas';
+        try {
+          // O erro do Supabase Functions pode ter o body como texto
+          if (error.context?.body) {
+            const body = typeof error.context.body === 'string' 
+              ? JSON.parse(error.context.body) 
+              : error.context.body;
+            errorMsg = body.error || errorMsg;
+          }
+        } catch {
+          errorMsg = error.message || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
-      setCampaigns(result.data || []);
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      setCampaigns(data?.data || []);
     } catch (err: any) {
       console.error('Erro ao buscar campanhas:', err);
       setError(err.message || 'Erro ao carregar campanhas');

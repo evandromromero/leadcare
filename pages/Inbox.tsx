@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { hasPermission } from '../lib/permissions';
 import { canSendMessage as checkRateLimit, recordMessageSent, waitForRateLimit } from '../lib/rateLimiter';
+import { SectionConfigModal, useSectionConfig, SectionKey, SECTION_KEYS, SECTION_LABELS } from '../components/InboxDetailsSections';
 
 const DEFAULT_QUICK_REPLIES = [
   { id: '1', text: 'Olá! Como posso ajudar você hoje?' },
@@ -104,7 +105,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [newSourceForm, setNewSourceForm] = useState({ name: '', code: '', tag_id: '' });
   const [savingSource, setSavingSource] = useState(false);
   
-  // Estados para pagamentos/negociações
+  // Estados para dados do anúncio Meta (Click to WhatsApp)
+  const [adInfo, setAdInfo] = useState<{ 
+    ad_title: string | null; 
+    ad_body: string | null; 
+    ad_source_id: string | null; 
+    ad_source_url: string | null; 
+    ad_source_type: string | null; 
+  } | null>(null);
+  
+  // Estados para pagamentos/negociações comerciais
   const [payments, setPayments] = useState<Array<{
     id: string;
     value: number;
@@ -117,6 +127,19 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0], payment_method: '' });
   const [savingPayment, setSavingPayment] = useState(false);
+  
+  // Estados para lançamentos diretos da clínica (sem comercial)
+  const [clinicReceipts, setClinicReceipts] = useState<Array<{
+    id: string;
+    total_value: number;
+    description: string | null;
+    receipt_date: string;
+    created_at: string;
+    payment_method: string | null;
+  }>>([]);
+  const [showClinicReceiptModal, setShowClinicReceiptModal] = useState(false);
+  const [clinicReceiptForm, setClinicReceiptForm] = useState({ value: '', description: '', receipt_date: new Date().toISOString().split('T')[0], payment_method: '' });
+  const [savingClinicReceipt, setSavingClinicReceipt] = useState(false);
   
   // Estados para tarefas
   const [tasks, setTasks] = useState<Array<{
@@ -227,6 +250,18 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [messageSearchResults, setMessageSearchResults] = useState<string[]>([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Hook para configuração de seções do painel lateral
+  const { hiddenSections, toggleSectionVisibility, isSectionVisible, sectionOrder, moveSectionUp, moveSectionDown, getSectionOrder } = useSectionConfig();
+  const [showSectionConfigModal, setShowSectionConfigModal] = useState(false);
+
+  // Estados para envio de email
+  const [smtpConfigured, setSmtpConfigured] = useState(false);
+  const [emailTemplates, setEmailTemplates] = useState<Array<{ id: string; name: string; subject: string; html_content: string }>>([]);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [selectedEmailTemplateId, setSelectedEmailTemplateId] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [leadEmail, setLeadEmail] = useState<string | null>(null);
 
   // Emojis comuns
   const commonEmojis = [
@@ -1470,17 +1505,29 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     return source.color || '#6B7280';
   };
 
-  // Buscar origem do chat selecionado
+  // Buscar origem e dados do anúncio do chat selecionado
   const fetchChatSource = async (chatId: string) => {
     try {
       const { data, error } = await supabase
         .from('chats')
-        .select('source_id')
+        .select('source_id, ad_title, ad_body, ad_source_id, ad_source_url, ad_source_type')
         .eq('id', chatId)
         .single();
       
       if (!error && data) {
         setSelectedSourceId((data as any).source_id);
+        // Verificar se tem dados de anúncio Meta
+        if ((data as any).ad_title || (data as any).ad_source_id) {
+          setAdInfo({
+            ad_title: (data as any).ad_title,
+            ad_body: (data as any).ad_body,
+            ad_source_id: (data as any).ad_source_id,
+            ad_source_url: (data as any).ad_source_url,
+            ad_source_type: (data as any).ad_source_type
+          });
+        } else {
+          setAdInfo(null);
+        }
       }
     } catch (err) {
       console.error('Error fetching chat source:', err);
@@ -1584,6 +1631,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         });
       
       if (!error) {
+        // Enviar evento Purchase para Meta (Negociação Comercial = fechou negócio)
+        const totalValue = parseFloat(paymentForm.value.replace(',', '.'));
+        await sendFacebookConversionEvent(selectedChatId, totalValue, 'Convertido');
+        
         setPaymentForm({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0], payment_method: '' });
         setShowPaymentModal(false);
         await fetchPayments(selectedChatId);
@@ -1610,6 +1661,94 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       }
     } catch (err) {
       console.error('Error cancelling payment:', err);
+    }
+  };
+
+  // Buscar lançamentos diretos da clínica (sem comercial)
+  const fetchClinicReceipts = async (chatId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('clinic_receipts' as any)
+        .select('id, total_value, description, receipt_date, created_at, receipt_payments(payment_method)')
+        .eq('chat_id', chatId)
+        .is('payment_id', null)
+        .order('receipt_date', { ascending: false });
+      
+      if (!error && data) {
+        const receiptsWithMethod = (data as any[]).map(r => ({
+          ...r,
+          payment_method: r.receipt_payments?.[0]?.payment_method || null
+        }));
+        setClinicReceipts(receiptsWithMethod);
+      }
+    } catch (err) {
+      console.error('Error fetching clinic receipts:', err);
+    }
+  };
+
+  // Salvar novo lançamento direto da clínica
+  const handleSaveClinicReceipt = async () => {
+    if (!clinicReceiptForm.value || !selectedChatId || !user || !clinicId) return;
+    
+    setSavingClinicReceipt(true);
+    try {
+      const totalValue = parseFloat(clinicReceiptForm.value.replace(',', '.'));
+      
+      // Criar o recebimento sem payment_id (lançamento direto)
+      const { data: newReceipt, error } = await supabase
+        .from('clinic_receipts' as any)
+        .insert({
+          clinic_id: clinicId,
+          chat_id: selectedChatId,
+          payment_id: null,
+          total_value: totalValue,
+          description: clinicReceiptForm.description.trim() || null,
+          receipt_date: clinicReceiptForm.receipt_date,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+      
+      if (!error && newReceipt && clinicReceiptForm.payment_method) {
+        // Criar o registro de forma de pagamento
+        await supabase.from('receipt_payments' as any).insert({
+          receipt_id: (newReceipt as any).id,
+          value: totalValue,
+          payment_method: clinicReceiptForm.payment_method,
+          installments: 1
+        });
+      }
+      
+      if (!error) {
+        // Enviar evento Purchase para Meta (Lançamento da Clínica = procedimento realizado)
+        await sendFacebookConversionEvent(selectedChatId, totalValue, 'Convertido');
+        
+        setClinicReceiptForm({ value: '', description: '', receipt_date: new Date().toISOString().split('T')[0], payment_method: '' });
+        setShowClinicReceiptModal(false);
+        await fetchClinicReceipts(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error saving clinic receipt:', err);
+    } finally {
+      setSavingClinicReceipt(false);
+    }
+  };
+
+  // Excluir lançamento direto da clínica
+  const handleDeleteClinicReceipt = async (receiptId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('clinic_receipts' as any)
+        .delete()
+        .eq('id', receiptId);
+      
+      if (!error && selectedChatId) {
+        await fetchClinicReceipts(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error deleting clinic receipt:', err);
     }
   };
 
@@ -1897,6 +2036,124 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     fetchLeadSources();
   }, [clinicId]);
 
+  // Buscar configuração SMTP e templates de email
+  useEffect(() => {
+    const fetchEmailConfig = async () => {
+      if (!clinicId) return;
+      
+      try {
+        // Verificar se SMTP está configurado
+        const { data: clinicData } = await supabase
+          .from('clinics' as any)
+          .select('smtp_host, smtp_user, email_marketing_enabled')
+          .eq('id', clinicId)
+          .single();
+        
+        const hasSmtp = (clinicData as any)?.smtp_host && (clinicData as any)?.smtp_user && (clinicData as any)?.email_marketing_enabled;
+        setSmtpConfigured(!!hasSmtp);
+        
+        // Se SMTP configurado, buscar templates
+        if (hasSmtp) {
+          const { data: templates } = await supabase
+            .from('email_templates' as any)
+            .select('id, name, subject, html_content')
+            .eq('clinic_id', clinicId)
+            .order('name');
+          
+          if (templates) {
+            setEmailTemplates(templates as any);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching email config:', err);
+      }
+    };
+    
+    fetchEmailConfig();
+  }, [clinicId]);
+
+  // Buscar email do lead quando mudar de chat
+  useEffect(() => {
+    const fetchLeadEmail = async () => {
+      if (!selectedChatId || !chatLeadId) {
+        setLeadEmail(null);
+        return;
+      }
+      
+      try {
+        const { data } = await supabase
+          .from('leads' as any)
+          .select('email')
+          .eq('id', chatLeadId)
+          .single();
+        
+        setLeadEmail((data as any)?.email || null);
+      } catch (err) {
+        setLeadEmail(null);
+      }
+    };
+    
+    fetchLeadEmail();
+  }, [selectedChatId, chatLeadId]);
+
+  // Função para enviar email
+  const handleSendEmail = async () => {
+    if (!selectedChatId || !selectedEmailTemplateId || !clinicId || !leadEmail) return;
+    
+    const selectedChat = chats.find(c => c.id === selectedChatId);
+    if (!selectedChat) return;
+    
+    setSendingEmail(true);
+    try {
+      const template = emailTemplates.find(t => t.id === selectedEmailTemplateId);
+      if (!template) throw new Error('Template não encontrado');
+      
+      // Buscar dados da clínica
+      const { data: clinicData } = await supabase
+        .from('clinics' as any)
+        .select('name, email, phone')
+        .eq('id', clinicId)
+        .single();
+      
+      // Substituir variáveis no template
+      let htmlContent = template.html_content;
+      let subject = template.subject;
+      
+      const variables: Record<string, string> = {
+        '{{lead_name}}': selectedChat.client_name || 'Cliente',
+        '{{clinic_name}}': (clinicData as any)?.name || '',
+        '{{clinic_email}}': (clinicData as any)?.email || '',
+        '{{clinic_phone}}': (clinicData as any)?.phone || '',
+        '{{unsubscribe_url}}': '#',
+      };
+      
+      Object.entries(variables).forEach(([key, value]) => {
+        htmlContent = htmlContent.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+        subject = subject.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+      });
+      
+      // Chamar edge function para enviar email
+      const { error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: leadEmail,
+          subject: subject,
+          html: htmlContent,
+          clinic_id: clinicId,
+        }
+      });
+      
+      if (error) throw error;
+      
+      setShowEmailModal(false);
+      setSelectedEmailTemplateId('');
+      
+    } catch (error) {
+      console.error('Erro ao enviar email:', error);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   // Buscar notas, orçamentos, origem, pagamentos, tarefas, mensagens agendadas e cliente quando mudar de chat
   useEffect(() => {
     if (selectedChatId) {
@@ -1904,6 +2161,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       fetchQuotes(selectedChatId);
       fetchChatSource(selectedChatId);
       fetchPayments(selectedChatId);
+      fetchClinicReceipts(selectedChatId);
       fetchTasks(selectedChatId);
       fetchScheduledMessages(selectedChatId);
       fetchChatClient(selectedChatId);
@@ -1912,6 +2170,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       setQuotes([]);
       setSelectedSourceId(null);
       setPayments([]);
+      setClinicReceipts([]);
       setTasks([]);
       setScheduledMessages([]);
       setChatLeadId(null);
@@ -2424,7 +2683,60 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       // Mensagem com nome do atendente para o WhatsApp
       const whatsappMessage = userName ? `*${userName}:* ${messageContent}` : messageContent;
       
-      // Buscar configurações em paralelo para melhor performance
+      // Detectar canal do chat
+      const chatChannel = (selectedChat as any).channel || 'whatsapp';
+      
+      let remoteMessageId = null;
+      
+      // Enviar via Meta API (Instagram ou Facebook)
+      if (chatChannel === 'instagram' || chatChannel === 'facebook') {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        
+        const response = await fetch(`${supabaseUrl}/functions/v1/meta-send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({
+            clinic_id: clinicId,
+            recipient_id: selectedChat.phone_number,
+            message: userName ? `${userName}: ${messageContent}` : messageContent,
+            channel: chatChannel,
+          }),
+        });
+        
+        if (response.ok) {
+          const responseData = await response.json().catch(() => ({}));
+          remoteMessageId = responseData?.message_id || null;
+          console.log(`${chatChannel} message sent, messageId:`, remoteMessageId);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error(`${chatChannel} API error:`, errorData);
+          // Remover mensagem otimista se falhou
+          updateOptimisticMessage(currentChatId, tempId, null);
+          return;
+        }
+        
+        // Salvar mensagem no banco
+        const savedMessage = await sendMessage(
+          currentChatId,
+          messageContent,
+          user.id,
+          currentReplyingTo ? { id: currentReplyingTo.id, content: currentReplyingTo.content, senderName: currentReplyingTo.senderName } : null,
+          remoteMessageId
+        );
+        
+        // Atualizar mensagem otimista com ID real
+        if (savedMessage) {
+          updateOptimisticMessage(currentChatId, tempId, savedMessage.id);
+        }
+        
+        return;
+      }
+      
+      // Buscar configurações em paralelo para melhor performance (WhatsApp)
       const [settingsResult, clinicConfigResult, instancesResult] = await Promise.all([
         supabase.from('settings').select('evolution_api_url, evolution_api_key').single(),
         supabase.from('clinics').select('whatsapp_provider, cloud_api_phone_number_id, cloud_api_access_token').eq('id', clinicId).single(),
@@ -2437,8 +2749,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       
       const isCloudApi = clinicConfig?.whatsapp_provider === 'cloud_api' && clinicConfig?.cloud_api_phone_number_id;
       const instance = instances?.[0];
-      
-      let remoteMessageId = null;
       
       // Enviar via Cloud API se configurado
       if (isCloudApi && selectedChat.phone_number) {
@@ -3342,14 +3652,17 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               <div 
                 key={chat.id} 
                 onClick={async () => {
+                  console.log('[Inbox] Chat clicked:', chat.id, 'messages:', chat.messages?.length || 0);
                   setSelectedChatId(chat.id);
                   markAsRead(chat.id);
                   // Carregar mensagens sob demanda se ainda não carregadas
                   if (!chat.messages || chat.messages.length === 0) {
+                    console.log('[Inbox] Loading messages for chat:', chat.id);
                     setLoadingMessages(true);
                     const { hasMore } = await fetchMessages(chat.id);
                     setHasMoreMessages(prev => ({ ...prev, [chat.id]: hasMore }));
                     setLoadingMessages(false);
+                    console.log('[Inbox] Messages loaded, hasMore:', hasMore);
                   }
                 }}
                 className={`group flex items-start gap-3 p-4 cursor-pointer transition-colors relative border-l-4 ${
@@ -3986,12 +4299,26 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               <p className="text-sm font-bold text-slate-400">{selectedChat.phone_number}</p>
               
               <div className="flex justify-center gap-4 mt-6">
-                <button 
-                  className="size-10 rounded-full border border-green-100 bg-green-50 text-green-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
-                  title="Conversar"
-                >
-                  <span className="material-symbols-outlined text-[20px]">chat</span>
-                </button>
+                {smtpConfigured && leadEmail ? (
+                  <button 
+                    onClick={() => {
+                      setSelectedEmailTemplateId('');
+                      setShowEmailModal(true);
+                    }}
+                    className="size-10 rounded-full border border-purple-100 bg-purple-50 text-purple-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
+                    title={`Enviar email para ${leadEmail}`}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">mail</span>
+                  </button>
+                ) : (
+                  <button 
+                    disabled
+                    className="size-10 rounded-full border border-slate-100 bg-slate-50 text-slate-300 flex items-center justify-center cursor-not-allowed shadow-sm"
+                    title={!smtpConfigured ? "Configure SMTP em Integrações" : "Cliente sem email cadastrado"}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">mail</span>
+                  </button>
+                )}
                 <button 
                   onClick={() => window.open(`tel:${selectedChat.phone_number}`, '_self')}
                   className="size-10 rounded-full border border-blue-100 bg-blue-50 text-blue-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
@@ -4006,11 +4333,18 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 >
                   <span className="material-symbols-outlined text-[20px]">{chatLeadId ? 'edit' : 'person_add'}</span>
                 </button>
+                <button 
+                  onClick={() => setShowSectionConfigModal(true)}
+                  className="size-10 rounded-full border border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center hover:scale-110 transition-transform shadow-sm hover:bg-slate-100"
+                  title="Configurar seções visíveis"
+                >
+                  <span className="material-symbols-outlined text-[20px]">settings</span>
+                </button>
               </div>
             </div>
 
-            <div className="p-6 space-y-8">
-              <section className="relative">
+            <div className="p-6 flex flex-col gap-8">
+              <section className="relative" style={{ order: getSectionOrder('pipeline') }}>
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-1">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Etapa do Pipeline</h3>
@@ -4073,7 +4407,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </section>
 
               {/* Seção Responsável pelo Atendimento */}
-              <section>
+              <section style={{ order: getSectionOrder('responsavel') }}>
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-1">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Responsável</h3>
@@ -4156,7 +4490,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </section>
 
               {/* Seção Origem do Lead */}
-              <section className="relative">
+              <section className="relative" style={{ order: getSectionOrder('origem') }}>
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-1">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Origem do Lead</h3>
@@ -4247,6 +4581,51 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     </div>
                   )}
                 </div>
+                
+                {/* Informações do Anúncio Meta (Click to WhatsApp) */}
+                {adInfo && (adInfo.ad_title || adInfo.ad_source_id) && (
+                  <div className="mt-4 p-3 bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl border border-pink-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="material-symbols-outlined text-pink-600 text-[16px]">ads_click</span>
+                      <span className="text-[10px] font-black text-pink-600 uppercase tracking-widest">Anúncio Meta</span>
+                    </div>
+                    {adInfo.ad_title && (
+                      <div className="mb-2">
+                        <span className="text-[10px] text-slate-500 block">Nome do Anúncio</span>
+                        <span className="text-sm font-semibold text-slate-700">{adInfo.ad_title}</span>
+                      </div>
+                    )}
+                    {adInfo.ad_body && (
+                      <div className="mb-2">
+                        <span className="text-[10px] text-slate-500 block">Texto do Anúncio</span>
+                        <span className="text-xs text-slate-600">{adInfo.ad_body}</span>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {adInfo.ad_source_type && (
+                        <span className="text-[10px] bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full">
+                          {adInfo.ad_source_type === 'AD' ? 'Anúncio Pago' : adInfo.ad_source_type}
+                        </span>
+                      )}
+                      {adInfo.ad_source_id && (
+                        <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                          ID: {adInfo.ad_source_id}
+                        </span>
+                      )}
+                    </div>
+                    {adInfo.ad_source_url && (
+                      <a 
+                        href={adInfo.ad_source_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="mt-2 text-[11px] text-pink-600 hover:text-pink-700 flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                        Ver anúncio original
+                      </a>
+                    )}
+                  </div>
+                )}
               </section>
 
               {/* Modal Nova Origem */}
@@ -4328,7 +4707,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
               )}
 
-              <section>
+              {isSectionVisible('etiquetas') && (
+              <section style={{ order: getSectionOrder('etiquetas') }}>
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-1">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Etiquetas</h3>
@@ -4365,6 +4745,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   )}
                 </div>
               </section>
+              )}
 
               {/* Modal de Edição de Mensagem */}
               {editingMessage && (
@@ -4556,7 +4937,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               )}
 
               {/* Seção de Orçamentos */}
-              <section>
+              {isSectionVisible('orcamentos') && (
+              <section style={{ order: getSectionOrder('orcamentos') }}>
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-1">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Orçamentos</h3>
@@ -4664,6 +5046,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   </div>
                 )}
               </section>
+              )}
 
               {/* Modal de Novo Orçamento */}
               {showQuoteModal && (
@@ -4727,15 +5110,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
               )}
 
-              {/* Seção de Negociações/Pagamentos */}
-              <section>
+              {/* Seção de Negociações Comerciais */}
+              {isSectionVisible('negociacoes') && (
+              <section style={{ order: getSectionOrder('negociacoes') }}>
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-1">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Negociações</h3>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Negociações Comerciais</h3>
                     <div className="relative group/tip">
                       <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
                       <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
-                        Pagamentos registrados deste cliente. Alimenta o Dashboard de Vendas Concluídas e Faturamento
+                        Vendas registradas pelo comercial. Alimenta o Dashboard de Vendas Concluídas e Faturamento
                       </div>
                     </div>
                   </div>
@@ -4823,6 +5207,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   </div>
                 )}
               </section>
+              )}
 
               {/* Modal de Novo Pagamento */}
               {showPaymentModal && (
@@ -4908,6 +5293,168 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
               )}
 
+              {/* Seção de Lançamentos da Clínica (sem comercial) */}
+              {isSectionVisible('lancamentos') && (
+              <section style={{ order: getSectionOrder('lancamentos') }}>
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-1">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamentos da Clínica</h3>
+                    <div className="relative group/tip">
+                      <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
+                      <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
+                        Recebimentos diretos da clínica, sem vínculo com venda comercial
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowClinicReceiptModal(true)}
+                    className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
+                  </button>
+                </div>
+                
+                {clinicReceipts.length === 0 ? (
+                  <p className="text-xs text-slate-400">Nenhum lançamento direto</p>
+                ) : (
+                  <div className="space-y-2">
+                    {clinicReceipts.map(receipt => (
+                      <div 
+                        key={receipt.id} 
+                        className="p-3 rounded-xl border bg-teal-50 border-teal-200"
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-sm font-black text-teal-700">
+                            R$ {receipt.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}
+                            </span>
+                            <button
+                              onClick={() => handleDeleteClinicReceipt(receipt.id)}
+                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Excluir"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">delete</span>
+                            </button>
+                          </div>
+                        </div>
+                        {receipt.payment_method && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">
+                            {receipt.payment_method === 'pix' ? 'PIX' :
+                             receipt.payment_method === 'dinheiro' ? 'Dinheiro' :
+                             receipt.payment_method === 'cartao_credito' ? 'Cartão Crédito' :
+                             receipt.payment_method === 'cartao_debito' ? 'Cartão Débito' :
+                             receipt.payment_method === 'boleto' ? 'Boleto' :
+                             receipt.payment_method === 'transferencia' ? 'Transferência' :
+                             'Outro'}
+                          </span>
+                        )}
+                        {receipt.description && (
+                          <p className="text-[11px] mt-1 text-slate-600">{receipt.description}</p>
+                        )}
+                      </div>
+                    ))}
+                    
+                    {/* Total */}
+                    <div className="pt-2 border-t border-slate-200 mt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-500">Total Lançado:</span>
+                        <span className="text-sm font-black text-teal-600">
+                          R$ {clinicReceipts
+                            .reduce((sum, r) => sum + r.total_value, 0)
+                            .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+              )}
+
+              {/* Modal de Novo Lançamento da Clínica */}
+              {showClinicReceiptModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowClinicReceiptModal(false)}>
+                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-teal-50">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-teal-600">account_balance</span>
+                        <h3 className="font-bold text-slate-800">Lançamento Direto</h3>
+                      </div>
+                      <button onClick={() => setShowClinicReceiptModal(false)} className="text-slate-400 hover:text-slate-600">
+                        <span className="material-symbols-outlined">close</span>
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
+                        <input
+                          type="text"
+                          value={clinicReceiptForm.value}
+                          onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, value: e.target.value }))}
+                          placeholder="0,00"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Data do Recebimento</label>
+                        <input
+                          type="date"
+                          value={clinicReceiptForm.receipt_date}
+                          onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, receipt_date: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento</label>
+                        <select
+                          value={clinicReceiptForm.payment_method}
+                          onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, payment_method: e.target.value }))}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                        >
+                          <option value="">Selecione...</option>
+                          <option value="pix">PIX</option>
+                          <option value="dinheiro">Dinheiro</option>
+                          <option value="cartao_credito">Cartão de Crédito</option>
+                          <option value="cartao_debito">Cartão de Débito</option>
+                          <option value="boleto">Boleto</option>
+                          <option value="transferencia">Transferência</option>
+                          <option value="outro">Outro</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Descrição</label>
+                        <input
+                          type="text"
+                          value={clinicReceiptForm.description}
+                          onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, description: e.target.value }))}
+                          placeholder="Ex: Consulta, Procedimento, Entrada..."
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                        />
+                      </div>
+                      <button
+                        onClick={handleSaveClinicReceipt}
+                        disabled={!clinicReceiptForm.value || savingClinicReceipt}
+                        className="w-full py-2 bg-teal-600 text-white text-sm font-bold rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {savingClinicReceipt ? (
+                          <>
+                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            Salvando...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">account_balance</span>
+                            Registrar Lançamento
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Modal de Valor para Conversão */}
               {showConversionValueModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowConversionValueModal(false)}>
@@ -4950,7 +5497,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               )}
 
               {/* Seção de Tarefas */}
-              <section>
+              {isSectionVisible('tarefas') && (
+              <section style={{ order: getSectionOrder('tarefas') }}>
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-1">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tarefas</h3>
@@ -5012,6 +5560,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   </div>
                 )}
               </section>
+              )}
 
               {/* Modal de Nova Tarefa */}
               {showTaskModal && (
@@ -5075,7 +5624,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               )}
 
               {/* Seção de Mensagens Agendadas */}
-              <section>
+              {isSectionVisible('followup') && (
+              <section style={{ order: getSectionOrder('followup') }}>
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-1">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Follow-up</h3>
@@ -5122,6 +5672,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   </div>
                 )}
               </section>
+              )}
 
               {/* Modal de Agendar Mensagem */}
               {showScheduleModal && (
@@ -5218,7 +5769,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
               )}
 
-              <section className="flex-1 flex flex-col">
+              {isSectionVisible('observacoes') && (
+              <section className="flex-1 flex flex-col" style={{ order: getSectionOrder('observacoes') }}>
                 <div className="flex items-center gap-1 mb-4">
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Observações</h3>
                   <div className="relative group/tip">
@@ -5273,6 +5825,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   </button>
                 </div>
               </section>
+              )}
             </div>
           </div>
         ) : (
@@ -5706,6 +6259,103 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           </div>
         </div>
       )}
+
+      {/* Modal Enviar Email */}
+      {showEmailModal && selectedChat && leadEmail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowEmailModal(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-purple-600 to-violet-600">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white">mail</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Enviar Email</h3>
+                  <p className="text-purple-100 text-sm">Para: {selectedChat.client_name}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <p className="text-xs text-slate-500 mb-1">Destinatário:</p>
+                <p className="text-sm font-medium text-slate-700">{leadEmail}</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Template *</label>
+                <select
+                  value={selectedEmailTemplateId}
+                  onChange={(e) => setSelectedEmailTemplateId(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                >
+                  <option value="">Selecione um template</option>
+                  {emailTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedEmailTemplateId && (
+                <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                  <p className="text-xs text-purple-500 mb-1">Assunto:</p>
+                  <p className="text-sm font-medium text-purple-700">
+                    {emailTemplates.find(t => t.id === selectedEmailTemplateId)?.subject
+                      .replace('{{lead_name}}', selectedChat.client_name || 'Cliente')
+                      .replace('{{clinic_name}}', state.selectedClinic?.name || '')}
+                  </p>
+                </div>
+              )}
+
+              {emailTemplates.length === 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                  <span className="material-symbols-outlined text-amber-500 text-2xl mb-2">warning</span>
+                  <p className="text-sm text-amber-700">Nenhum template de email encontrado.</p>
+                  <p className="text-xs text-amber-600 mt-1">Crie templates em Email Marketing.</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                onClick={() => setShowEmailModal(false)}
+                className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSendEmail}
+                disabled={!selectedEmailTemplateId || sendingEmail}
+                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
+              >
+                {sendingEmail ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">send</span>
+                    Enviar Email
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Configuração de Seções */}
+      <SectionConfigModal
+        isOpen={showSectionConfigModal}
+        onClose={() => setShowSectionConfigModal(false)}
+        hiddenSections={hiddenSections}
+        onToggle={toggleSectionVisibility}
+        sectionOrder={sectionOrder}
+        onMoveUp={moveSectionUp}
+        onMoveDown={moveSectionDown}
+      />
     </div>
   );
 };

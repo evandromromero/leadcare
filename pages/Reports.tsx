@@ -48,8 +48,12 @@ interface PaymentData {
 }
 
 interface ReceiptData {
-  payment_id: string;
+  payment_id: string | null;
   total_value: number;
+  receipt_date?: string;
+  chat_id?: string;
+  description?: string | null;
+  chat?: { client_name: string } | null;
 }
 
 interface LeadSource {
@@ -120,14 +124,14 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
     try {
       const { data: paymentsData } = await supabase
         .from('payments' as any)
-        .select('id, value, payment_date, created_by, description, chat:chats(id, client_name, source_id), creator:users!payments_created_by_fkey(id, name)')
+        .select('id, value, payment_date, created_by, description, chat:chats(id, client_name, source_id, assigned_to, attendant:users!chats_assigned_to_fkey(id, name)), creator:users!payments_created_by_fkey(id, name)')
         .eq('clinic_id', clinicId)
         .or('status.is.null,status.eq.active')
         .order('payment_date', { ascending: false });
 
       const { data: receiptsData } = await supabase
         .from('clinic_receipts' as any)
-        .select('payment_id, total_value')
+        .select('payment_id, total_value, receipt_date, chat_id, description, chat:chats(client_name)')
         .eq('clinic_id', clinicId);
 
       const { data: sourcesData } = await supabase
@@ -263,16 +267,54 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
   const metrics = useMemo(() => {
     const totalComercial = filteredPayments.reduce((sum, p) => sum + Number(p.value), 0);
     
+    // Receita via comercial (vinculada a payments)
     const filteredPaymentIds = filteredPayments.map(p => p.id);
-    const filteredReceipts = receipts.filter(r => filteredPaymentIds.includes(r.payment_id));
-    const totalRecebido = filteredReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
+    const filteredReceipts = receipts.filter(r => r.payment_id && filteredPaymentIds.includes(r.payment_id));
+    const totalRecebidoComercial = filteredReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
+    
+    // Receita direta (sem payment_id) - filtrar por período
+    const directReceipts = receipts.filter(r => r.payment_id === null && r.receipt_date);
+    let filteredDirectReceipts = directReceipts;
+    
+    if (customDateStart && customDateEnd) {
+      const startDate = new Date(customDateStart);
+      const endDate = new Date(customDateEnd);
+      endDate.setHours(23, 59, 59, 999);
+      filteredDirectReceipts = directReceipts.filter(r => {
+        const receiptDate = new Date(r.receipt_date!);
+        return receiptDate >= startDate && receiptDate <= endDate;
+      });
+    } else if (dateFilter !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+      let endDate: Date = now;
+      
+      switch (dateFilter) {
+        case '7d': startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break;
+        case '30d': startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); break;
+        case 'month': startDate = new Date(now.getFullYear(), now.getMonth(), 1); break;
+        case 'lastMonth':
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+          break;
+        default: startDate = new Date(0);
+      }
+      
+      filteredDirectReceipts = directReceipts.filter(r => {
+        const receiptDate = new Date(r.receipt_date!);
+        return receiptDate >= startDate && receiptDate <= endDate;
+      });
+    }
+    
+    const totalRecebidoDireto = filteredDirectReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
+    const totalRecebido = totalRecebidoComercial + totalRecebidoDireto;
     
     const total = totalComercial + totalRecebido;
     
     // Métricas do período anterior
     const prevComercial = previousPeriodPayments.reduce((sum, p) => sum + Number(p.value), 0);
     const prevPaymentIds = previousPeriodPayments.map(p => p.id);
-    const prevReceipts = receipts.filter(r => prevPaymentIds.includes(r.payment_id));
+    const prevReceipts = receipts.filter(r => r.payment_id && prevPaymentIds.includes(r.payment_id));
     const prevRecebido = prevReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
     const prevTotal = prevComercial + prevRecebido;
     const prevVendas = previousPeriodPayments.length;
@@ -288,7 +330,7 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
       prevComercial, prevRecebido, prevTotal, prevVendas,
       varComercial, varRecebido, varTotal, varVendas
     };
-  }, [filteredPayments, receipts, previousPeriodPayments]);
+  }, [filteredPayments, receipts, previousPeriodPayments, dateFilter, customDateStart, customDateEnd]);
 
   const byAttendant = useMemo((): AttendantStats[] => {
     const attendantMap = new Map<string, { salesCount: number; commercialValue: number; receivedValue: number }>();
@@ -370,6 +412,7 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
   }, [filteredPayments, receipts, sources]);
 
   const details = useMemo((): SaleDetail[] => {
+    // Vendas comerciais
     const mapped = filteredPayments.map(p => {
       const paymentReceipts = receipts.filter(r => r.payment_id === p.id);
       const receivedValue = paymentReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
@@ -386,16 +429,68 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
         paymentDate: p.payment_date,
         sourceName: source?.name || '-',
         sourceColor: source?.color || '#94a3b8',
-        attendantName: p.creator?.name || 'Desconhecido',
+        attendantName: (p.chat as any)?.attendant?.name || p.creator?.name || 'Desconhecido',
         commercialValue: Number(p.value),
         receivedValue,
         description: p.description,
-        status
+        status,
+        isDirect: false
       };
     });
     
+    // Lançamentos diretos (sem payment_id) - filtrar por período
+    const directReceipts = receipts.filter(r => r.payment_id === null && r.receipt_date);
+    let filteredDirectReceipts = directReceipts;
+    
+    if (customDateStart && customDateEnd) {
+      const startDate = new Date(customDateStart);
+      const endDate = new Date(customDateEnd);
+      endDate.setHours(23, 59, 59, 999);
+      filteredDirectReceipts = directReceipts.filter(r => {
+        const receiptDate = new Date(r.receipt_date!);
+        return receiptDate >= startDate && receiptDate <= endDate;
+      });
+    } else if (dateFilter !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+      let endDate: Date = now;
+      
+      switch (dateFilter) {
+        case '7d': startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break;
+        case '30d': startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); break;
+        case 'month': startDate = new Date(now.getFullYear(), now.getMonth(), 1); break;
+        case 'lastMonth':
+          startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+          break;
+        default: startDate = new Date(0);
+      }
+      
+      filteredDirectReceipts = directReceipts.filter(r => {
+        const receiptDate = new Date(r.receipt_date!);
+        return receiptDate >= startDate && receiptDate <= endDate;
+      });
+    }
+    
+    // Adicionar lançamentos diretos à lista
+    const directMapped = filteredDirectReceipts.map(r => ({
+      id: `direct-${r.chat_id}-${r.receipt_date}`,
+      clientName: (r.chat as any)?.client_name || 'Cliente',
+      paymentDate: r.receipt_date!,
+      sourceName: 'Direto',
+      sourceColor: '#14b8a6',
+      attendantName: '-',
+      commercialValue: 0,
+      receivedValue: Number(r.total_value),
+      description: r.description || null,
+      status: 'received' as const,
+      isDirect: true
+    }));
+    
+    const allDetails = [...mapped, ...directMapped];
+    
     // Ordenação
-    return mapped.sort((a, b) => {
+    return allDetails.sort((a, b) => {
       let comparison = 0;
       switch (sortField) {
         case 'date':
@@ -413,7 +508,7 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
       }
       return sortDirection === 'asc' ? comparison : -comparison;
     });
-  }, [filteredPayments, receipts, sources, sortField, sortDirection]);
+  }, [filteredPayments, receipts, sources, sortField, sortDirection, dateFilter, customDateStart, customDateEnd]);
   
   const handleSort = (field: SortField) => {
     if (sortField === field) {

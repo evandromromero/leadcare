@@ -792,16 +792,141 @@ O erro 406 (Not Acceptable) ocorria porque o método `.single()` do Supabase ret
 
 ---
 
-## Próximos Passos (Fase 10)
+## Fase 10: Integração Multi-Canal (Facebook + Instagram) ✅ PARCIALMENTE COMPLETA
+
+### Status da Integração
 
 | Funcionalidade | Status |
 |----------------|--------|
-| Relatórios avançados com exportação | 🔄 Pendente |
-| Gestão de planos e assinaturas | 🔄 Pendente |
-| Auto-registro de clínicas | 🔄 Pendente |
-| Notificações push | 🔄 Pendente |
-| Agendamentos integrados | 🔄 Pendente |
-| Chatbot/IA para respostas automáticas | 🔄 Pendente |
+| OAuth do Facebook (Login com Facebook) | ✅ Completo |
+| Receber mensagens do Messenger | ✅ Completo |
+| Enviar mensagens pelo Messenger | ✅ Completo |
+| OAuth do Instagram (Login com Instagram) | ✅ Completo |
+| Assinatura automática de webhook (Facebook) | ✅ Completo |
+| Assinatura automática de webhook (Instagram) | ✅ Completo |
+| Receber mensagens do Instagram Direct | ⚠️ Requer aprovação da Meta |
+| Enviar mensagens pelo Instagram Direct | ⚠️ Requer aprovação da Meta |
+
+### Edge Functions Criadas
+
+| Função | Versão | Descrição |
+|--------|--------|-----------|
+| `facebook-oauth-callback` | v9 | Processa OAuth do Facebook, busca páginas, Instagram vinculado, assina webhooks |
+| `instagram-oauth-callback` | v2 | Processa OAuth do Instagram com Login do Instagram, assina webhook |
+| `meta-webhook` | v9 | Recebe eventos do Facebook e Instagram (mensagens, status, etc) |
+
+### URLs para Meta for Developers
+
+| Configuração | URL |
+|--------------|-----|
+| URI de Redirecionamento OAuth (Facebook) | `https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/facebook-oauth-callback` |
+| URI de Redirecionamento OAuth (Instagram) | `https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/instagram-oauth-callback` |
+| URL do Webhook | `https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/meta-webhook` |
+| Token de Verificação | `belitx_meta_webhook_2024` |
+
+### Colunas na tabela `clinics` (Meta)
+
+| Campo | Descrição |
+|-------|-----------|
+| `facebook_page_id` | ID da página do Facebook |
+| `facebook_page_name` | Nome da página |
+| `facebook_page_access_token` | Token da página (longa duração) |
+| `facebook_user_access_token` | Token do usuário (longa duração) |
+| `facebook_enabled` | Boolean - Facebook ativo |
+| `instagram_business_account_id` | ID da conta Instagram Business |
+| `instagram_username` | Username do Instagram (@usuario) |
+| `instagram_access_token` | Token do Instagram (longa duração) |
+| `instagram_enabled` | Boolean - Instagram ativo |
+| `instagram_connected_at` | Timestamp da conexão do Instagram |
+| `meta_connected_at` | Timestamp da conexão do Facebook |
+
+### Colunas na tabela `settings` (Credenciais do App)
+
+| Campo | Descrição |
+|-------|-----------|
+| `meta_app_id` | ID do App no Meta for Developers |
+| `meta_app_secret` | Chave secreta do App |
+| `instagram_app_id` | ID do App do Instagram (pode ser o mesmo) |
+| `instagram_app_secret` | Chave secreta do Instagram |
+
+### Permissões Necessárias do App
+
+| Permissão | Descrição | Status |
+|-----------|-----------|--------|
+| `pages_show_list` | Listar páginas do usuário | ✅ Disponível |
+| `pages_messaging` | Enviar/receber mensagens do Messenger | ✅ Disponível |
+| `pages_manage_metadata` | Gerenciar metadados da página | ✅ Disponível |
+| `instagram_basic` | Acesso básico ao Instagram | ✅ Disponível |
+| `instagram_manage_messages` | Enviar/receber mensagens do Instagram Direct | ⚠️ Requer aprovação |
+
+### Fluxo de Conexão
+
+```
+1. Cliente clica em "Conectar Facebook" ou "Conectar Instagram"
+2. Popup abre com OAuth da Meta/Instagram
+3. Usuário autoriza o app
+4. Callback processa o código e obtém tokens
+5. Tokens são convertidos para longa duração (60 dias)
+6. Páginas/contas são buscadas automaticamente
+7. Webhooks são assinados automaticamente
+8. Dados são salvos no banco
+9. Popup fecha e página atualiza
+```
+
+### O que falta para Instagram funcionar
+
+1. **Solicitar aprovação da permissão `instagram_manage_messages`** no Meta for Developers
+2. **Passar pelo processo de revisão do App** (Business Verification)
+3. **Colocar o App em modo Live** (não desenvolvimento)
+
+**Alternativa para testes:**
+- Adicionar a conta do Instagram como **Testador** no App
+- Aceitar o convite na conta do Instagram
+- Funciona apenas para testadores em modo de desenvolvimento
+
+### Arquivos Criados/Modificados
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `supabase/functions/facebook-oauth-callback/index.ts` | OAuth Facebook + assinatura webhook Instagram |
+| `supabase/functions/instagram-oauth-callback/index.ts` | OAuth Instagram com Login do Instagram |
+| `supabase/functions/meta-webhook/index.ts` | Webhook para Facebook e Instagram |
+| `pages/Integrations.tsx` | UI de conexão Facebook/Instagram |
+| `pages/admin/AdminIntegrations.tsx` | Configuração das credenciais do App |
+
+---
+
+## Próximos Passos (Pendentes)
+
+| Funcionalidade | Status | Prioridade |
+|----------------|--------|------------|
+| Aprovação `instagram_manage_messages` pela Meta | 🔄 Pendente | Alta |
+| Funcionalidade de excluir conversa | 🔄 Pendente | Média |
+| Relatórios avançados com exportação | 🔄 Pendente | Média |
+| Gestão de planos e assinaturas | 🔄 Pendente | Baixa |
+| Auto-registro de clínicas | 🔄 Pendente | Baixa |
+| Notificações push | 🔄 Pendente | Baixa |
+| Agendamentos integrados | 🔄 Pendente | Baixa |
+| Chatbot/IA para respostas automáticas | 🔄 Pendente | Baixa |
+
+---
+
+## Atualizações - 29/01/2026 (Madrugada)
+
+### O que foi feito hoje? 🌙
+
+Implementamos a **Integração Multi-Canal com Facebook e Instagram**:
+
+1. **Facebook/Messenger** - Funcionando 100%
+   - OAuth com popup
+   - Assinatura automática de webhook
+   - Receber e enviar mensagens em tempo real
+
+2. **Instagram Direct** - Estrutura pronta, aguardando aprovação da Meta
+   - OAuth separado (Login com Instagram)
+   - Assinatura automática de webhook
+   - Webhook preparado para processar mensagens
+   - **Bloqueio**: Permissão `instagram_manage_messages` requer aprovação
 
 ---
 
@@ -1787,7 +1912,257 @@ O sistema agora compara timestamps antes de atualizar dados:
 
 ---
 
+### Fase 7: Melhorias de Administração ✅ COMPLETA
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Edge Function `impersonate-user` (login como usuário) | ✅ Completo |
+| Botão "Logar como" na lista de usuários do AdminClinicDetail | ✅ Completo |
+| Correção de inconsistência de role entre auth.users e tabela users | ✅ Completo |
+| Rodapé com direitos autorais (Betix/Alpha Omega MS) | ✅ Completo |
+| Modal de solicitação de orçamento via WhatsApp | ✅ Completo |
+
+#### Edge Function: impersonate-user
+
+Permite que o SuperAdmin faça login como qualquer usuário da clínica para debug e suporte:
+- Gera link de login mágico via `supabase.auth.admin.generateLink()`
+- Apenas SuperAdmin pode usar
+- Não permite impersonate de outros SuperAdmins
+- Registra log de acesso para auditoria
+
+#### Componente Footer
+
+Rodapé presente em todas as páginas (Login e área logada):
+- Texto: "© 2026 Betix - Todos os direitos reservados | Desenvolvido por Alpha Omega MS"
+- Botão "Solicitar Orçamento" que abre modal
+- Formulário com Nome, WhatsApp e Descrição do projeto
+- Envio via Evolution API para o número do desenvolvedor
+
+---
+
+### Fase 8: Integração Meta (Facebook + Instagram) 🔄 EM ANDAMENTO
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Edge Function `facebook-oauth-callback` | ✅ Completo |
+| Edge Function `meta-webhook` | ✅ Completo |
+| Workflow de configuração documentado | ✅ Completo |
+| Colunas no banco para Facebook/Instagram | 🔄 Pendente |
+| Botão "Conectar Facebook/Instagram" na página Integrações | 🔄 Pendente |
+| Recebimento de mensagens do Messenger | 🔄 Pendente |
+| Recebimento de mensagens do Instagram Direct | 🔄 Pendente |
+| Envio de mensagens para Messenger/Instagram | 🔄 Pendente |
+
+#### Edge Functions Criadas
+
+| Função | URL | JWT | Descrição |
+|--------|-----|-----|-----------|
+| `facebook-oauth-callback` | `/functions/v1/facebook-oauth-callback` | false | Recebe callback OAuth do Facebook |
+| `meta-webhook` | `/functions/v1/meta-webhook` | false | Recebe mensagens do Messenger/Instagram |
+
+#### URLs para Configurar no Meta for Developers
+
+| Configuração | URL |
+|--------------|-----|
+| URI de Redirecionamento OAuth | `https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/facebook-oauth-callback` |
+| URL do Webhook | `https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/meta-webhook` |
+| Token de Verificação | `belitx_meta_webhook_2024` |
+
+#### Fluxo de Autenticação
+
+1. Usuário clica em "Conectar Facebook/Instagram" no Belitx
+2. Abre popup do Facebook pedindo autorização
+3. Usuário autoriza as permissões (pages_messaging, instagram_manage_messages)
+4. Facebook redireciona para `facebook-oauth-callback` com código
+5. Edge function troca código por access token de longa duração (60 dias)
+6. Busca páginas do Facebook e contas do Instagram vinculadas
+7. Salva tokens na tabela `clinics`
+8. Redireciona de volta para o frontend
+
+#### Fluxo de Mensagens
+
+1. Cliente envia mensagem no Messenger ou Instagram Direct
+2. Meta envia POST para `meta-webhook`
+3. Edge function identifica a clínica pelo `facebook_page_id`
+4. Cria ou atualiza chat na tabela `chats` com `channel = 'facebook'` ou `'instagram'`
+5. Salva mensagem na tabela `messages`
+6. Realtime do Supabase notifica o frontend
+
+#### Colunas Necessárias na Tabela `clinics`
+
+```sql
+facebook_page_id TEXT
+facebook_page_name TEXT
+facebook_page_access_token TEXT
+facebook_user_access_token TEXT
+facebook_enabled BOOLEAN DEFAULT FALSE
+instagram_business_account_id TEXT
+instagram_enabled BOOLEAN DEFAULT FALSE
+meta_connected_at TIMESTAMPTZ
+```
+
+#### Workflow
+
+Use o comando `/integracaometafacebookinstagram` para ver o guia completo de configuração.
+
+---
+
+## Configuração de Seções do Painel Lateral (Inbox) - 29/01/2026
+
+### Funcionalidade
+
+Permite ao usuário **personalizar** o painel lateral direito do Inbox:
+- **Esconder/Mostrar** seções que não usa
+- **Reordenar** seções conforme preferência (1º, 2º, 3º...)
+- **Persistência** automática no localStorage
+
+### Seções Configuráveis
+
+| Seção | Chave | Descrição |
+|-------|-------|-----------|
+| Etapa do Pipeline | `pipeline` | Funil de vendas do lead |
+| Responsável | `responsavel` | Atendente responsável pelo chat |
+| Origem do Lead | `origem` | De onde o lead veio |
+| Etiquetas | `etiquetas` | Tags para categorização |
+| Orçamentos | `orcamentos` | Propostas enviadas ao cliente |
+| Negociações Comerciais | `negociacoes` | Vendas registradas |
+| Lançamentos da Clínica | `lancamentos` | Recebimentos diretos |
+| Tarefas | `tarefas` | Lista de tarefas pendentes |
+| Follow-up | `followup` | Mensagens agendadas |
+| Observações | `observacoes` | Notas internas |
+
+### Arquivos Criados/Modificados
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `components/InboxDetailsSections.tsx` | Componente com hook e modal de configuração |
+| `pages/Inbox.tsx` | Integração do componente e CSS order nas seções |
+
+### Componente `InboxDetailsSections.tsx`
+
+```typescript
+// Hook para gerenciar seções
+export const useSectionConfig = () => {
+  // Estados
+  const [hiddenSections, setHiddenSections] = useState<Record<SectionKey, boolean>>();
+  const [sectionOrder, setSectionOrder] = useState<SectionKey[]>();
+  
+  // Funções
+  const toggleSectionVisibility = (key: SectionKey) => { ... };
+  const moveSectionUp = (key: SectionKey) => { ... };
+  const moveSectionDown = (key: SectionKey) => { ... };
+  const isSectionVisible = (key: SectionKey) => !hiddenSections[key];
+  const getSectionOrder = (key: SectionKey) => sectionOrder.indexOf(key);
+  
+  return { ... };
+};
+
+// Modal de configuração
+export const SectionConfigModal: React.FC<SectionConfigModalProps> = ({ ... });
+```
+
+### Persistência no localStorage
+
+| Chave | Descrição |
+|-------|-----------|
+| `inbox_hidden_sections` | Objeto com seções ocultas `{ etiquetas: true, ... }` |
+| `inbox_section_order` | Array com ordem das seções `['pipeline', 'etiquetas', ...]` |
+
+### Como Usar
+
+1. Clique no botão ⚙️ (engrenagem) no topo do painel lateral direito
+2. No modal "Configurar Seções":
+   - Use as setas ↑↓ para reordenar
+   - Use os checkboxes para esconder/mostrar
+   - O número (1º, 2º, 3º...) indica a posição atual
+3. Clique em "Concluído"
+4. As seções serão reorganizadas visualmente
+
+### Implementação Técnica
+
+- **Visibilidade**: Condicionais `{isSectionVisible('key') && ( ... )}`
+- **Reordenação**: CSS `style={{ order: getSectionOrder('key') }}`
+- **Container**: `flex flex-col gap-8` no div das seções
+
+---
+
+## Melhorias - 30/01/2026
+
+### Múltiplas Contas Meta Ads
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Tabela `clinic_meta_accounts` para múltiplas contas | ✅ Completo |
+| Migração de dados existentes | ✅ Completo |
+| Página de Integrações com gerenciamento de contas | ✅ Completo |
+| Edge function `meta-ads-api` atualizada | ✅ Completo |
+| Abas dinâmicas no Dashboard por conta Meta Ads | ✅ Completo |
+| Coluna `meta_account_id` na tabela `chats` | ✅ Completo |
+| Webhook captura `meta_account_id` dos leads | ✅ Completo |
+| Dashboard filtra leads por `meta_account_id` | ✅ Completo |
+
+### Novas Tabelas
+
+| Tabela | Descrição |
+|--------|-----------|
+| `clinic_meta_accounts` | Contas Meta Ads por clínica (account_id, account_name, access_token, is_active) |
+
+### Novos Campos
+
+| Tabela | Campo | Descrição |
+|--------|-------|-----------|
+| `chats` | `meta_account_id` | ID da conta Meta Ads de origem do lead |
+
+### Dashboard - Cards de Faturamento
+
+| Card | Descrição |
+|------|-----------|
+| **Receita Comercial** | Faturamento do comercial (tabela `payments`) |
+| **Receita Clínica** | Faturamento da clínica (tabela `clinic_receipts`) |
+| **Faturamento do Mês** | Comercial + Clínica do mês atual |
+| **Faturamento Total** | Comercial + Clínica acumulado |
+
+### Dashboard - Leads por Origem
+
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| Filtro "Hoje" | Mostra apenas leads do dia atual |
+| Filtro "7 dias" | Padrão selecionado |
+| Filtro "30 dias" | Últimos 30 dias |
+| Filtro "Este mês" | Mês atual |
+| Filtro "Todos" | Sem filtro de data |
+| Paginação | Mínimo 10 itens por página |
+| Mensagem vazia | "Nenhum lead encontrado para o período selecionado" |
+
+### Restrições de Abas no Dashboard
+
+| Aba | Visível para |
+|-----|--------------|
+| Visão Geral | Todos |
+| Clínica Belizze (Meta Ads) | Apenas Admin |
+| Dra. Kamylle (Meta Ads) | Apenas Admin |
+| Tarefas | Todos |
+| Produtividade | Todos |
+| Links | Apenas Admin |
+| Leads | Todos |
+
+### Correção - Login como Cliente no /admin
+
+- **Problema**: `navigate('/dashboard')` + `window.location.reload()` causava condição de corrida
+- **Solução**: Usar `window.location.href = '/dashboard'` diretamente
+- **Resultado**: Impersonate funciona corretamente em produção
+
+### Edge Function: evolution-webhook
+
+Melhorias implementadas:
+- Busca `account_id` via Meta Graph API quando lead vem de anúncio
+- Salva `meta_account_id` no chat para identificar conta de origem
+- Permite filtrar leads por conta Meta Ads no Dashboard
+
+---
+
 ## Desenvolvido por
 
-**LeadCare** - CRM para Clínicas
+**Betix** - CRM para Clínicas
+Desenvolvido por **Alpha Omega MS**
 React + TypeScript + Supabase

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Key, BarChart3, Facebook, Eye, EyeOff } from 'lucide-react';
+import { Save, Key, BarChart3, Facebook, Eye, EyeOff, MessageCircle, Instagram } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface IntegrationSettings {
   facebook_ads_account_id: string;
   facebook_ads_token: string;
   facebook_ads_visible_columns: string[];
+  meta_app_id: string;
+  meta_app_secret: string;
+  meta_webhook_verify_token: string;
 }
 
 const ALL_CAMPAIGN_COLUMNS = [
@@ -55,10 +58,14 @@ const AdminIntegrations: React.FC = () => {
     facebook_ads_account_id: '',
     facebook_ads_token: '',
     facebook_ads_visible_columns: DEFAULT_VISIBLE_COLUMNS,
+    meta_app_id: '',
+    meta_app_secret: '',
+    meta_webhook_verify_token: 'belitx_meta_webhook_2024',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [showMetaSecret, setShowMetaSecret] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -69,7 +76,7 @@ const AdminIntegrations: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('settings')
-        .select('facebook_ads_account_id, facebook_ads_token, facebook_ads_visible_columns')
+        .select('facebook_ads_account_id, facebook_ads_token, facebook_ads_visible_columns, meta_app_id, meta_app_secret, meta_webhook_verify_token')
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
@@ -80,6 +87,9 @@ const AdminIntegrations: React.FC = () => {
           facebook_ads_account_id: d.facebook_ads_account_id || '',
           facebook_ads_token: d.facebook_ads_token || '',
           facebook_ads_visible_columns: d.facebook_ads_visible_columns || DEFAULT_VISIBLE_COLUMNS,
+          meta_app_id: d.meta_app_id || '',
+          meta_app_secret: d.meta_app_secret || '',
+          meta_webhook_verify_token: d.meta_webhook_verify_token || 'belitx_meta_webhook_2024',
         });
       }
     } catch (error) {
@@ -100,6 +110,9 @@ const AdminIntegrations: React.FC = () => {
           facebook_ads_account_id: settings.facebook_ads_account_id,
           facebook_ads_token: settings.facebook_ads_token,
           facebook_ads_visible_columns: settings.facebook_ads_visible_columns,
+          meta_app_id: settings.meta_app_id,
+          meta_app_secret: settings.meta_app_secret,
+          meta_webhook_verify_token: settings.meta_webhook_verify_token,
           updated_at: new Date().toISOString(),
         } as any)
         .eq('id', 1 as any);
@@ -233,6 +246,116 @@ const AdminIntegrations: React.FC = () => {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+
+        {/* Meta App - Facebook/Instagram Messaging */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+          <div className="p-4 sm:p-6 border-b border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                <MessageCircle className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-semibold text-slate-800">Meta App (Facebook/Instagram)</h2>
+                <p className="text-xs sm:text-sm text-slate-500">Receber mensagens do Messenger e Instagram Direct</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-blue-600">info</span>
+                <div className="text-sm text-blue-700">
+                  <p className="font-medium mb-1">Como funciona:</p>
+                  <p>Configure seu App do Meta aqui. Cada clínica poderá conectar sua própria página do Facebook/Instagram usando OAuth.</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                <Facebook className="w-4 h-4 inline mr-2" />
+                App ID
+              </label>
+              <input
+                type="text"
+                value={settings.meta_app_id}
+                onChange={(e) => setSettings({ ...settings, meta_app_id: e.target.value })}
+                placeholder="4177299802587376"
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Encontre em: Meta for Developers → Seu App → Configurações → Básico
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                <Key className="w-4 h-4 inline mr-2" />
+                App Secret
+              </label>
+              <div className="relative">
+                <input
+                  type={showMetaSecret ? 'text' : 'password'}
+                  value={settings.meta_app_secret}
+                  onChange={(e) => setSettings({ ...settings, meta_app_secret: e.target.value })}
+                  placeholder="••••••••••••••••••••••••••••••••"
+                  className="w-full px-4 py-2 pr-12 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowMetaSecret(!showMetaSecret)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showMetaSecret ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Chave secreta do aplicativo Meta (nunca compartilhe!)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                <span className="material-symbols-outlined text-base align-middle mr-1">webhook</span>
+                Token de Verificação do Webhook
+              </label>
+              <input
+                type="text"
+                value={settings.meta_webhook_verify_token}
+                onChange={(e) => setSettings({ ...settings, meta_webhook_verify_token: e.target.value })}
+                placeholder="belitx_meta_webhook_2024"
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Use este token ao configurar o Webhook no Meta for Developers
+              </p>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <h4 className="text-sm font-medium text-slate-700 mb-3">URLs para configurar no Meta:</h4>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 mb-1">URI de Redirecionamento OAuth:</p>
+                  <code className="block text-xs bg-white p-2 rounded border border-slate-200 text-slate-700 break-all">
+                    https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/facebook-oauth-callback
+                  </code>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500 mb-1">URL do Webhook:</p>
+                  <code className="block text-xs bg-white p-2 rounded border border-slate-200 text-slate-700 break-all">
+                    https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/meta-webhook
+                  </code>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200">
+              <span className="material-symbols-outlined text-green-600">check_circle</span>
+              <span className="text-sm text-green-700">Edge Functions deployadas e prontas para uso</span>
             </div>
           </div>
         </div>

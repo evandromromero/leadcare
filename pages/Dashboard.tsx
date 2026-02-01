@@ -1,12 +1,15 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
 import { useAuth } from '../hooks/useAuth';
 import { useTasks } from '../hooks/useTasks';
 import { supabase } from '../lib/supabase';
 import { getDataAccess } from '../lib/permissions';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area } from 'recharts';
+import DashboardLeadsTab from '../components/DashboardLeadsTab';
+import DashboardChartsTab from '../components/DashboardChartsTab';
 
 interface DashboardProps {
   state: GlobalState;
@@ -25,8 +28,16 @@ interface LeadSourceStats {
   tag_color: string | null;
 }
 
+interface MetaAdsAccount {
+  id: string;
+  account_id: string;
+  account_name: string;
+  has_token: boolean;
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const clinicId = state.selectedClinic?.id;
   const { chats, loading } = useChats(clinicId, user?.id);
@@ -42,7 +53,78 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const [loadingStats, setLoadingStats] = useState(true);
   
   // Filtro de período para Leads por Origem
-  const [sourcesPeriodFilter, setSourcesPeriodFilter] = useState<'all' | '7d' | '30d' | 'month'>('all');
+  const [sourcesPeriodFilter, setSourcesPeriodFilter] = useState<'today' | 'all' | '7d' | '30d' | 'month'>('7d');
+  
+  // Paginação para Leads por Origem
+  const [sourcesPage, setSourcesPage] = useState(1);
+  const sourcesPerPage = 10;
+  
+  // Estado para aba ativa do Dashboard (string para suportar abas dinâmicas como 'meta_123456')
+  // Ler parâmetro 'tab' da URL para abrir na aba correta
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<string>(tabFromUrl || 'overview');
+  
+  // Contas Meta Ads disponíveis
+  const [metaAdsAccounts, setMetaAdsAccounts] = useState<MetaAdsAccount[]>([]);
+  const [selectedMetaAccountId, setSelectedMetaAccountId] = useState<string | null>(null);
+  
+  // Estados para dados de campanhas (aba Campanhas)
+  const [campaignStats, setCampaignStats] = useState<{
+    leadsByDay: Array<{ date: string; leads: number; campanhas: number }>;
+    metaAds: Array<{ chat_id: string; ad_title: string; count: number; ad_source_type: string | null; client_name?: string; phone_number?: string; source_code?: string; ad_name?: string; campaign_name?: string; adset_name?: string; created_at?: string; utm_source?: string; utm_medium?: string; utm_campaign?: string; utm_content?: string; utm_term?: string }>;
+    leadsByPlatform: Array<{ name: string; value: number; color: string }>;
+    sourceStats: Array<{ id: string; name: string; code: string | null; color: string; total_leads: number; converted_leads: number; revenue: number }>;
+  } | null>(null);
+  const [customDateRange, setCustomDateRange] = useState<{ start: string; end: string } | null>(null);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [campaignPeriod, setCampaignPeriod] = useState<'today' | '7d' | '30d' | '90d' | 'custom'>('30d');
+  
+  // Estados para dados da Meta Ads API
+  const [metaAdsApiData, setMetaAdsApiData] = useState<{
+    campaigns: Array<{ id: string; name: string; status: string; objective: string }>;
+    adsets: Array<{ id: string; name: string; status: string; effective_status?: string; campaign_id: string; daily_budget?: string; lifetime_budget?: string; budget_remaining?: string; optimization_goal?: string; destination_type?: string; targeting?: any }>;
+    ads: Array<{ id: string; name: string; status: string; campaign_id: string; adset_id: string }>;
+    insights: Array<{ campaign_name: string; adset_name?: string; ad_name: string; impressions: string; clicks: string; spend: string }>;
+    campaignInsights: Array<{ campaign_id: string; campaign_name: string; impressions: string; clicks: string; spend: string; reach: string; ctr: string; cpc: string }>;
+    adsetInsights: Array<{ campaign_id: string; adset_id: string; adset_name: string; impressions: string; clicks: string; spend: string; reach: string; ctr: string; cpc: string }>;
+  } | null>(null);
+  const [loadingMetaAdsApi, setLoadingMetaAdsApi] = useState(false);
+  const [metaAdsConfigured, setMetaAdsConfigured] = useState(false);
+  const [expandedCampaignSections, setExpandedCampaignSections] = useState<{ active: boolean; paused: boolean; other: boolean; performance: boolean }>({ active: true, paused: false, other: false, performance: true });
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
+  
+  // Estados para aba Tarefas
+  const [tasks, setTasks] = useState<Array<{ id: string; chat_id: string; title: string; description: string | null; due_date: string | null; completed: boolean; completed_at: string | null; created_by: string | null; created_at: string; client_name?: string }>>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [tasksFilter, setTasksFilter] = useState<'all' | 'pending' | 'completed'>('pending');
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<{ id: string; title: string; description: string; due_date: string } | null>(null);
+  
+  // Estados para aba Produtividade
+  const [productivityData, setProductivityData] = useState<Array<{ user_id: string; user_name: string; role: string; avg_response_time: number; first_response_time: number; messages_sent: number; chats_active: number; leads_count: number; conversions: number }>>([]);
+  const [loadingProductivity, setLoadingProductivity] = useState(false);
+  const [productivityPeriod, setProductivityPeriod] = useState<1 | 7 | 15 | 30>(30);
+  
+  // Estados para Top Anúncios Meta (Click to WhatsApp)
+  const [topMetaAds, setTopMetaAds] = useState<Array<{ ad_title: string; ad_source_id: string; source_code: string; client_name: string }>>([]);
+  
+  // Estado para modal de detalhes do lead Meta Ads
+  const [selectedMetaAdLead, setSelectedMetaAdLead] = useState<{
+    chat_id: string;
+    client_name: string;
+    phone_number: string;
+    source_code: string;
+    ad_title: string;
+    ad_name: string;
+    campaign_name: string;
+    adset_name: string;
+    created_at: string;
+    utm_source?: string;
+    utm_medium?: string;
+    utm_campaign?: string;
+    utm_content?: string;
+    utm_term?: string;
+  } | null>(null);
   
   // Filtro de origens selecionadas (null = todas)
   const [selectedSources, setSelectedSources] = useState<string[] | null>(null);
@@ -60,6 +142,19 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     totalComercial: number;
     totalRecebido: number;
     roi: string;
+  } | null>(null);
+  
+  // Estado para receita direta da clínica (lançamentos sem comercial)
+  const [directClinicRevenue, setDirectClinicRevenue] = useState<{
+    total: number;
+    monthly: number;
+    count: number;
+  } | null>(null);
+  
+  // Estado para receita total da clínica (todos os clinic_receipts)
+  const [totalClinicRevenue, setTotalClinicRevenue] = useState<{
+    total: number;
+    monthly: number;
   } | null>(null);
   
   // Estado para lista detalhada de vendas do comercial
@@ -103,6 +198,13 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     leadsHojeOntem: number;
     leadsCampanhaHoje: number;
     leadsCampanhaOntem: number;
+    leadsMetaAdsHoje: number;
+    leadsMetaAdsOntem: number;
+    leadsLinksHoje: number;
+    leadsLinksOntem: number;
+    leadsOrganicoHoje: number;
+    leadsOrganicoOntem: number;
+    topOrigens: Array<{ nome: string; codigo: string; quantidade: number; tipo: 'meta' | 'link' | 'source' }>;
     codigosRecentes: string[];
   } | null>(null);
   
@@ -283,21 +385,39 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             .select('id, name, code, color, tag_id, tag:tags(id, name, color)')
             .eq('clinic_id', clinicId);
           
-          // Buscar clinic_receipts vinculados aos payments para calcular receita clínica
-          const { data: receiptsData } = await supabase
+          // Buscar clinic_receipts vinculados aos payments ATIVOS para calcular receita clínica
+          // Primeiro, pegar os IDs dos payments ativos
+          const activePaymentIds = (paymentsData || []).map(p => p.id);
+          
+          let receiptsData: any[] | null = null;
+          if (activePaymentIds.length > 0) {
+            const { data } = await supabase
+              .from('clinic_receipts' as any)
+              .select('id, payment_id, total_value')
+              .eq('clinic_id', clinicId)
+              .in('payment_id', activePaymentIds);
+            receiptsData = data;
+          }
+          
+          // Buscar lançamentos diretos (sem payment_id) com chat_id para vincular à origem
+          const { data: directReceiptsForSources } = await supabase
             .from('clinic_receipts' as any)
-            .select('id, payment_id, total_value')
-            .eq('clinic_id', clinicId);
+            .select('id, chat_id, total_value, receipt_date')
+            .eq('clinic_id', clinicId)
+            .is('payment_id', null);
           
           if (sourcesData && sourcesData.length > 0) {
             // Função para filtrar chats por período
-            const getFilteredChats = (allChats: any[], period: 'all' | '7d' | '30d' | 'month') => {
+            const getFilteredChats = (allChats: any[], period: 'today' | 'all' | '7d' | '30d' | 'month') => {
               if (period === 'all') return allChats;
               
               const now = new Date();
               let startDate: Date;
               
               switch (period) {
+                case 'today':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  break;
                 case '7d':
                   startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
                   break;
@@ -315,13 +435,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             };
             
             // Função para filtrar payments por período
-            const getFilteredPayments = (allPayments: any[], period: 'all' | '7d' | '30d' | 'month') => {
+            const getFilteredPayments = (allPayments: any[], period: 'today' | 'all' | '7d' | '30d' | 'month') => {
               if (period === 'all') return allPayments;
               
               const now = new Date();
               let startDate: Date;
               
               switch (period) {
+                case 'today':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  break;
                 case '7d':
                   startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
                   break;
@@ -353,9 +476,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               
               // Receita clínica (clinic_receipts vinculados aos payments desta origem)
               const sourcePaymentIds = sourcePayments.map(p => p.id);
-              const clinicRevenue = (receiptsData as any[] || [])
+              const clinicRevenueFromPayments = (receiptsData as any[] || [])
                 .filter(r => sourcePaymentIds.includes(r.payment_id))
                 .reduce((sum, r) => sum + Number(r.total_value), 0);
+              
+              // Receita direta (lançamentos sem payment_id, vinculados aos chats desta origem)
+              const directRevenueFromSource = (directReceiptsForSources as any[] || [])
+                .filter(r => sourceChatIds.includes(r.chat_id))
+                .reduce((sum, r) => sum + Number(r.total_value), 0);
+              
+              const clinicRevenue = clinicRevenueFromPayments + directRevenueFromSource;
               
               return {
                 id: source.id,
@@ -445,6 +575,48 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         } else {
           setClinicReceiptsData(null);
           setMySalesDetails([]);
+        }
+        
+        // Buscar TODOS os clinic_receipts para calcular receita total da clínica
+        const { data: allClinicReceiptsData } = await supabase
+          .from('clinic_receipts' as any)
+          .select('id, total_value, receipt_date, payment_id')
+          .eq('clinic_id', clinicId);
+        
+        if (allClinicReceiptsData && allClinicReceiptsData.length > 0) {
+          const now = new Date();
+          const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          
+          // Receita total da clínica (todos os clinic_receipts)
+          const totalClinic = (allClinicReceiptsData as any[]).reduce((sum, r) => sum + Number(r.total_value), 0);
+          const monthlyClinic = (allClinicReceiptsData as any[])
+            .filter(r => new Date(r.receipt_date) >= firstDayOfMonth)
+            .reduce((sum, r) => sum + Number(r.total_value), 0);
+          
+          setTotalClinicRevenue({
+            total: totalClinic,
+            monthly: monthlyClinic
+          });
+          
+          // Receita direta (sem comercial - payment_id IS NULL)
+          const directReceipts = (allClinicReceiptsData as any[]).filter(r => !r.payment_id);
+          if (directReceipts.length > 0) {
+            const directTotal = directReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
+            const directMonthly = directReceipts
+              .filter(r => new Date(r.receipt_date) >= firstDayOfMonth)
+              .reduce((sum, r) => sum + Number(r.total_value), 0);
+            
+            setDirectClinicRevenue({
+              total: directTotal,
+              monthly: directMonthly,
+              count: directReceipts.length
+            });
+          } else {
+            setDirectClinicRevenue(null);
+          }
+        } else {
+          setDirectClinicRevenue(null);
+          setTotalClinicRevenue(null);
         }
       } catch (err) {
         console.error('Error fetching stats:', err);
@@ -555,24 +727,96 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         yesterdayEnd.setHours(23, 59, 59, 999);
         const yesterdayEndStr = yesterdayEnd.toISOString();
         
-        // Buscar leads criados HOJE
-        const { data: leadsHoje } = await supabase
+        // Buscar leads criados HOJE com mais detalhes
+        const { data: leadsHoje } = await (supabase as any)
           .from('chats')
-          .select('id, source_id')
+          .select('id, source_id, ad_source_id, meta_campaign_name, meta_ad_name, lead_sources(id, code, name)')
           .eq('clinic_id', clinicId)
           .eq('is_group', false)
           .gte('created_at', todayStart);
         
         // Buscar leads criados ONTEM
-        const { data: leadsOntem } = await supabase
+        const { data: leadsOntem } = await (supabase as any)
           .from('chats')
-          .select('id, source_id')
+          .select('id, source_id, ad_source_id')
           .eq('clinic_id', clinicId)
           .eq('is_group', false)
           .gte('created_at', yesterdayStart)
           .lte('created_at', yesterdayEndStr);
         
-        // Buscar códigos de campanha recentes (últimos 5)
+        // Buscar links rastreáveis da clínica
+        const { data: trackableLinks } = await (supabase as any)
+          .from('trackable_links')
+          .select('id, code, name, source_id')
+          .eq('clinic_id', clinicId);
+        
+        const trackableLinkSourceIds = new Set(trackableLinks?.map((l: any) => l.source_id).filter(Boolean) || []);
+        const trackableLinkCodes = new Set(trackableLinks?.map((l: any) => l.code?.toUpperCase()).filter(Boolean) || []);
+        
+        // Classificar leads de hoje
+        const leadsHojeArr = leadsHoje || [];
+        const leadsOntemArr = leadsOntem || [];
+        
+        // Meta Ads = tem ad_source_id
+        const leadsMetaAdsHoje = leadsHojeArr.filter((l: any) => l.ad_source_id).length;
+        const leadsMetaAdsOntem = leadsOntemArr.filter((l: any) => l.ad_source_id).length;
+        
+        // Links Rastreáveis = source_id está na lista de links OU código do source está na lista
+        const leadsLinksHoje = leadsHojeArr.filter((l: any) => {
+          if (!l.source_id) return false;
+          if (trackableLinkSourceIds.has(l.source_id)) return true;
+          const sourceCode = (l.lead_sources as any)?.code?.toUpperCase();
+          return sourceCode && trackableLinkCodes.has(sourceCode);
+        }).length;
+        const leadsLinksOntem = leadsOntemArr.filter((l: any) => trackableLinkSourceIds.has(l.source_id)).length;
+        
+        // Orgânico = sem source_id e sem ad_source_id
+        const leadsOrganicoHoje = leadsHojeArr.filter((l: any) => !l.source_id && !l.ad_source_id).length;
+        const leadsOrganicoOntem = leadsOntemArr.filter((l: any) => !l.source_id && !l.ad_source_id).length;
+        
+        // De Campanhas = tem source_id (qualquer origem identificada)
+        const leadsCampanhaHoje = leadsHojeArr.filter((l: any) => l.source_id || l.ad_source_id).length;
+        const leadsCampanhaOntem = leadsOntemArr.filter((l: any) => l.source_id || l.ad_source_id).length;
+        
+        // Top Origens de hoje - separando Meta Ads de origens do sistema
+        const origemCount: Record<string, { nome: string; codigo: string; quantidade: number; tipo: 'meta' | 'link' | 'source' }> = {};
+        
+        for (const lead of leadsHojeArr) {
+          let key = '';
+          let nome = '';
+          let codigo = '';
+          let tipo: 'meta' | 'link' | 'source' = 'source';
+          
+          if (lead.ad_source_id) {
+            // Meta Ads - agrupar por nome do anúncio (meta_ad_name)
+            const adName = lead.meta_ad_name || 'Anúncio Meta';
+            const campaignName = lead.meta_campaign_name || '';
+            key = `meta_${adName}`; // Agrupar por nome do anúncio
+            nome = adName;
+            codigo = campaignName;
+            tipo = 'meta';
+          } else if (lead.source_id && (lead.lead_sources as any)) {
+            // Origem do sistema - usar dados corretos da origem
+            const source = lead.lead_sources as any;
+            key = `source_${source.id}`;
+            nome = source.name || source.code || 'Origem';
+            codigo = source.code || '';
+            tipo = trackableLinkSourceIds.has(lead.source_id) || trackableLinkCodes.has(source.code?.toUpperCase()) ? 'link' : 'source';
+          }
+          
+          if (key) {
+            if (!origemCount[key]) {
+              origemCount[key] = { nome, codigo, quantidade: 0, tipo };
+            }
+            origemCount[key].quantidade++;
+          }
+        }
+        
+        const topOrigens = Object.values(origemCount)
+          .sort((a, b) => b.quantidade - a.quantidade)
+          .slice(0, 7);
+        
+        // Códigos recentes (últimos 5 sources)
         const { data: recentSources } = await supabase
           .from('lead_sources')
           .select('code, name')
@@ -581,17 +825,20 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           .order('created_at', { ascending: false })
           .limit(5);
         
-        const leadsHojeCount = leadsHoje?.length || 0;
-        const leadsHojeCampanha = leadsHoje?.filter((l: any) => l.source_id !== null).length || 0;
-        const leadsOntemCount = leadsOntem?.length || 0;
-        const leadsOntemCampanha = leadsOntem?.filter((l: any) => l.source_id !== null).length || 0;
         const codigos = recentSources?.map((s: any) => s.code || s.name).filter(Boolean) || [];
         
         setLeadsDetails({
-          leadsHoje: leadsHojeCount,
-          leadsHojeOntem: leadsOntemCount,
-          leadsCampanhaHoje: leadsHojeCampanha,
-          leadsCampanhaOntem: leadsOntemCampanha,
+          leadsHoje: leadsHojeArr.length,
+          leadsHojeOntem: leadsOntemArr.length,
+          leadsCampanhaHoje,
+          leadsCampanhaOntem,
+          leadsMetaAdsHoje,
+          leadsMetaAdsOntem,
+          leadsLinksHoje,
+          leadsLinksOntem,
+          leadsOrganicoHoje,
+          leadsOrganicoOntem,
+          topOrigens,
           codigosRecentes: codigos,
         });
       } catch (error) {
@@ -713,6 +960,413 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     fetchCardsDetails();
   }, [clinicId, chats]);
 
+  // Buscar contas Meta Ads disponíveis
+  useEffect(() => {
+    const fetchMetaAccounts = async () => {
+      if (!clinicId) return;
+      
+      const { data } = await (supabase as any)
+        .from('clinic_meta_accounts')
+        .select('id, account_id, account_name, access_token')
+        .eq('clinic_id', clinicId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true });
+      
+      if (data && data.length > 0) {
+        setMetaAdsAccounts(data.map((a: any) => ({
+          id: a.id,
+          account_id: a.account_id,
+          account_name: a.account_name,
+          has_token: !!a.access_token
+        })));
+      }
+    };
+    
+    fetchMetaAccounts();
+  }, [clinicId]);
+
+  // Buscar dados de campanhas quando mudar para aba de conta Meta
+  useEffect(() => {
+    const fetchCampaignStats = async () => {
+      if (!clinicId || !activeTab.startsWith('meta_')) return;
+      setLoadingCampaigns(true);
+      
+      try {
+        // Calcular data de início baseado no período
+        const now = new Date();
+        let startDate = new Date();
+        if (campaignPeriod === 'custom' && customDateRange) {
+          startDate = new Date(customDateRange.start + 'T00:00:00');
+        } else if (campaignPeriod === 'today') startDate.setHours(0, 0, 0, 0);
+        else if (campaignPeriod === '7d') startDate.setDate(now.getDate() - 7);
+        else if (campaignPeriod === '30d') startDate.setDate(now.getDate() - 30);
+        else if (campaignPeriod === '90d') startDate.setDate(now.getDate() - 90);
+        
+        // Calcular data final para período customizado
+        let endDate = new Date();
+        if (campaignPeriod === 'custom' && customDateRange?.end) {
+          endDate = new Date(customDateRange.end + 'T23:59:59');
+        }
+        
+        // Buscar chats do período com dados de campanha
+        // Extrair account_id da aba ativa (formato: meta_123456)
+        const accountIdFromTab = activeTab.startsWith('meta_') ? activeTab.replace('meta_', '') : null;
+        
+        let chatsQuery = supabase
+          .from('chats')
+          .select('id, created_at, source_id, ad_title, ad_source_id, ad_source_type, ad_source_url, client_name, phone_number, meta_campaign_name, meta_adset_name, meta_ad_name, meta_account_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term, lead_sources!chats_source_id_fkey(code)')
+          .eq('clinic_id', clinicId)
+          .eq('is_group', false)
+          .gte('created_at', startDate.toISOString());
+        
+        // Filtrar por conta Meta se uma aba específica estiver selecionada
+        if (accountIdFromTab) {
+          chatsQuery = (chatsQuery as any).eq('meta_account_id', accountIdFromTab);
+        }
+        
+        if (campaignPeriod === 'custom' && customDateRange?.end) {
+          chatsQuery = chatsQuery.lte('created_at', endDate.toISOString());
+        }
+        
+        const { data: chatsData } = await chatsQuery.order('created_at', { ascending: false });
+        
+        if (chatsData) {
+          const chatsArr = chatsData as any[];
+          
+          // 1. Leads por dia
+          const leadsByDayMap = new Map<string, { leads: number; campanhas: number }>();
+          chatsArr.forEach(chat => {
+            const date = new Date(chat.created_at).toLocaleDateString('pt-BR');
+            const current = leadsByDayMap.get(date) || { leads: 0, campanhas: 0 };
+            current.leads++;
+            if (chat.source_id || chat.ad_title) current.campanhas++;
+            leadsByDayMap.set(date, current);
+          });
+          const leadsByDay = Array.from(leadsByDayMap.entries()).map(([date, data]) => ({
+            date,
+            leads: data.leads,
+            campanhas: data.campanhas
+          }));
+          
+          // 2. Anúncios Meta (Click to WhatsApp) - Lista individual de leads
+          // Buscar dados da campanha via Meta API se não estiver preenchido
+          const metaAdsChats = chatsArr.filter(c => c.ad_title).slice(0, 20);
+          const metaAds = await Promise.all(metaAdsChats.map(async (chat) => {
+            let adName = chat.meta_ad_name || '';
+            let campaignName = chat.meta_campaign_name || '';
+            let adsetName = chat.meta_adset_name || '';
+            
+            // Se não tem dados da campanha e tem ad_source_id, buscar na Meta API
+            if (!campaignName && chat.ad_source_id) {
+              try {
+                const { data: adInfo } = await supabase.functions.invoke('meta-ads-api', {
+                  body: { clinic_id: clinicId, action: 'get_ad_info', ad_id: chat.ad_source_id }
+                });
+                if (adInfo?.data) {
+                  adName = adInfo.data.ad_name || adName;
+                  campaignName = adInfo.data.campaign_name || '';
+                  adsetName = adInfo.data.adset_name || '';
+                }
+              } catch (e) {
+                console.log('Erro ao buscar info do anúncio:', e);
+              }
+            }
+            
+            return {
+              chat_id: chat.id,
+              ad_title: chat.ad_title || 'Sem título',
+              count: 1,
+              ad_source_type: chat.ad_source_type,
+              client_name: chat.client_name || 'Cliente',
+              phone_number: chat.phone_number || '',
+              source_code: (chat.lead_sources as any)?.code || '-',
+              ad_name: adName,
+              campaign_name: campaignName,
+              adset_name: adsetName,
+              created_at: chat.created_at,
+              utm_source: chat.utm_source || '',
+              utm_medium: chat.utm_medium || '',
+              utm_campaign: chat.utm_campaign || '',
+              utm_content: chat.utm_content || '',
+              utm_term: chat.utm_term || ''
+            };
+          }));
+          
+          // 3. Leads por plataforma
+          const fromMeta = chatsArr.filter(c => c.ad_title || c.ad_source_id).length;
+          const fromCampaign = chatsArr.filter(c => c.source_id && !c.ad_title).length;
+          const organic = chatsArr.length - fromMeta - fromCampaign;
+          
+          const leadsByPlatform = [
+            { name: 'Meta Ads', value: fromMeta, color: '#E1306C' },
+            { name: 'Campanhas (código)', value: fromCampaign, color: '#6366f1' },
+            { name: 'Orgânico', value: organic, color: '#94a3b8' },
+          ].filter(p => p.value > 0);
+          
+          // 4. Estatísticas por origem (para tabela Performance por Origem)
+          // Buscar origens
+          const { data: sourcesData } = await supabase
+            .from('lead_sources')
+            .select('id, name, code, color')
+            .eq('clinic_id', clinicId);
+          
+          // Buscar pagamentos do período
+          const { data: paymentsData } = await supabase
+            .from('payments')
+            .select('value, chat_id')
+            .gte('payment_date', startDate.toISOString().split('T')[0]);
+          
+          // Buscar status dos chats diretamente com filtro de período e source_id
+          let chatsWithStatusQuery = supabase
+            .from('chats')
+            .select('id, status, source_id')
+            .eq('clinic_id', clinicId)
+            .eq('is_group', false)
+            .gte('created_at', startDate.toISOString())
+            .not('source_id', 'is', null);
+          
+          if (campaignPeriod === 'custom' && customDateRange?.end) {
+            chatsWithStatusQuery = chatsWithStatusQuery.lte('created_at', endDate.toISOString());
+          }
+          
+          const { data: chatsWithStatus } = await chatsWithStatusQuery;
+          
+          const sourceStats: Array<{ id: string; name: string; code: string | null; color: string; total_leads: number; converted_leads: number; revenue: number }> = [];
+          
+          if (sourcesData) {
+            (sourcesData as any[]).forEach(source => {
+              const sourceChats = (chatsWithStatus as any[] || []).filter(c => c.source_id === source.id);
+              const convertedChats = sourceChats.filter(c => c.status === 'Convertido');
+              const sourceChatIds = sourceChats.map(c => c.id);
+              const sourcePayments = (paymentsData as any[] || []).filter(p => sourceChatIds.includes(p.chat_id));
+              const revenue = sourcePayments.reduce((sum, p) => sum + (Number(p.value) || 0), 0);
+              
+              if (sourceChats.length > 0) {
+                sourceStats.push({
+                  id: source.id,
+                  name: source.name,
+                  code: source.code,
+                  color: source.color || '#94a3b8',
+                  total_leads: sourceChats.length,
+                  converted_leads: convertedChats.length,
+                  revenue
+                });
+              }
+            });
+            sourceStats.sort((a, b) => b.total_leads - a.total_leads);
+          }
+          
+          console.log('sourceStats:', sourceStats);
+          setCampaignStats({ leadsByDay, metaAds, leadsByPlatform, sourceStats });
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados de campanhas:', error);
+      } finally {
+        setLoadingCampaigns(false);
+      }
+    };
+    
+    fetchCampaignStats();
+  }, [clinicId, activeTab, campaignPeriod, customDateRange]);
+
+  // Buscar dados da Meta Ads API quando uma aba de conta Meta for selecionada
+  useEffect(() => {
+    const fetchMetaAdsApiData = async () => {
+      // Verificar se é uma aba de conta Meta (formato: meta_123456)
+      if (!clinicId || !activeTab.startsWith('meta_')) return;
+      
+      const accountId = activeTab.replace('meta_', '');
+      setSelectedMetaAccountId(accountId);
+      setMetaAdsConfigured(true);
+      setLoadingMetaAdsApi(true);
+      
+      try {
+        const datePreset = campaignPeriod === 'today' ? 'today' : campaignPeriod === '7d' ? 'last_7d' : campaignPeriod === '30d' ? 'last_30d' : 'last_90d';
+        
+        // Buscar todos os dados em paralelo para a conta específica
+        const [campaignsRes, adsetsRes, adsRes, insightsRes, campaignInsightsRes, adsetInsightsRes] = await Promise.all([
+          supabase.functions.invoke('meta-ads-api', {
+            body: { clinic_id: clinicId, action: 'get_campaigns', account_id: accountId }
+          }),
+          supabase.functions.invoke('meta-ads-api', {
+            body: { clinic_id: clinicId, action: 'get_adsets', account_id: accountId }
+          }),
+          supabase.functions.invoke('meta-ads-api', {
+            body: { clinic_id: clinicId, action: 'get_ads', account_id: accountId }
+          }),
+          supabase.functions.invoke('meta-ads-api', {
+            body: { clinic_id: clinicId, action: 'get_insights', date_preset: datePreset, account_id: accountId }
+          }),
+          supabase.functions.invoke('meta-ads-api', {
+            body: { clinic_id: clinicId, action: 'get_campaign_insights', date_preset: datePreset, account_id: accountId }
+          }),
+          supabase.functions.invoke('meta-ads-api', {
+            body: { clinic_id: clinicId, action: 'get_adset_insights', date_preset: datePreset, account_id: accountId }
+          })
+        ]);
+        
+        setMetaAdsApiData({
+          campaigns: campaignsRes.data?.data || [],
+          adsets: adsetsRes.data?.data || [],
+          ads: adsRes.data?.data || [],
+          insights: insightsRes.data?.data || [],
+          campaignInsights: campaignInsightsRes.data?.data || [],
+          adsetInsights: adsetInsightsRes.data?.data || []
+        });
+        
+        // Buscar leads por anúncio Meta (Click to WhatsApp) com código e nome do cliente
+        const { data: metaAdsLeads } = await supabase
+          .from('chats' as any)
+          .select('ad_title, ad_source_id, client_name, source_id, lead_sources!chats_source_id_fkey(code)')
+          .eq('clinic_id', clinicId)
+          .not('ad_title', 'is', null)
+          .eq('ad_source_type', 'ad')
+          .order('created_at', { ascending: false });
+        
+        if (metaAdsLeads) {
+          const adsList = (metaAdsLeads as any[]).map((chat: any) => ({
+            ad_title: chat.ad_title,
+            ad_source_id: chat.ad_source_id,
+            source_code: chat.lead_sources?.code || '-',
+            client_name: chat.client_name || 'Cliente'
+          }));
+          setTopMetaAds(adsList);
+        }
+        
+        console.log('Meta Ads API Data:', { campaigns: campaignsRes.data, ads: adsRes.data, insights: insightsRes.data, campaignInsights: campaignInsightsRes.data });
+      } catch (error) {
+        console.error('Erro ao buscar dados da Meta Ads API:', error);
+      } finally {
+        setLoadingMetaAdsApi(false);
+      }
+    };
+    
+    fetchMetaAdsApiData();
+  }, [clinicId, activeTab, campaignPeriod, customDateRange]);
+
+  // Buscar tarefas quando a aba Tarefas for selecionada
+  useEffect(() => {
+    const fetchTasks = async () => {
+      if (!clinicId || activeTab !== 'tasks') return;
+      setLoadingTasks(true);
+      
+      try {
+        const { data: tasksData, error } = await supabase
+          .from('tasks' as any)
+          .select(`
+            id,
+            chat_id,
+            title,
+            description,
+            due_date,
+            completed,
+            completed_at,
+            created_by,
+            created_at,
+            chats:chat_id (client_name)
+          `)
+          .eq('clinic_id', clinicId)
+          .order('due_date', { ascending: true, nullsFirst: false });
+        
+        if (!error && tasksData) {
+          const formattedTasks = (tasksData as any[]).map(task => ({
+            ...task,
+            client_name: task.chats?.client_name || 'Cliente'
+          }));
+          setTasks(formattedTasks);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar tarefas:', error);
+      } finally {
+        setLoadingTasks(false);
+      }
+    };
+    
+    fetchTasks();
+  }, [clinicId, activeTab]);
+
+  // Buscar dados de produtividade quando a aba Produtividade for selecionada
+  useEffect(() => {
+    const fetchProductivity = async () => {
+      if (!clinicId || activeTab !== 'productivity') return;
+      setLoadingProductivity(true);
+      
+      try {
+        // Calcular data de início baseado no período selecionado
+        const periodStart = new Date();
+        periodStart.setDate(periodStart.getDate() - productivityPeriod);
+        periodStart.setHours(0, 0, 0, 0);
+        const periodStartStr = periodStart.toISOString();
+        
+        // Buscar usuários da clínica (roles que atendem leads)
+        const { data: usersData } = await supabase
+          .from('users' as any)
+          .select('id, name, role')
+          .eq('clinic_id', clinicId)
+          .in('role', ['Admin', 'Comercial', 'Recepcionista', 'Atendente']);
+        
+        if (!usersData) {
+          setLoadingProductivity(false);
+          return;
+        }
+        
+        // Buscar tempo médio de resposta via SQL (com período)
+        const { data: responseTimesData } = await (supabase.rpc as any)('get_response_times_by_user_period', { 
+          p_clinic_id: clinicId,
+          p_start_date: periodStartStr
+        });
+        const responseTimes = (responseTimesData || []) as any[];
+        
+        // Para cada usuário, calcular métricas
+        const productivityPromises = (usersData as any[]).map(async (user) => {
+          // Buscar chats atribuídos ao usuário no período
+          const { data: chatsData } = await (supabase as any)
+            .from('chats')
+            .select('id, status, created_at')
+            .eq('clinic_id', clinicId)
+            .eq('assigned_to', user.id)
+            .eq('is_group', false)
+            .gte('created_at', periodStartStr);
+          
+          // Buscar mensagens que o usuário REALMENTE enviou (sent_by) no período
+          const { data: messagesData } = await (supabase as any)
+            .from('messages')
+            .select('id, created_at, chat_id, sent_by')
+            .eq('sent_by', user.id)
+            .eq('is_from_client', false)
+            .gte('created_at', periodStartStr);
+          
+          const chats = chatsData || [];
+          const messages = messagesData || [];
+          
+          // Encontrar tempo médio de resposta para este usuário
+          const userResponseTime = responseTimes.find((rt: any) => rt.assigned_to === user.id);
+          
+          return {
+            user_id: user.id,
+            user_name: user.name,
+            role: user.role,
+            avg_response_time: userResponseTime?.avg_response_minutes || 0,
+            first_response_time: 0,
+            messages_sent: messages.length,
+            chats_active: chats.filter((c: any) => c.status !== 'Convertido' && c.status !== 'Perdido').length,
+            leads_count: chats.length,
+            conversions: chats.filter((c: any) => c.status === 'Convertido').length
+          };
+        });
+        
+        const results = await Promise.all(productivityPromises);
+        setProductivityData(results);
+      } catch (error) {
+        console.error('Erro ao buscar produtividade:', error);
+      } finally {
+        setLoadingProductivity(false);
+      }
+    };
+    
+    fetchProductivity();
+  }, [clinicId, activeTab, productivityPeriod]);
+
   // Calcular variação percentual
   const calcChange = (current: number, yesterday: number | undefined) => {
     if (yesterday === undefined || yesterday === 0) return null;
@@ -759,11 +1413,104 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   return (
     <div className="p-8">
       <div className="space-y-8">
+        {/* Header com Abas */}
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Visão Geral</h1>
-          <p className="text-slate-500">Resumo em tempo real da performance da sua clínica hoje.</p>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Dashboard</h1>
+          <p className="text-slate-500 mb-4">Resumo em tempo real da performance da sua clínica.</p>
+          
+          {/* Tabs */}
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'overview' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">dashboard</span>
+                Visão Geral
+              </span>
+            </button>
+            {/* Abas dinâmicas para cada conta Meta Ads - Apenas para Admin */}
+            {user?.role === 'Admin' && metaAdsAccounts.map((account) => (
+              <button
+                key={account.id}
+                onClick={() => {
+                  setActiveTab(`meta_${account.account_id}`);
+                  setSelectedMetaAccountId(account.account_id);
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  activeTab === `meta_${account.account_id}` 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">ads_click</span>
+                  {account.account_name.length > 15 ? account.account_name.substring(0, 15) + '...' : account.account_name}
+                </span>
+              </button>
+            ))}
+            <button
+              onClick={() => setActiveTab('tasks')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'tasks' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">task_alt</span>
+                Tarefas
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('productivity')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'productivity' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">speed</span>
+                Produtividade
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('leads')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'leads' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">group</span>
+                Leads
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('charts')}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'charts' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">bar_chart</span>
+                Gráficos
+              </span>
+            </button>
+          </div>
         </div>
 
+        {/* Conteúdo da Aba Visão Geral */}
+        {activeTab === 'overview' && (
+          <>
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map(stat => (
@@ -822,36 +1569,81 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     </div>
                   </div>
                   
-                  {/* Leads de Campanha */}
+                  {/* Separador - Por Origem */}
+                  <div className="pt-2 pb-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Por Origem</span>
+                  </div>
+                  
+                  {/* Meta Ads */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-purple-500">campaign</span>
-                      <span className="text-sm text-slate-600">De Campanhas</span>
+                      <span className="material-symbols-outlined text-[18px] text-pink-500">ads_click</span>
+                      <span className="text-sm text-slate-600">Meta Ads</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-purple-600">{leadsDetails.leadsCampanhaHoje}</span>
-                      {leadsDetails.leadsCampanhaOntem > 0 && (
-                        <span className="text-xs text-slate-400">(ontem: {leadsDetails.leadsCampanhaOntem})</span>
+                      <span className="text-lg font-bold text-pink-600">{leadsDetails.leadsMetaAdsHoje}</span>
+                      {leadsDetails.leadsMetaAdsOntem > 0 && (
+                        <span className="text-xs text-slate-400">(ontem: {leadsDetails.leadsMetaAdsOntem})</span>
                       )}
                     </div>
                   </div>
                   
-                  {/* Códigos recentes */}
-                  {leadsDetails.codigosRecentes.length > 0 && (
-                    <div className="pt-2">
-                      <span className="text-xs text-slate-500 block mb-1.5">Códigos recentes:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {leadsDetails.codigosRecentes.map((codigo, idx) => (
-                          <span key={idx} className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
-                            {codigo}
-                          </span>
+                  {/* Links Rastreáveis */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-indigo-500">link</span>
+                      <span className="text-sm text-slate-600">Links Rastreáveis</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-indigo-600">{leadsDetails.leadsLinksHoje}</span>
+                      {leadsDetails.leadsLinksOntem > 0 && (
+                        <span className="text-xs text-slate-400">(ontem: {leadsDetails.leadsLinksOntem})</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Orgânico */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px] text-emerald-500">public</span>
+                      <span className="text-sm text-slate-600">Orgânico</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-emerald-600">{leadsDetails.leadsOrganicoHoje}</span>
+                      {leadsDetails.leadsOrganicoOntem > 0 && (
+                        <span className="text-xs text-slate-400">(ontem: {leadsDetails.leadsOrganicoOntem})</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Top Origens */}
+                  {leadsDetails.topOrigens.length > 0 && (
+                    <div className="pt-3 border-t border-slate-100">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Top Origens Hoje</span>
+                      <div className="space-y-1.5">
+                        {leadsDetails.topOrigens.map((origem, idx) => (
+                          <div key={idx} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                origem.tipo === 'meta' ? 'bg-pink-500' : 
+                                origem.tipo === 'link' ? 'bg-indigo-500' : 'bg-slate-400'
+                              }`}></span>
+                              <span className="text-xs text-slate-600 truncate" title={origem.nome}>
+                                {origem.nome.length > 25 ? origem.nome.substring(0, 25) + '...' : origem.nome}
+                              </span>
+                              {origem.codigo && origem.codigo !== origem.nome && (
+                                <span className="text-[10px] text-slate-400">({origem.codigo})</span>
+                              )}
+                            </div>
+                            <span className="text-sm font-bold text-slate-700 ml-2">{origem.quantidade}</span>
+                          </div>
                         ))}
                       </div>
                     </div>
                   )}
                   
-                  <p className="text-[10px] text-slate-400 pt-1">
-                    * Leads de campanha são identificados pelo código na primeira mensagem (ex: AV7, ACV5)
+                  <p className="text-[10px] text-slate-400 pt-2">
+                    * Meta Ads = Click to WhatsApp | Links = Bio, Site | Orgânico = Sem origem identificada
                   </p>
                 </div>
               )}
@@ -998,41 +1790,81 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           ))}
         </div>
 
-        {/* Faturamento Cards */}
+        {/* Faturamento Cards - 4 cards: Comercial, Clínica, Total Mês, Total Geral */}
         {canSeeBilling && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 rounded-2xl shadow-lg text-white">
-            <div className="flex justify-between items-start mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {/* Receita Comercial do Mês */}
+          <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-5 rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-3">
               <div>
-                <p className="text-emerald-100 text-sm font-medium uppercase tracking-wider">Faturamento do Mês</p>
-                <p className="text-4xl font-black mt-1">
+                <p className="text-orange-100 text-xs font-medium uppercase tracking-wider">Receita Comercial</p>
+                <p className="text-2xl font-black mt-1">
                   R$ {monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="bg-white/20 p-3 rounded-xl">
-                <span className="material-symbols-outlined text-2xl">trending_up</span>
+              <div className="bg-white/20 p-2 rounded-xl">
+                <span className="material-symbols-outlined text-xl">storefront</span>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-emerald-100 text-sm">
-              <span className="material-symbols-outlined text-[16px]">calendar_month</span>
-              {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+            <div className="flex items-center gap-1 text-orange-100 text-xs">
+              <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+              {new Date().toLocaleDateString('pt-BR', { month: 'short' })}
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 p-6 rounded-2xl shadow-lg text-white">
-            <div className="flex justify-between items-start mb-4">
+          {/* Receita Clínica do Mês */}
+          <div className="bg-gradient-to-br from-teal-500 to-teal-600 p-5 rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-3">
               <div>
-                <p className="text-cyan-100 text-sm font-medium uppercase tracking-wider">Faturamento Total</p>
-                <p className="text-4xl font-black mt-1">
-                  R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                <p className="text-teal-100 text-xs font-medium uppercase tracking-wider">Receita Clínica</p>
+                <p className="text-2xl font-black mt-1">
+                  R$ {(totalClinicRevenue?.monthly || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="bg-white/20 p-3 rounded-xl">
-                <span className="material-symbols-outlined text-2xl">payments</span>
+              <div className="bg-white/20 p-2 rounded-xl">
+                <span className="material-symbols-outlined text-xl">medical_services</span>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-cyan-100 text-sm">
-              <span className="material-symbols-outlined text-[16px]">account_balance</span>
+            <div className="flex items-center gap-1 text-teal-100 text-xs">
+              <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+              {new Date().toLocaleDateString('pt-BR', { month: 'short' })}
+            </div>
+          </div>
+
+          {/* Faturamento do Mês (Total) */}
+          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <p className="text-emerald-100 text-xs font-medium uppercase tracking-wider">Faturamento do Mês</p>
+                <p className="text-2xl font-black mt-1">
+                  R$ {(monthlyRevenue + (totalClinicRevenue?.monthly || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white/20 p-2 rounded-xl">
+                <span className="material-symbols-outlined text-xl">trending_up</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-emerald-100 text-xs">
+              <span className="material-symbols-outlined text-[14px]">add</span>
+              Comercial + Clínica
+            </div>
+          </div>
+
+          {/* Faturamento Total */}
+          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 p-5 rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <p className="text-cyan-100 text-xs font-medium uppercase tracking-wider">Faturamento Total</p>
+                <p className="text-2xl font-black mt-1">
+                  R$ {(totalRevenue + (totalClinicRevenue?.total || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white/20 p-2 rounded-xl">
+                <span className="material-symbols-outlined text-xl">payments</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-cyan-100 text-xs">
+              <span className="material-symbols-outlined text-[14px]">account_balance</span>
               Acumulado geral
             </div>
           </div>
@@ -1238,7 +2070,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         )}
 
         {/* Leads por Origem */}
-        {canSeeBilling && leadSourceStats.length > 0 && (
+        {canSeeBilling && (
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
               <div>
@@ -1247,17 +2079,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               </div>
               <div className="flex flex-wrap gap-2 items-center">
                 <button
-                  onClick={() => setSourcesPeriodFilter('all')}
+                  onClick={() => { setSourcesPeriodFilter('today'); setSourcesPage(1); }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                    sourcesPeriodFilter === 'all' 
+                    sourcesPeriodFilter === 'today' 
                       ? 'bg-cyan-100 text-cyan-700' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  Todos
+                  Hoje
                 </button>
                 <button
-                  onClick={() => setSourcesPeriodFilter('7d')}
+                  onClick={() => { setSourcesPeriodFilter('7d'); setSourcesPage(1); }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                     sourcesPeriodFilter === '7d' 
                       ? 'bg-cyan-100 text-cyan-700' 
@@ -1267,7 +2099,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                   7 dias
                 </button>
                 <button
-                  onClick={() => setSourcesPeriodFilter('30d')}
+                  onClick={() => { setSourcesPeriodFilter('30d'); setSourcesPage(1); }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                     sourcesPeriodFilter === '30d' 
                       ? 'bg-cyan-100 text-cyan-700' 
@@ -1277,7 +2109,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                   30 dias
                 </button>
                 <button
-                  onClick={() => setSourcesPeriodFilter('month')}
+                  onClick={() => { setSourcesPeriodFilter('month'); setSourcesPage(1); }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                     sourcesPeriodFilter === 'month' 
                       ? 'bg-cyan-100 text-cyan-700' 
@@ -1285,6 +2117,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                   }`}
                 >
                   Este mês
+                </button>
+                <button
+                  onClick={() => { setSourcesPeriodFilter('all'); setSourcesPage(1); }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    sourcesPeriodFilter === 'all' 
+                      ? 'bg-cyan-100 text-cyan-700' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Todos
                 </button>
                 
                 <div className="w-px h-6 bg-slate-200 mx-1"></div>
@@ -1400,7 +2242,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredLeadSourceStats.map(source => {
+                  {filteredLeadSourceStats.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                        <span className="material-symbols-outlined text-4xl mb-2 block">inbox</span>
+                        Nenhum lead encontrado para o período selecionado
+                      </td>
+                    </tr>
+                  ) : filteredLeadSourceStats
+                    .slice((sourcesPage - 1) * sourcesPerPage, sourcesPage * sourcesPerPage)
+                    .map(source => {
                     const conversionRate = source.total_leads > 0 
                       ? ((source.converted_leads / source.total_leads) * 100).toFixed(1) 
                       : '0.0';
@@ -1453,6 +2304,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     );
                   })}
                 </tbody>
+                {filteredLeadSourceStats.length > 0 && (
                 <tfoot>
                   <tr className="border-t-2 border-slate-200 bg-slate-50">
                     <td className="py-3 px-4 font-bold text-slate-700">Total</td>
@@ -1478,8 +2330,45 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     </td>
                   </tr>
                 </tfoot>
+                )}
               </table>
             </div>
+            
+            {/* Paginação */}
+            {filteredLeadSourceStats.length > sourcesPerPage && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
+                <p className="text-sm text-slate-500">
+                  Mostrando {Math.min((sourcesPage - 1) * sourcesPerPage + 1, filteredLeadSourceStats.length)} - {Math.min(sourcesPage * sourcesPerPage, filteredLeadSourceStats.length)} de {filteredLeadSourceStats.length} origens
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSourcesPage(p => Math.max(1, p - 1))}
+                    disabled={sourcesPage === 1}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                      sourcesPage === 1
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-sm text-slate-600">
+                    Página {sourcesPage} de {Math.ceil(filteredLeadSourceStats.length / sourcesPerPage)}
+                  </span>
+                  <button
+                    onClick={() => setSourcesPage(p => Math.min(Math.ceil(filteredLeadSourceStats.length / sourcesPerPage), p + 1))}
+                    disabled={sourcesPage >= Math.ceil(filteredLeadSourceStats.length / sourcesPerPage)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                      sourcesPage >= Math.ceil(filteredLeadSourceStats.length / sourcesPerPage)
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1701,7 +2590,1340 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             </div>
           </div>
         </div>
+          </>
+        )}
+
+        {/* Conteúdo da Aba de Conta Meta Ads */}
+        {activeTab.startsWith('meta_') && (
+          <div className="space-y-6">
+            {/* Header com filtro de período */}
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">
+                  {metaAdsAccounts.find(a => a.account_id === selectedMetaAccountId)?.account_name || 'Campanhas'}
+                </h2>
+                <p className="text-sm text-slate-500">Performance de campanhas e anúncios Meta Ads</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {(['today', '7d', '30d', '90d'] as const).map(period => (
+                  <button
+                    key={period}
+                    onClick={() => setCampaignPeriod(period)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      campaignPeriod === period
+                        ? 'bg-cyan-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {period === 'today' ? 'Hoje' : period === '7d' ? '7 dias' : period === '30d' ? '30 dias' : '90 dias'}
+                  </button>
+                ))}
+                <div className="flex items-center gap-1 ml-2">
+                  <input
+                    type="date"
+                    value={customDateRange?.start || ''}
+                    onChange={(e) => {
+                      const start = e.target.value;
+                      setCustomDateRange(prev => ({ start, end: prev?.end || start }));
+                      setCampaignPeriod('custom');
+                    }}
+                    className="px-2 py-1 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                  />
+                  <span className="text-slate-400 text-sm">até</span>
+                  <input
+                    type="date"
+                    value={customDateRange?.end || ''}
+                    onChange={(e) => {
+                      const end = e.target.value;
+                      setCustomDateRange(prev => ({ start: prev?.start || end, end }));
+                      setCampaignPeriod('custom');
+                    }}
+                    className="px-2 py-1 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {loadingCampaigns ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+              </div>
+            ) : campaignStats ? (
+              <>
+                {/* Cards de resumo */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-pink-500 to-rose-600 p-5 rounded-2xl text-white relative group">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="text-pink-100 text-xs font-medium uppercase tracking-wider">Meta Ads</p>
+                        <p className="text-3xl font-black mt-1">
+                          {campaignStats.leadsByPlatform.find(p => p.name === 'Meta Ads')?.value || 0}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <span className="material-symbols-outlined text-white/60 text-base cursor-help hover:text-white transition-colors">info</span>
+                          <div className="absolute right-0 top-6 w-64 bg-slate-900 text-white text-xs p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                            <p className="font-semibold mb-1">Meta Ads (Click to WhatsApp)</p>
+                            <p className="text-slate-300">Leads capturados através de anúncios Click to WhatsApp do Meta Ads. Esses leads clicaram em um anúncio e iniciaram conversa diretamente.</p>
+                          </div>
+                        </div>
+                        <div className="bg-white/20 p-2 rounded-xl">
+                          <span className="material-symbols-outlined text-xl">ads_click</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-pink-100 text-xs">Leads de Click to WhatsApp</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-indigo-500 to-violet-600 p-5 rounded-2xl text-white relative group">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="text-indigo-100 text-xs font-medium uppercase tracking-wider">Campanhas (código)</p>
+                        <p className="text-3xl font-black mt-1">
+                          {campaignStats.leadsByPlatform.find(p => p.name === 'Campanhas (código)')?.value || 0}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <span className="material-symbols-outlined text-white/60 text-base cursor-help hover:text-white transition-colors">info</span>
+                          <div className="absolute right-0 top-6 w-64 bg-slate-900 text-white text-xs p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                            <p className="font-semibold mb-1">Campanhas com Código</p>
+                            <p className="text-slate-300">Leads que enviaram um código de campanha na primeira mensagem (ex: AV2, KR5). Usado para rastrear campanhas offline ou links personalizados.</p>
+                          </div>
+                        </div>
+                        <div className="bg-white/20 p-2 rounded-xl">
+                          <span className="material-symbols-outlined text-xl">tag</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-indigo-100 text-xs">Leads com código na mensagem</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-slate-500 to-slate-600 p-5 rounded-2xl text-white relative group">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="text-slate-300 text-xs font-medium uppercase tracking-wider">Orgânico</p>
+                        <p className="text-3xl font-black mt-1">
+                          {campaignStats.leadsByPlatform.find(p => p.name === 'Orgânico')?.value || 0}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <span className="material-symbols-outlined text-white/60 text-base cursor-help hover:text-white transition-colors">info</span>
+                          <div className="absolute right-0 top-6 w-64 bg-slate-900 text-white text-xs p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                            <p className="font-semibold mb-1">Leads Orgânicos</p>
+                            <p className="text-slate-300">Leads que chegaram sem identificação de origem. Podem ser indicações, busca orgânica, ou leads que não foram rastreados.</p>
+                          </div>
+                        </div>
+                        <div className="bg-white/20 p-2 rounded-xl">
+                          <span className="material-symbols-outlined text-xl">nature</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-slate-300 text-xs">Leads sem origem identificada</p>
+                  </div>
+                </div>
+
+                {/* Gráficos */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Gráfico de Linha - Leads por Dia */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-slate-900 mb-4">Leads por Dia</h3>
+                    {campaignStats.leadsByDay.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={250}>
+                        <AreaChart data={campaignStats.leadsByDay}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                          <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                          <Tooltip 
+                            contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                            labelStyle={{ fontWeight: 'bold' }}
+                          />
+                          <Legend />
+                          <Area type="monotone" dataKey="leads" name="Total" stroke="#0891b2" fill="#0891b2" fillOpacity={0.2} />
+                          <Area type="monotone" dataKey="campanhas" name="Campanhas" stroke="#E1306C" fill="#E1306C" fillOpacity={0.2} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[250px] flex items-center justify-center text-slate-400">
+                        Sem dados no período
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Gráfico de Pizza - Distribuição por Plataforma */}
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-slate-900 mb-4">Distribuição por Origem</h3>
+                    {campaignStats.leadsByPlatform.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={250}>
+                        <PieChart>
+                          <Pie
+                            data={campaignStats.leadsByPlatform}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={90}
+                            paddingAngle={5}
+                            dataKey="value"
+                            label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                            labelLine={false}
+                          >
+                            {campaignStats.leadsByPlatform.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[250px] flex items-center justify-center text-slate-400">
+                        Sem dados no período
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tabela de Anúncios Meta - Leads por Anúncio */}
+                {campaignStats.metaAds.length > 0 && (
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="material-symbols-outlined text-pink-600">ads_click</span>
+                      <h3 className="font-bold text-slate-900">Top Anúncios Meta (Click to WhatsApp)</h3>
+                      <span className="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full ml-auto">{campaignStats.metaAds.reduce((sum, ad) => sum + ad.count, 0)} leads</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Cliente</th>
+                            <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Código</th>
+                            <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Anúncio</th>
+                            <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Campanha</th>
+                            <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Data</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {campaignStats.metaAds.map((ad, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                              <td className="py-3 px-4">
+                                <a 
+                                  href={`/lead/${ad.chat_id}`}
+                                  className="font-medium text-indigo-600 hover:text-indigo-800 hover:underline text-left"
+                                >
+                                  {ad.client_name || 'Cliente'}
+                                </a>
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700 font-medium">
+                                  {ad.source_code || '-'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium text-slate-800">{ad.ad_name || ad.ad_title}</span>
+                                  {ad.ad_name && ad.ad_title !== ad.ad_name && (
+                                    <span className="text-xs text-slate-400 truncate max-w-[200px]">{ad.ad_title}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="flex flex-col">
+                                  <span className="text-sm text-slate-600">{ad.campaign_name || '-'}</span>
+                                  {ad.adset_name && (
+                                    <span className="text-xs text-slate-400">{ad.adset_name}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className="text-sm text-slate-600">
+                                  {ad.created_at ? new Date(ad.created_at).toLocaleDateString('pt-BR') : '-'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dados da Meta Ads API */}
+                {metaAdsConfigured && (
+                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-pink-600">analytics</span>
+                        <h3 className="font-bold text-slate-900">Dados do Meta Ads Manager</h3>
+                      </div>
+                      {loadingMetaAdsApi && (
+                        <div className="w-4 h-4 border-2 border-pink-300 border-t-pink-600 rounded-full animate-spin"></div>
+                      )}
+                    </div>
+                    
+                    {metaAdsApiData ? (
+                      <div className="space-y-6">
+                        {/* Cards de Métricas Totais */}
+                        {metaAdsApiData.insights.length > 0 && (
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                            {(() => {
+                              const totals = metaAdsApiData.insights.reduce((acc, i) => ({
+                                impressions: acc.impressions + parseInt(i.impressions || '0'),
+                                clicks: acc.clicks + parseInt(i.clicks || '0'),
+                                spend: acc.spend + parseFloat(i.spend || '0'),
+                              }), { impressions: 0, clicks: 0, spend: 0 });
+                              const ctr = totals.impressions > 0 ? ((totals.clicks / totals.impressions) * 100) : 0;
+                              const cpc = totals.clicks > 0 ? (totals.spend / totals.clicks) : 0;
+                              return (
+                                <>
+                                  <div className="p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl text-white text-center relative group">
+                                    <div className="absolute top-2 right-2">
+                                      <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
+                                      <div className="absolute right-0 top-5 w-48 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                        Número de vezes que seus anúncios foram exibidos
+                                      </div>
+                                    </div>
+                                    <p className="text-2xl font-black">{totals.impressions.toLocaleString()}</p>
+                                    <p className="text-xs text-blue-100 mt-1">Impressões</p>
+                                  </div>
+                                  <div className="p-4 bg-gradient-to-br from-green-500 to-green-600 rounded-xl text-white text-center relative group">
+                                    <div className="absolute top-2 right-2">
+                                      <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
+                                      <div className="absolute right-0 top-5 w-48 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                        Número de cliques nos seus anúncios
+                                      </div>
+                                    </div>
+                                    <p className="text-2xl font-black">{totals.clicks.toLocaleString()}</p>
+                                    <p className="text-xs text-green-100 mt-1">Cliques</p>
+                                  </div>
+                                  <div className="p-4 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl text-white text-center relative group">
+                                    <div className="absolute top-2 right-2">
+                                      <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
+                                      <div className="absolute right-0 top-5 w-48 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                        Taxa de cliques: Cliques ÷ Impressões × 100
+                                      </div>
+                                    </div>
+                                    <p className="text-2xl font-black">{ctr.toFixed(2)}%</p>
+                                    <p className="text-xs text-amber-100 mt-1">CTR</p>
+                                  </div>
+                                  <div className="p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl text-white text-center relative group">
+                                    <div className="absolute top-2 right-2">
+                                      <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
+                                      <div className="absolute right-0 top-5 w-48 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                        Custo por clique médio: Gasto ÷ Cliques
+                                      </div>
+                                    </div>
+                                    <p className="text-2xl font-black">R$ {cpc.toFixed(2)}</p>
+                                    <p className="text-xs text-purple-100 mt-1">CPC Médio</p>
+                                  </div>
+                                  <div className="p-4 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl text-white text-center relative group">
+                                    <div className="absolute top-2 right-2">
+                                      <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
+                                      <div className="absolute right-0 top-5 w-48 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                        Valor total investido em anúncios no período selecionado
+                                      </div>
+                                    </div>
+                                    <p className="text-2xl font-black">R$ {totals.spend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                    <p className="text-xs text-pink-100 mt-1">Investido</p>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
+
+                        {/* Tabela de Performance por Campanha */}
+                        {metaAdsApiData.campaignInsights && metaAdsApiData.campaignInsights.length > 0 && (
+                          <div className="rounded-xl border border-purple-200 overflow-hidden">
+                            <button 
+                              onClick={() => setExpandedCampaignSections(prev => ({ ...prev, performance: !prev.performance }))}
+                              className="bg-purple-50 text-purple-700 px-4 py-3 flex items-center justify-between w-full hover:opacity-90 transition-opacity"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-base">campaign</span>
+                                <h4 className="text-sm font-bold">Performance por Campanha ({metaAdsApiData.campaignInsights.length})</h4>
+                              </div>
+                              <span className="material-symbols-outlined text-base transition-transform" style={{ transform: expandedCampaignSections.performance ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                                expand_more
+                              </span>
+                            </button>
+                            {expandedCampaignSections.performance && (
+                              <div className="overflow-x-auto">
+                                <table className="w-full">
+                                  <thead>
+                                    <tr className="border-b border-slate-200 bg-white">
+                                      <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Campanha</th>
+                                      <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Impressões</th>
+                                      <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Cliques</th>
+                                      <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">CTR</th>
+                                      <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">CPC</th>
+                                      <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Gasto</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100 bg-white">
+                                    {metaAdsApiData.campaignInsights
+                                      .sort((a, b) => parseFloat(b.spend || '0') - parseFloat(a.spend || '0'))
+                                      .map((insight, idx) => {
+                                        const impressions = parseInt(insight.impressions || '0');
+                                        const clicks = parseInt(insight.clicks || '0');
+                                        const spend = parseFloat(insight.spend || '0');
+                                        const ctr = impressions > 0 ? ((clicks / impressions) * 100) : 0;
+                                        const cpc = clicks > 0 ? (spend / clicks) : 0;
+                                        const campaignId = insight.campaign_id || `campaign-${idx}`;
+                                        const isExpanded = expandedCampaigns.has(campaignId);
+                                        const campaignAdsets = metaAdsApiData.adsets?.filter(a => a.campaign_id === campaignId) || [];
+                                        const hasAdsets = campaignAdsets.length > 0;
+                                        
+                                        return (
+                                          <React.Fragment key={campaignId}>
+                                            <tr 
+                                              className={`hover:bg-slate-50 transition-colors ${hasAdsets ? 'cursor-pointer' : ''}`}
+                                              onClick={() => {
+                                                if (hasAdsets) {
+                                                  setExpandedCampaigns(prev => {
+                                                    const newSet = new Set(prev);
+                                                    if (newSet.has(campaignId)) {
+                                                      newSet.delete(campaignId);
+                                                    } else {
+                                                      newSet.add(campaignId);
+                                                    }
+                                                    return newSet;
+                                                  });
+                                                }
+                                              }}
+                                            >
+                                              <td className="py-3 px-4">
+                                                <div className="flex items-center gap-2">
+                                                  {hasAdsets && (
+                                                    <span className={`material-symbols-outlined text-sm text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                                                      chevron_right
+                                                    </span>
+                                                  )}
+                                                  <span className="font-medium text-slate-800 text-sm">{insight.campaign_name}</span>
+                                                  {hasAdsets && (
+                                                    <span className="text-xs text-slate-400">({campaignAdsets.length} conjuntos)</span>
+                                                  )}
+                                                </div>
+                                              </td>
+                                              <td className="py-3 px-4 text-right">
+                                                <span className="text-sm text-slate-600">{impressions.toLocaleString()}</span>
+                                              </td>
+                                              <td className="py-3 px-4 text-right">
+                                                <span className="text-sm font-semibold text-green-600">{clicks.toLocaleString()}</span>
+                                              </td>
+                                              <td className="py-3 px-4 text-right">
+                                                <span className={`text-sm font-semibold ${ctr >= 2 ? 'text-green-600' : ctr >= 1 ? 'text-amber-600' : 'text-red-500'}`}>
+                                                  {ctr.toFixed(2)}%
+                                                </span>
+                                              </td>
+                                              <td className="py-3 px-4 text-right">
+                                                <span className="text-sm text-purple-600">R$ {cpc.toFixed(2)}</span>
+                                              </td>
+                                              <td className="py-3 px-4 text-right">
+                                                <span className="text-sm font-bold text-pink-600">R$ {spend.toFixed(2)}</span>
+                                              </td>
+                                            </tr>
+                                            {/* Conjuntos de Anúncios (Ad Sets) */}
+                                            {isExpanded && campaignAdsets.map((adset) => {
+                                              const adsetInsight = metaAdsApiData.adsetInsights?.find(i => i.adset_id === adset.id);
+                                              const adsetImpressions = parseInt(adsetInsight?.impressions || '0');
+                                              const adsetClicks = parseInt(adsetInsight?.clicks || '0');
+                                              const adsetSpend = parseFloat(adsetInsight?.spend || '0');
+                                              const adsetCtr = adsetImpressions > 0 ? ((adsetClicks / adsetImpressions) * 100) : 0;
+                                              const adsetCpc = adsetClicks > 0 ? (adsetSpend / adsetClicks) : 0;
+                                              const destinationType = adset.destination_type === 'WHATSAPP' ? 'WhatsApp' : 
+                                                                     adset.destination_type === 'MESSENGER' ? 'Messenger' : 
+                                                                     adset.destination_type === 'WEBSITE' ? 'Site' : 
+                                                                     adset.destination_type || '';
+                                              
+                                              return (
+                                                <tr key={adset.id} className="bg-purple-50/50 border-l-2 border-purple-300">
+                                                  <td className="py-2 px-4 pl-10">
+                                                    <div className="flex items-center gap-2">
+                                                      <span className="material-symbols-outlined text-xs text-purple-400">subdirectory_arrow_right</span>
+                                                      <div className="flex flex-col">
+                                                        <span className="text-sm text-purple-700 font-medium">{adset.name}</span>
+                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                          <span className={`text-xs px-1.5 py-0.5 rounded ${adset.effective_status === 'ACTIVE' || adset.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                            {adset.effective_status === 'ACTIVE' || adset.status === 'ACTIVE' ? 'Ativo' : adset.status === 'PAUSED' ? 'Pausado' : adset.effective_status || adset.status}
+                                                          </span>
+                                                          {destinationType && (
+                                                            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">
+                                                              {destinationType}
+                                                            </span>
+                                                          )}
+                                                          {adset.daily_budget && (
+                                                            <span className="text-xs text-slate-500">R$ {(parseInt(adset.daily_budget) / 100).toFixed(2)}/dia</span>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  </td>
+                                                  <td className="py-2 px-4 text-right">
+                                                    <span className="text-xs text-slate-600">{adsetImpressions > 0 ? adsetImpressions.toLocaleString() : '-'}</span>
+                                                  </td>
+                                                  <td className="py-2 px-4 text-right">
+                                                    <span className="text-xs font-semibold text-green-600">{adsetClicks > 0 ? adsetClicks.toLocaleString() : '-'}</span>
+                                                  </td>
+                                                  <td className="py-2 px-4 text-right">
+                                                    <span className={`text-xs font-semibold ${adsetCtr >= 2 ? 'text-green-600' : adsetCtr >= 1 ? 'text-amber-600' : adsetCtr > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                                                      {adsetCtr > 0 ? `${adsetCtr.toFixed(2)}%` : '-'}
+                                                    </span>
+                                                  </td>
+                                                  <td className="py-2 px-4 text-right">
+                                                    <span className="text-xs text-purple-600">{adsetCpc > 0 ? `R$ ${adsetCpc.toFixed(2)}` : '-'}</span>
+                                                  </td>
+                                                  <td className="py-2 px-4 text-right">
+                                                    <span className="text-xs font-bold text-pink-600">{adsetSpend > 0 ? `R$ ${adsetSpend.toFixed(2)}` : '-'}</span>
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </React.Fragment>
+                                        );
+                                      })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Campanhas Ativas com Métricas */}
+                        {(() => {
+                          const activeCampaigns = metaAdsApiData.campaigns.filter(c => c.status === 'ACTIVE');
+                          const pausedCampaigns = metaAdsApiData.campaigns.filter(c => c.status === 'PAUSED');
+                          const otherCampaigns = metaAdsApiData.campaigns.filter(c => c.status !== 'ACTIVE' && c.status !== 'PAUSED');
+                          
+                          // Função para obter métricas de uma campanha
+                          const getCampaignMetrics = (campaignId: string) => {
+                            const insight = metaAdsApiData.campaignInsights?.find(i => i.campaign_id === campaignId);
+                            if (!insight) return null;
+                            const impressions = parseInt(insight.impressions || '0');
+                            const clicks = parseInt(insight.clicks || '0');
+                            const spend = parseFloat(insight.spend || '0');
+                            const ctr = impressions > 0 ? ((clicks / impressions) * 100) : 0;
+                            const cpc = clicks > 0 ? (spend / clicks) : 0;
+                            return { impressions, clicks, spend, ctr, cpc };
+                          };
+                          
+                          // Ordenar campanhas por gasto
+                          const sortBySpend = (a: any, b: any) => {
+                            const metricsA = getCampaignMetrics(a.id);
+                            const metricsB = getCampaignMetrics(b.id);
+                            return (metricsB?.spend || 0) - (metricsA?.spend || 0);
+                          };
+                          
+                          const renderCampaignTable = (campaigns: typeof activeCampaigns, title: string, icon: string, bgColor: string, borderColor: string, sectionKey: 'active' | 'paused' | 'other') => {
+                            const isExpanded = expandedCampaignSections[sectionKey];
+                            return campaigns.length > 0 && (
+                              <div className={`rounded-xl border ${borderColor} overflow-hidden`}>
+                                <button 
+                                  onClick={() => setExpandedCampaignSections(prev => ({ ...prev, [sectionKey]: !prev[sectionKey] }))}
+                                  className={`${bgColor} px-4 py-3 flex items-center justify-between w-full hover:opacity-90 transition-opacity`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-base">{icon}</span>
+                                    <h4 className="text-sm font-bold">{title} ({campaigns.length})</h4>
+                                  </div>
+                                  <span className="material-symbols-outlined text-base transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                                    expand_more
+                                  </span>
+                                </button>
+                                {isExpanded && (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                      <thead>
+                                        <tr className="border-b border-slate-200 bg-white">
+                                          <th className="text-left py-2 px-4 text-xs font-bold text-slate-500 uppercase">Campanha</th>
+                                          <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">Cliques</th>
+                                          <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">CTR</th>
+                                          <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">CPC</th>
+                                          <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">Gasto</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100 bg-white">
+                                        {campaigns.sort(sortBySpend).map(campaign => {
+                                          const metrics = getCampaignMetrics(campaign.id);
+                                          return (
+                                            <tr key={campaign.id} className="hover:bg-slate-50 transition-colors">
+                                              <td className="py-2.5 px-4">
+                                                <span className="font-medium text-slate-800 text-sm">{campaign.name}</span>
+                                              </td>
+                                              <td className="py-2.5 px-4 text-right">
+                                                <span className="text-sm font-semibold text-green-600">
+                                                  {metrics?.clicks?.toLocaleString() || '-'}
+                                                </span>
+                                              </td>
+                                              <td className="py-2.5 px-4 text-right">
+                                                <span className={`text-sm font-semibold ${
+                                                  (metrics?.ctr || 0) >= 2 ? 'text-green-600' : 
+                                                  (metrics?.ctr || 0) >= 1 ? 'text-amber-600' : 
+                                                  'text-red-500'
+                                                }`}>
+                                                  {metrics?.ctr?.toFixed(2) || '0.00'}%
+                                                </span>
+                                              </td>
+                                              <td className="py-2.5 px-4 text-right">
+                                                <span className="text-sm text-purple-600">
+                                                  R$ {metrics?.cpc?.toFixed(2) || '0.00'}
+                                                </span>
+                                              </td>
+                                              <td className="py-2.5 px-4 text-right">
+                                                <span className="text-sm font-bold text-pink-600">
+                                                  R$ {metrics?.spend?.toFixed(2) || '0.00'}
+                                                </span>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          };
+                          
+                          return (
+                            <div className="space-y-4">
+                              {renderCampaignTable(activeCampaigns, 'Campanhas Ativas', 'play_circle', 'bg-green-50 text-green-700', 'border-green-200', 'active')}
+                              {renderCampaignTable(pausedCampaigns, 'Campanhas Pausadas', 'pause_circle', 'bg-slate-100 text-slate-600', 'border-slate-200', 'paused')}
+                              {renderCampaignTable(otherCampaigns, 'Outras Campanhas', 'help', 'bg-amber-50 text-amber-700', 'border-amber-200', 'other')}
+                            </div>
+                          );
+                        })()}
+                        
+                        {metaAdsApiData.campaigns.length === 0 && metaAdsApiData.ads.length === 0 && (
+                          <p className="text-sm text-slate-500 text-center py-4">Nenhum dado retornado da API</p>
+                        )}
+                      </div>
+                    ) : loadingMetaAdsApi ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="w-6 h-6 border-2 border-pink-300 border-t-pink-600 rounded-full animate-spin"></div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500 text-center py-4">Carregando dados...</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Card de Comparação: Meta Ads vs Origens do Sistema */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="material-symbols-outlined text-cyan-600">compare</span>
+                    <h3 className="font-bold text-slate-900">Comparativo de Performance</h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Tabela Meta Ads - Campanhas */}
+                    <div className="rounded-xl border border-purple-200 overflow-hidden">
+                      <div className="bg-purple-50 text-purple-700 px-4 py-3 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-base">campaign</span>
+                        <h4 className="text-sm font-bold">Campanhas Meta Ads</h4>
+                        <span className="text-xs bg-purple-200 px-2 py-0.5 rounded-full ml-auto">
+                          {metaAdsApiData?.campaignInsights?.length || 0}
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto max-h-80">
+                        <table className="w-full">
+                          <thead className="sticky top-0 bg-white">
+                            <tr className="border-b border-slate-200">
+                              <th className="text-left py-2 px-3 text-xs font-bold text-slate-500 uppercase">Campanha</th>
+                              <th className="text-right py-2 px-3 text-xs font-bold text-slate-500 uppercase">Cliques</th>
+                              <th className="text-right py-2 px-3 text-xs font-bold text-slate-500 uppercase">Gasto</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {metaAdsApiData?.campaignInsights?.sort((a, b) => parseFloat(b.spend || '0') - parseFloat(a.spend || '0')).slice(0, 10).map((insight, idx) => (
+                              <tr key={insight.campaign_id || idx} className="hover:bg-slate-50">
+                                <td className="py-2 px-3 text-sm text-slate-800 truncate max-w-[150px]" title={insight.campaign_name}>
+                                  {insight.campaign_name}
+                                </td>
+                                <td className="py-2 px-3 text-right text-sm font-semibold text-green-600">
+                                  {parseInt(insight.clicks || '0').toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 text-right text-sm font-bold text-pink-600">
+                                  R$ {parseFloat(insight.spend || '0').toFixed(2)}
+                                </td>
+                              </tr>
+                            )) || (
+                              <tr>
+                                <td colSpan={3} className="py-4 text-center text-sm text-slate-400">
+                                  Sem dados do Meta Ads
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Tabela Origens do Sistema */}
+                    <div className="rounded-xl border border-cyan-200 overflow-hidden">
+                      <div className="bg-cyan-50 text-cyan-700 px-4 py-3 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-base">group</span>
+                        <h4 className="text-sm font-bold">Origens do Sistema</h4>
+                        <span className="text-xs bg-cyan-200 px-2 py-0.5 rounded-full ml-auto">
+                          {campaignStats.sourceStats?.length || 0}
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto max-h-80">
+                        <table className="w-full">
+                          <thead className="sticky top-0 bg-white">
+                            <tr className="border-b border-slate-200">
+                              <th className="text-left py-2 px-3 text-xs font-bold text-slate-500 uppercase">Origem</th>
+                              <th className="text-right py-2 px-3 text-xs font-bold text-slate-500 uppercase">Leads</th>
+                              <th className="text-right py-2 px-3 text-xs font-bold text-slate-500 uppercase">Taxa</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {campaignStats.sourceStats?.slice(0, 10).map(source => {
+                              const rate = source.total_leads > 0 ? ((source.converted_leads / source.total_leads) * 100).toFixed(1) : '0.0';
+                              return (
+                                <tr key={source.id} className="hover:bg-slate-50">
+                                  <td className="py-2 px-3">
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: source.color }}></span>
+                                      <span className="text-sm text-slate-800 truncate max-w-[120px]" title={source.name}>
+                                        {source.name}
+                                      </span>
+                                      {source.code && (
+                                        <span className="text-[9px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">{source.code}</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-2 px-3 text-right text-sm font-bold text-slate-800">{source.total_leads}</td>
+                                  <td className="py-2 px-3 text-right">
+                                    <span className={`text-sm font-bold ${Number(rate) >= 30 ? 'text-green-600' : Number(rate) >= 15 ? 'text-amber-600' : 'text-slate-500'}`}>
+                                      {rate}%
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            }) || (
+                              <tr>
+                                <td colSpan={3} className="py-4 text-center text-sm text-slate-400">
+                                  Sem dados de origens
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-20 text-slate-400">
+                <span className="material-symbols-outlined text-4xl mb-2">campaign</span>
+                <p>Nenhum dado de campanha encontrado</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Conteúdo da Aba Tarefas */}
+        {activeTab === 'tasks' && (
+          <div className="space-y-6">
+            {/* Header com filtros */}
+            <div className="flex flex-wrap justify-between items-center gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Tarefas</h2>
+                <p className="text-sm text-slate-500">Gerencie suas tarefas e lembretes</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                  <button
+                    onClick={() => setTasksFilter('pending')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${tasksFilter === 'pending' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
+                  >
+                    Pendentes
+                  </button>
+                  <button
+                    onClick={() => setTasksFilter('completed')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${tasksFilter === 'completed' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
+                  >
+                    Concluídas
+                  </button>
+                  <button
+                    onClick={() => setTasksFilter('all')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${tasksFilter === 'all' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
+                  >
+                    Todas
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {loadingTasks ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+              </div>
+            ) : (
+              <>
+                {/* Layout de 3 colunas */}
+                {tasksFilter === 'pending' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Coluna Atrasadas */}
+                    {(() => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const overdueTasks = tasks.filter(t => !t.completed && t.due_date && new Date(t.due_date) < today);
+                      const todayTasks = tasks.filter(t => !t.completed && t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString());
+                      const endOfWeek = new Date();
+                      endOfWeek.setDate(endOfWeek.getDate() + 7);
+                      const weekTasks = tasks.filter(t => {
+                        if (t.completed || !t.due_date) return false;
+                        const dueDate = new Date(t.due_date);
+                        return dueDate > today && dueDate <= endOfWeek && dueDate.toDateString() !== new Date().toDateString();
+                      });
+
+                      const renderTaskItem = (task: typeof tasks[0], showDate = true) => (
+                        <div key={task.id} className="p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                          <button
+                            onClick={async () => {
+                              await supabase
+                                .from('tasks' as any)
+                                .update({ completed: true, completed_at: new Date().toISOString() })
+                                .eq('id', task.id);
+                              setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: true, completed_at: new Date().toISOString() } : t));
+                            }}
+                            className="mt-0.5 w-4 h-4 rounded border-2 border-slate-300 hover:border-green-500 flex-shrink-0 transition-colors"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-800">{task.title}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{task.client_name}</p>
+                          </div>
+                          {showDate && task.due_date && (
+                            <span className="text-xs text-slate-400 flex-shrink-0">
+                              {new Date(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                      );
+
+                      return (
+                        <>
+                          {/* Atrasadas */}
+                          <div className="bg-white rounded-2xl border border-red-200 shadow-sm overflow-hidden">
+                            <div className="px-4 py-3 bg-red-50 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-red-500 text-lg">warning</span>
+                                <span className="font-semibold text-red-700">Atrasadas</span>
+                              </div>
+                              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{overdueTasks.length}</span>
+                            </div>
+                            <div className="max-h-80 overflow-y-auto">
+                              {overdueTasks.length === 0 ? (
+                                <p className="text-center py-6 text-sm text-slate-400">Nenhuma tarefa atrasada</p>
+                              ) : (
+                                overdueTasks.map(task => renderTaskItem(task, true))
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Hoje */}
+                          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+                            <div className="px-4 py-3 bg-amber-50 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-amber-500 text-lg">today</span>
+                                <span className="font-semibold text-amber-700">Hoje</span>
+                              </div>
+                              <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{todayTasks.length}</span>
+                            </div>
+                            <div className="max-h-80 overflow-y-auto">
+                              {todayTasks.length === 0 ? (
+                                <p className="text-center py-6 text-sm text-slate-400">Nenhuma tarefa para hoje</p>
+                              ) : (
+                                todayTasks.map(task => renderTaskItem(task, false))
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Esta Semana */}
+                          <div className="bg-white rounded-2xl border border-blue-200 shadow-sm overflow-hidden">
+                            <div className="px-4 py-3 bg-blue-50 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-blue-500 text-lg">date_range</span>
+                                <span className="font-semibold text-blue-700">Esta Semana</span>
+                              </div>
+                              <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{weekTasks.length}</span>
+                            </div>
+                            <div className="max-h-80 overflow-y-auto">
+                              {weekTasks.length === 0 ? (
+                                <p className="text-center py-6 text-sm text-slate-400">Nenhuma tarefa esta semana</p>
+                              ) : (
+                                weekTasks.map(task => {
+                                  const dueDate = new Date(task.due_date!);
+                                  const dayName = dueDate.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+                                  const dayNum = dueDate.toLocaleDateString('pt-BR', { day: '2-digit' });
+                                  return (
+                                    <div key={task.id} className="p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                                      <button
+                                        onClick={async () => {
+                                          await supabase
+                                            .from('tasks' as any)
+                                            .update({ completed: true, completed_at: new Date().toISOString() })
+                                            .eq('id', task.id);
+                                          setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: true, completed_at: new Date().toISOString() } : t));
+                                        }}
+                                        className="mt-0.5 w-4 h-4 rounded border-2 border-slate-300 hover:border-green-500 flex-shrink-0 transition-colors"
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-slate-800">{task.title}</p>
+                                        <p className="text-xs text-slate-400 mt-0.5">{task.client_name}</p>
+                                      </div>
+                                      <span className="text-xs text-slate-400 flex-shrink-0">{dayName}, {dayNum}</span>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* Lista de tarefas concluídas */}
+                {tasksFilter === 'completed' && (
+                  <div className="bg-white rounded-2xl border border-green-200 shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 bg-green-50 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-green-500 text-lg">check_circle</span>
+                        <span className="font-semibold text-green-700">Concluídas</span>
+                      </div>
+                      <span className="bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{tasks.filter(t => t.completed).length}</span>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {tasks.filter(t => t.completed).length === 0 ? (
+                        <p className="text-center py-6 text-sm text-slate-400">Nenhuma tarefa concluída</p>
+                      ) : (
+                        tasks.filter(t => t.completed).map(task => (
+                          <div key={task.id} className="p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors opacity-60">
+                            <button
+                              onClick={async () => {
+                                await supabase
+                                  .from('tasks' as any)
+                                  .update({ completed: false, completed_at: null })
+                                  .eq('id', task.id);
+                                setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: false, completed_at: null } : t));
+                              }}
+                              className="mt-0.5 w-4 h-4 rounded bg-green-500 border-2 border-green-500 flex items-center justify-center flex-shrink-0"
+                            >
+                              <span className="material-symbols-outlined text-white text-xs">check</span>
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-800 line-through">{task.title}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">{task.client_name}</p>
+                            </div>
+                            {task.completed_at && (
+                              <span className="text-xs text-slate-400 flex-shrink-0">
+                                {new Date(task.completed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                              </span>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Lista de todas as tarefas */}
+                {tasksFilter === 'all' && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 bg-slate-50 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-slate-500 text-lg">list</span>
+                        <span className="font-semibold text-slate-700">Todas as Tarefas</span>
+                      </div>
+                      <span className="bg-slate-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{tasks.length}</span>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {tasks.length === 0 ? (
+                        <p className="text-center py-6 text-sm text-slate-400">Nenhuma tarefa</p>
+                      ) : (
+                        tasks.map(task => {
+                          const isOverdue = task.due_date && new Date(task.due_date) < new Date() && !task.completed;
+                          const isToday = task.due_date && new Date(task.due_date).toDateString() === new Date().toDateString();
+                          return (
+                            <div key={task.id} className={`p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors ${task.completed ? 'opacity-60' : ''}`}>
+                              <button
+                                onClick={async () => {
+                                  const newCompleted = !task.completed;
+                                  await supabase
+                                    .from('tasks' as any)
+                                    .update({ completed: newCompleted, completed_at: newCompleted ? new Date().toISOString() : null })
+                                    .eq('id', task.id);
+                                  setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: newCompleted, completed_at: newCompleted ? new Date().toISOString() : null } : t));
+                                }}
+                                className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                                  task.completed ? 'bg-green-500 border-green-500' : 'border-slate-300 hover:border-green-500'
+                                }`}
+                              >
+                                {task.completed && <span className="material-symbols-outlined text-white text-xs">check</span>}
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium text-slate-800 ${task.completed ? 'line-through' : ''}`}>{task.title}</p>
+                                <p className="text-xs text-slate-400 mt-0.5">{task.client_name}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {task.completed && (
+                                  <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">Concluída</span>
+                                )}
+                                {isOverdue && !task.completed && (
+                                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Atrasada</span>
+                                )}
+                                {isToday && !task.completed && (
+                                  <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">Hoje</span>
+                                )}
+                                {task.due_date && (
+                                  <span className="text-xs text-slate-400">
+                                    {new Date(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Conteúdo da Aba Produtividade */}
+        {activeTab === 'productivity' && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Produtividade</h2>
+              <p className="text-sm text-slate-500">Métricas de desempenho da equipe</p>
+            </div>
+
+            {loadingProductivity ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+              </div>
+            ) : (
+              <>
+                {/* Cards de resumo */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-5 rounded-2xl text-white">
+                    <p className="text-blue-100 text-xs font-medium uppercase">Total de Leads</p>
+                    <p className="text-3xl font-black mt-1">{productivityData.reduce((acc, p) => acc + p.leads_count, 0)}</p>
+                    <p className="text-blue-100 text-xs mt-1">{productivityPeriod === 1 ? 'Hoje' : `Últimos ${productivityPeriod} dias`}</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-5 rounded-2xl text-white">
+                    <p className="text-green-100 text-xs font-medium uppercase">Conversões</p>
+                    <p className="text-3xl font-black mt-1">{productivityData.reduce((acc, p) => acc + p.conversions, 0)}</p>
+                    <p className="text-green-100 text-xs mt-1">{productivityPeriod === 1 ? 'Hoje' : `Últimos ${productivityPeriod} dias`}</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-5 rounded-2xl text-white">
+                    <p className="text-purple-100 text-xs font-medium uppercase">Mensagens Enviadas</p>
+                    <p className="text-3xl font-black mt-1">{productivityData.reduce((acc, p) => acc + p.messages_sent, 0).toLocaleString()}</p>
+                    <p className="text-purple-100 text-xs mt-1">{productivityPeriod === 1 ? 'Hoje' : `Últimos ${productivityPeriod} dias`}</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-5 rounded-2xl text-white">
+                    <p className="text-amber-100 text-xs font-medium uppercase">Chats Ativos</p>
+                    <p className="text-3xl font-black mt-1">{productivityData.reduce((acc, p) => acc + p.chats_active, 0)}</p>
+                    <p className="text-amber-100 text-xs mt-1">Em atendimento</p>
+                  </div>
+                </div>
+
+                {/* Tabela de produtividade por usuário */}
+                {(user?.role === 'Admin' || user?.role === 'SuperAdmin') && productivityData.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-cyan-600">group</span>
+                        <h3 className="font-bold text-slate-900">Produtividade por Comercial</h3>
+                      </div>
+                      <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                        {([1, 7, 15, 30] as const).map((days) => (
+                          <button
+                            key={days}
+                            onClick={() => setProductivityPeriod(days)}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              productivityPeriod === days
+                                ? 'bg-white text-cyan-600 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                          >
+                            {days === 1 ? 'Hoje' : `${days}d`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50">
+                            <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Comercial</th>
+                            <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Cargo</th>
+                            <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Leads</th>
+                            <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Conversões</th>
+                            <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Taxa</th>
+                            <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Tempo Resp.</th>
+                            <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Msgs Enviadas</th>
+                            <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase">Chats Ativos</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {productivityData
+                            .sort((a, b) => b.conversions - a.conversions)
+                            .map((p, idx) => {
+                              const conversionRate = p.leads_count > 0 ? ((p.conversions / p.leads_count) * 100).toFixed(1) : '0.0';
+                              const formatResponseTime = (minutes: number) => {
+                                if (minutes === 0) return '-';
+                                if (minutes < 60) return `${Math.round(minutes)}min`;
+                                const hours = Math.floor(minutes / 60);
+                                const mins = Math.round(minutes % 60);
+                                return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
+                              };
+                              return (
+                                <tr key={p.user_id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-3">
+                                      {idx === 0 && <span className="material-symbols-outlined text-amber-500 text-lg">emoji_events</span>}
+                                      <span className="font-medium text-slate-800">{p.user_name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <span className={`text-xs px-2 py-1 rounded-full ${
+                                      p.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
+                                      p.role === 'Comercial' ? 'bg-cyan-100 text-cyan-700' :
+                                      p.role === 'Recepcionista' ? 'bg-pink-100 text-pink-700' :
+                                      'bg-slate-100 text-slate-600'
+                                    }`}>
+                                      {p.role}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-center font-bold text-slate-800">{p.leads_count}</td>
+                                  <td className="py-3 px-4 text-center font-bold text-green-600">{p.conversions}</td>
+                                  <td className="py-3 px-4 text-center">
+                                    <span className={`font-bold ${Number(conversionRate) >= 30 ? 'text-green-600' : Number(conversionRate) >= 15 ? 'text-amber-600' : 'text-slate-500'}`}>
+                                      {conversionRate}%
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <span className={`font-medium ${p.avg_response_time <= 15 ? 'text-green-600' : p.avg_response_time <= 60 ? 'text-amber-600' : 'text-red-500'}`}>
+                                      {formatResponseTime(p.avg_response_time)}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-center text-slate-600">{p.messages_sent.toLocaleString()}</td>
+                                  <td className="py-3 px-4 text-center text-slate-600">{p.chats_active}</td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Para usuário comum, mostrar apenas seus dados */}
+                {(user?.role === 'Comercial' || user?.role === 'Recepcionista' || user?.role === 'Atendente') && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <h3 className="font-bold text-slate-900 mb-4">Sua Performance</h3>
+                    {productivityData.filter(p => p.user_id === user.id).map(p => {
+                      const conversionRate = p.leads_count > 0 ? ((p.conversions / p.leads_count) * 100).toFixed(1) : '0.0';
+                      return (
+                        <div key={p.user_id} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                          <div className="text-center p-4 bg-slate-50 rounded-xl">
+                            <p className="text-2xl font-black text-slate-800">{p.leads_count}</p>
+                            <p className="text-xs text-slate-500 mt-1">Leads</p>
+                          </div>
+                          <div className="text-center p-4 bg-green-50 rounded-xl">
+                            <p className="text-2xl font-black text-green-600">{p.conversions}</p>
+                            <p className="text-xs text-slate-500 mt-1">Conversões</p>
+                          </div>
+                          <div className="text-center p-4 bg-purple-50 rounded-xl">
+                            <p className="text-2xl font-black text-purple-600">{conversionRate}%</p>
+                            <p className="text-xs text-slate-500 mt-1">Taxa</p>
+                          </div>
+                          <div className="text-center p-4 bg-amber-50 rounded-xl">
+                            <p className="text-2xl font-black text-amber-600">{p.messages_sent}</p>
+                            <p className="text-xs text-slate-500 mt-1">Mensagens</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+
+        {/* Conteúdo da Aba Leads */}
+        {activeTab === 'leads' && clinicId && (
+          <DashboardLeadsTab clinicId={clinicId} />
+        )}
+
+        {/* Conteúdo da Aba Gráficos */}
+        {activeTab === 'charts' && clinicId && (
+          <DashboardChartsTab clinicId={clinicId} />
+        )}
       </div>
+
+      {/* Modal de Detalhes do Lead Meta Ads */}
+      {selectedMetaAdLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedMetaAdLead(null)}></div>
+          <div className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-600">
+              <button 
+                onClick={() => setSelectedMetaAdLead(null)}
+                className="absolute top-4 right-4 text-white/80 hover:text-white"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-2xl">person</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">{selectedMetaAdLead.client_name}</h3>
+                  <p className="text-white/80 text-sm">{selectedMetaAdLead.phone_number}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+              {/* Origem */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">analytics</span>
+                  Origem do Lead
+                </h4>
+                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-500">Código</span>
+                    <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-medium">{selectedMetaAdLead.source_code}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-500">Origem</span>
+                    <span className="text-sm font-medium text-indigo-600">Meta Ads (Click to WhatsApp)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dados do Anúncio */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">campaign</span>
+                  Dados do Anúncio
+                </h4>
+                <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-500">Campanha</span>
+                    <span className="text-sm font-medium text-slate-800">{selectedMetaAdLead.campaign_name || '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-500">Conjunto</span>
+                    <span className="text-sm font-medium text-slate-800">{selectedMetaAdLead.adset_name || '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-500">Anúncio</span>
+                    <span className="text-sm font-medium text-slate-800">{selectedMetaAdLead.ad_name || '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-500">Descrição</span>
+                    <span className="text-sm text-slate-600 text-right max-w-[200px] truncate">{selectedMetaAdLead.ad_title}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* UTM (se disponível) */}
+              {(selectedMetaAdLead.utm_source || selectedMetaAdLead.utm_medium || selectedMetaAdLead.utm_campaign) && (
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">link</span>
+                    Parâmetros UTM
+                  </h4>
+                  <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+                    {selectedMetaAdLead.utm_source && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">utm_source</span>
+                        <span className="text-sm font-medium text-slate-800">{selectedMetaAdLead.utm_source}</span>
+                      </div>
+                    )}
+                    {selectedMetaAdLead.utm_medium && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">utm_medium</span>
+                        <span className="text-sm font-medium text-slate-800">{selectedMetaAdLead.utm_medium}</span>
+                      </div>
+                    )}
+                    {selectedMetaAdLead.utm_campaign && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">utm_campaign</span>
+                        <span className="text-sm font-medium text-slate-800">{selectedMetaAdLead.utm_campaign}</span>
+                      </div>
+                    )}
+                    {selectedMetaAdLead.utm_content && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">utm_content</span>
+                        <span className="text-sm font-medium text-slate-800">{selectedMetaAdLead.utm_content}</span>
+                      </div>
+                    )}
+                    {selectedMetaAdLead.utm_term && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-slate-500">utm_term</span>
+                        <span className="text-sm font-medium text-slate-800">{selectedMetaAdLead.utm_term}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Data */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">calendar_today</span>
+                  Data
+                </h4>
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-slate-500">Chegou em</span>
+                    <span className="text-sm font-medium text-slate-800">
+                      {selectedMetaAdLead.created_at ? new Date(selectedMetaAdLead.created_at).toLocaleString('pt-BR') : '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-200 flex gap-3">
+              <button
+                onClick={() => setSelectedMetaAdLead(null)}
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-slate-700 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => {
+                  window.location.href = `/inbox?chat=${selectedMetaAdLead.chat_id}`;
+                }}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">chat</span>
+                Ver Conversa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

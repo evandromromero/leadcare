@@ -1,0 +1,10 @@
+# Redirect para WhatsApp com delay (estilo TinTim) - Belitx
+# Redireciona /w/CODIGO para index.php
+
+RewriteEngine On
+RewriteBase /w/
+
+# Se não for um arquivo ou diretório existente, redirecionar para index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [L,QSA]

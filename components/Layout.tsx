@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useChats } from '../hooks/useChats';
 import { useTasks } from '../hooks/useTasks';
 import ImpersonateBanner from './ImpersonateBanner';
+import Footer from './Footer';
 import { canAccessPage, MenuPage } from '../lib/permissions';
 import { supabase } from '../lib/supabase';
 
@@ -128,10 +129,13 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   // Adicionar menus dinâmicos
   let dynamicNavItems = [...allNavItems];
   
+  // Links Rastreáveis (sempre visível para Admin)
+  dynamicNavItems.splice(3, 0, { path: '/links', label: 'Links Rastreáveis', icon: 'link', page: 'settings' as MenuPage });
+  
   // Email Marketing (aparece se integrações estiver habilitado)
   if (integrationsEnabled) {
-    // Inserir Email Marketing após Kanban (posição 3)
-    dynamicNavItems.splice(3, 0, { path: '/email-marketing', label: 'Email Marketing', icon: 'mail', page: 'settings' as MenuPage });
+    // Inserir Email Marketing após Links Rastreáveis (posição 4)
+    dynamicNavItems.splice(4, 0, { path: '/email-marketing', label: 'Email Marketing', icon: 'mail', page: 'settings' as MenuPage });
     dynamicNavItems.push({ path: '/integrations', label: 'Integrações', icon: 'extension', page: 'settings' as MenuPage });
   }
   
@@ -140,7 +144,7 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   }
 
   const navItems = dynamicNavItems.filter(item => 
-    item.page === 'support' || item.path === '/integrations' || item.path === '/email-marketing' || canAccessPage(user?.role, item.page as MenuPage)
+    item.page === 'support' || item.path === '/integrations' || item.path === '/email-marketing' || item.path === '/links' || canAccessPage(user?.role, item.page as MenuPage)
   );
 
   const statusColors = {
@@ -388,9 +392,19 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto relative">
-          {children}
-        </main>
+        {/* Páginas com layout de altura fixa não usam flex-col nem Footer */}
+        {['/inbox', '/support-panel'].includes(location.pathname) ? (
+          <main className="flex-1 overflow-hidden relative">
+            {children}
+          </main>
+        ) : (
+          <main className="flex-1 overflow-auto relative flex flex-col">
+            <div className="flex-1">
+              {children}
+            </div>
+            <Footer />
+          </main>
+        )}
       </div>
       </div>
     </div>

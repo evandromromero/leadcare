@@ -20,6 +20,10 @@ import Support from './pages/Support';
 import SupportPanel from './pages/SupportPanel';
 import Integrations from './pages/Integrations';
 import EmailMarketing from './pages/EmailMarketing';
+import LeadDetail from './pages/LeadDetail';
+import LinkSettings from './pages/LinkSettings';
+import LinkConversations from './pages/LinkConversations';
+import Links from './pages/Links';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminClinics from './pages/admin/AdminClinics';
 import AdminClinicDetail from './pages/admin/AdminClinicDetail';
@@ -188,6 +192,24 @@ const AppRoutes: React.FC = () => {
           </PrivateRoute>
         } />
 
+        <Route path="/lead/:chatId" element={
+          <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
+            <LeadDetail state={state} />
+          </PrivateRoute>
+        } />
+
+        <Route path="/link/:linkId" element={
+          <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
+            <LinkSettings />
+          </PrivateRoute>
+        } />
+
+        <Route path="/link/:linkId/conversations" element={
+          <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
+            <LinkConversations />
+          </PrivateRoute>
+        } />
+
         <Route path="/kanban" element={
           <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
             <Kanban state={state} setState={setState} />
@@ -233,6 +255,12 @@ const AppRoutes: React.FC = () => {
         <Route path="/integrations" element={
           <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
             <Integrations />
+          </PrivateRoute>
+        } />
+
+        <Route path="/links" element={
+          <PrivateRoute state={state} setState={setState} isAuthenticated={!!session} authLoading={authLoading}>
+            <Links />
           </PrivateRoute>
         } />
 

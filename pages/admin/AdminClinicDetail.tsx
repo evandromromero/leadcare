@@ -194,6 +194,8 @@ interface ClinicDetail {
   meta_event_name?: string | null;
   meta_action_source?: string | null;
   meta_funnel_events?: Record<string, string> | null;
+  meta_ads_account_id?: string | null;
+  meta_ads_access_token?: string | null;
 }
 
 interface ClinicUser {
@@ -399,6 +401,9 @@ const AdminClinicDetail: React.FC = () => {
   // Estados para modal de permissões
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [permissionsUser, setPermissionsUser] = useState<ClinicUser | null>(null);
+  
+  // Estados para impersonate de usuário
+  const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null);
   
   // Estados para edição de limite de usuários
   const [editingMaxUsers, setEditingMaxUsers] = useState(false);
@@ -929,7 +934,7 @@ const AdminClinicDetail: React.FC = () => {
         .select('id, name, color')
         .eq('clinic_id', id);
 
-      // Buscar receitas
+      // Buscar receitas vinculadas a payments
       const paymentIds = ((paymentsData || []) as any[]).map(p => p.id);
       let receiptsData: any[] = [];
       if (paymentIds.length > 0) {
@@ -939,11 +944,20 @@ const AdminClinicDetail: React.FC = () => {
           .in('payment_id', paymentIds);
         receiptsData = (data || []) as any[];
       }
+      
+      // Buscar receitas diretas (sem payment_id)
+      const { data: directReceiptsData } = await supabase
+        .from('clinic_receipts' as any)
+        .select('total_value')
+        .eq('clinic_id', id)
+        .is('payment_id', null);
+      const totalRecebidoDireto = ((directReceiptsData || []) as any[]).reduce((sum, r) => sum + Number(r.total_value), 0);
 
       // Calcular totais
       const totalComercial = ((paymentsData || []) as any[]).reduce((sum, p) => sum + Number(p.value), 0);
-      const totalRecebido = receiptsData.reduce((sum, r) => sum + Number(r.total_value), 0);
-      const roi = totalComercial > 0 ? ((totalRecebido / totalComercial) * 100).toFixed(1) : '0';
+      const totalRecebidoComercial = receiptsData.reduce((sum, r) => sum + Number(r.total_value), 0);
+      const totalRecebido = totalRecebidoComercial + totalRecebidoDireto;
+      const roi = totalComercial > 0 ? ((totalRecebidoComercial / totalComercial) * 100).toFixed(1) : '0';
 
       // Agrupar por atendente
       const attendantMap = new Map<string, { salesCount: number; commercialValue: number; receivedValue: number }>();
@@ -1271,11 +1285,9 @@ const AdminClinicDetail: React.FC = () => {
         logoUrl: null,
       }));
 
-      // Redirecionar para o dashboard
-      navigate('/dashboard');
-      
-      // Forçar reload para aplicar o novo contexto
-      window.location.reload();
+      // Redirecionar diretamente para o dashboard com reload completo
+      // Usar window.location.href em vez de navigate + reload para evitar condição de corrida
+      window.location.href = '/dashboard';
       
     } catch (error) {
       console.error('Error impersonating:', error);
@@ -1516,6 +1528,49 @@ const AdminClinicDetail: React.FC = () => {
       console.error('Erro ao excluir usuário:', error);
     } finally {
       setDeletingUserId(null);
+    }
+  };
+
+  const handleImpersonateUser = async (targetUser: ClinicUser) => {
+    if (!user) return;
+    
+    setImpersonatingUserId(targetUser.id);
+    
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('Sessão expirada');
+      }
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/impersonate-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({ 
+          user_id: targetUser.id,
+          redirect_url: window.location.origin + '/dashboard'
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao gerar link de login');
+      }
+      
+      if (result.login_url) {
+        window.open(result.login_url, '_blank');
+      }
+    } catch (error) {
+      console.error('Erro ao fazer impersonate:', error);
+    } finally {
+      setImpersonatingUserId(null);
     }
   };
 
@@ -2240,6 +2295,14 @@ const AdminClinicDetail: React.FC = () => {
                         {u.status}
                       </span>
                       <button
+                        onClick={() => handleImpersonateUser(u)}
+                        disabled={impersonatingUserId === u.id}
+                        className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
+                        title="Logar como este usuário"
+                      >
+                        <LogIn className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() => { setPermissionsUser(u); setShowPermissionsModal(true); }}
                         className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
                         title="Ver Permissões"
@@ -2423,6 +2486,14 @@ const AdminClinicDetail: React.FC = () => {
                         {u.status}
                       </span>
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleImpersonateUser(u)}
+                          disabled={impersonatingUserId === u.id}
+                          className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
+                          title="Logar como este usuário"
+                        >
+                          <LogIn className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => { setPermissionsUser(u); setShowPermissionsModal(true); }}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
@@ -3138,6 +3209,78 @@ const AdminClinicDetail: React.FC = () => {
 
               {/* Últimos eventos enviados */}
               <MetaConversionLogs clinicId={clinic.id} />
+            </div>
+          </div>
+
+          {/* Meta Ads API (Marketing API) */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-lg bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white">ads_click</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Meta Ads API</h3>
+                  <p className="text-sm text-slate-500">Buscar dados de campanhas e anúncios do Meta Ads Manager</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <span className="material-symbols-outlined text-pink-600 mt-0.5">info</span>
+                  <div className="text-sm text-pink-700">
+                    <p className="font-medium mb-1">Para que serve?</p>
+                    <p>Com a Meta Ads API você pode buscar informações detalhadas das campanhas, como nome da campanha, conjunto de anúncios e anúncio específico que trouxe cada lead.</p>
+                    <p className="mt-2"><strong>Permissões necessárias:</strong> ads_read, ads_management, business_management</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-slate-600 uppercase">ID da Conta de Anúncios</label>
+                  <input
+                    type="text"
+                    value={clinic.meta_ads_account_id || ''}
+                    onChange={async (e) => {
+                      const newValue = e.target.value;
+                      setClinic(prev => prev ? { ...prev, meta_ads_account_id: newValue } : prev);
+                      await (supabase as any).from('clinics').update({ meta_ads_account_id: newValue || null }).eq('id', clinic.id);
+                    }}
+                    placeholder="Ex: 1195915652265933"
+                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Encontre em: Meta Business Suite → Configurações → Conta de anúncios</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 uppercase">Access Token (Meta Ads)</label>
+                  <input
+                    type="password"
+                    value={clinic.meta_ads_access_token || ''}
+                    onChange={async (e) => {
+                      const newValue = e.target.value;
+                      setClinic(prev => prev ? { ...prev, meta_ads_access_token: newValue } : prev);
+                      await (supabase as any).from('clinics').update({ meta_ads_access_token: newValue || null }).eq('id', clinic.id);
+                    }}
+                    placeholder="Token com permissões ads_read, ads_management"
+                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Gere em: developers.facebook.com → Ferramentas → Graph API Explorer</p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="text-xs text-slate-600">
+                  <span className="font-medium">Status:</span>{' '}
+                  {clinic.meta_ads_account_id && clinic.meta_ads_access_token ? (
+                    <span className="text-green-600 font-medium">✓ Configurado</span>
+                  ) : (
+                    <span className="text-amber-600 font-medium">⚠ Não configurado</span>
+                  )}
+                </p>
+              </div>
             </div>
           </div>
 

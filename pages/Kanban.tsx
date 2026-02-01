@@ -71,6 +71,9 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const [customDateEnd, setCustomDateEnd] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   
+  // Estado para busca por nome/telefone
+  const [searchTerm, setSearchTerm] = useState('');
+  
   // Estados para envio de email
   const [smtpConfigured, setSmtpConfigured] = useState(false);
   const [emailTemplates, setEmailTemplates] = useState<Array<{ id: string; name: string; subject: string; html_content: string }>>([]);
@@ -361,8 +364,24 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     return true;
   };
 
-  // Chats filtrados por período
-  const filteredChats = chats.filter(filterByPeriod);
+  // Filtrar por busca (nome ou telefone)
+  const filterBySearch = (chat: any) => {
+    if (!searchTerm.trim()) return true;
+    
+    const term = searchTerm.toLowerCase().trim();
+    const clientName = (chat.client_name || '').toLowerCase();
+    const phoneNumber = (chat.phone_number || '').replace(/\D/g, '');
+    const searchDigits = term.replace(/\D/g, '');
+    
+    // Busca por nome (texto) ou por telefone (apenas dígitos)
+    const matchesName = clientName.includes(term);
+    const matchesPhone = searchDigits.length > 0 && phoneNumber.includes(searchDigits);
+    
+    return matchesName || matchesPhone;
+  };
+
+  // Chats filtrados por período e busca
+  const filteredChats = chats.filter(chat => filterByPeriod(chat) && filterBySearch(chat));
 
   // Buscar informações completas do cliente
   const handleShowLeadInfo = async (lead: any) => {
@@ -473,7 +492,21 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
            )}
            <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined text-[20px]">search</span>
-              <input type="text" placeholder="Buscar lead..." className="pl-10 pr-4 py-2 bg-white border-slate-200 rounded-lg text-sm" />
+              <input 
+                type="text" 
+                placeholder="Buscar por nome ou telefone..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-10 py-2 bg-white border border-slate-200 rounded-lg text-sm w-64 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" 
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              )}
            </div>
            {canCreateLead && (
            <button 

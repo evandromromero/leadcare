@@ -162,6 +162,30 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
       return;
     }
 
+    // Se o status for "Convertido", enviar conversão para Google Ads
+    if (status === 'Convertido' && clinicId) {
+      const chat = chats.find(c => c.id === chatId);
+      if (chat) {
+        // Chamar Edge Function em background (não bloquear a UI)
+        supabase.functions.invoke('google-ads-conversion', {
+          body: {
+            clinic_id: clinicId,
+            chat_id: chatId,
+            phone_number: chat.phone_number,
+            gclid: (chat as any).gclid || null,
+          }
+        }).then(({ error: convError }) => {
+          if (convError) {
+            console.error('Error sending conversion to Google Ads:', convError);
+          } else {
+            console.log('Conversion sent to Google Ads for chat:', chatId);
+          }
+        }).catch(err => {
+          console.error('Error calling google-ads-conversion:', err);
+        });
+      }
+    }
+
     setChats(prev => prev.map(chat => 
       chat.id === chatId ? { ...chat, status } : chat
     ));
@@ -239,6 +263,57 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
   const sendMessage = async (chatId: string, content: string, userId: string): Promise<{ success: boolean; error?: string }> => {
     const chat = chats.find(c => c.id === chatId);
+    
+    // Se o canal é Instagram ou Facebook, não enviar via WhatsApp (já foi enviado via meta-send)
+    const chatChannel = (chat as any)?.channel || 'whatsapp';
+    if (chatChannel === 'instagram' || chatChannel === 'facebook') {
+      // Apenas salvar no banco, o envio já foi feito via meta-send
+      const { data: newMessage, error } = await supabase
+        .from('messages')
+        .insert({
+          chat_id: chatId,
+          content,
+          is_from_client: false,
+          sent_by: userId,
+          type: 'text',
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error saving message:', error);
+        return { success: false, error: error.message };
+      }
+
+      // Atualizar chat
+      await supabase
+        .from('chats')
+        .update({ 
+          last_message: content, 
+          last_message_time: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          assigned_to: userId
+        })
+        .eq('id', chatId);
+
+      setChats(prev => {
+        const chatIndex = prev.findIndex(c => c.id === chatId);
+        if (chatIndex === -1) return prev;
+        
+        const updatedChat = {
+          ...prev[chatIndex],
+          messages: [...prev[chatIndex].messages, newMessage as any],
+          last_message: content,
+          last_message_time: new Date().toISOString()
+        };
+        
+        const newChats = [...prev];
+        newChats.splice(chatIndex, 1);
+        return [updatedChat, ...newChats];
+      });
+
+      return { success: true };
+    }
     
     // Buscar nome do usuário para prefixar a mensagem
     let userName = '';
@@ -502,6 +577,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     const subscription = supabase
       .channel('leadcare-updates')
       .on('broadcast', { event: 'new_message' }, async (payload) => {
+        console.log('[Realtime] Broadcast received:', payload);
         // Só atualiza se for da clínica atual
         if (payload.payload?.clinic_id === clinicId) {
           const chatId = payload.payload?.chat_id;
@@ -528,6 +604,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
                 
                 // Se chat não existe na lista, fazer refetch completo
                 if (chatIndex === -1) {
+                  console.log('[Realtime] Chat not in list, fetching all chats');
                   fetchChats();
                   return prev;
                 }
@@ -535,6 +612,14 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
                 // Atualizar chat com novos dados e adicionar mensagem
                 const existingChat = prev[chatIndex];
                 const existingMessages = existingChat.messages || [];
+                
+                console.log('[Realtime] Processing message:', {
+                  chatId,
+                  newMessageId: newMessage?.id,
+                  newMessageContent: newMessage?.content,
+                  existingMessagesCount: existingMessages.length,
+                  fromClient: payload.payload?.from_client
+                });
                 
                 // Verificar se a mensagem já existe (incluindo mensagens otimistas com temp_)
                 const messageExists = newMessage && existingMessages.some(m => 
@@ -554,6 +639,10 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
                   : newMessage 
                     ? [...existingMessages, newMessage]
                     : existingMessages;
+                
+                if (!messageExists && newMessage) {
+                  console.log('[Realtime] Adding new message to chat panel:', newMessage.content);
+                }
                 
                 // Preservar last_message local se for mais recente que o do banco
                 // (evita sobrescrever atualização otimista com dados antigos)
@@ -593,6 +682,9 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
         console.log('[Realtime] Broadcast status:', status, err ? `Error: ${err.message}` : '');
       });
 
+    // Nota: postgres_changes removido pois causa erro de binding
+    // O broadcast já é suficiente para atualizar em tempo real
+
     // Polling de backup a cada 30 segundos (caso broadcast falhe)
     const pollingInterval = setInterval(() => {
       supabase
@@ -621,7 +713,8 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
                   return chat;
                 }
                 hasChanges = true;
-                return { ...chat, ...newData };
+                // Preservar mensagens existentes ao atualizar metadados
+                return { ...chat, ...newData, messages: chat.messages };
               }
               return chat;
             });
@@ -797,6 +890,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
   // Buscar mensagens de um chat com paginação
   const fetchMessages = async (chatId: string, limit: number = MESSAGES_PER_PAGE, before?: string): Promise<{ messages: DbMessage[]; hasMore: boolean }> => {
+    console.log('[fetchMessages] Loading messages for chat:', chatId);
     let query = supabase
       .from('messages')
       .select('*')
@@ -817,6 +911,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
     const hasMore = (data?.length || 0) > limit;
     const messages = (data || []).slice(0, limit).reverse(); // Reverter para ordem cronológica
+    console.log('[fetchMessages] Loaded', messages.length, 'messages for chat:', chatId);
 
     // Atualizar estado local do chat
     setChats(prev => prev.map(chat => {

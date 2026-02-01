@@ -115,6 +115,18 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
   const [loading, setLoading] = useState(true);
   const [expandedPayments, setExpandedPayments] = useState<Set<string>>(new Set());
   
+  // Lançamentos diretos da clínica (sem comercial)
+  const [directReceipts, setDirectReceipts] = useState<Array<{
+    id: string;
+    chat_id: string;
+    total_value: number;
+    description: string | null;
+    receipt_date: string;
+    created_at: string;
+    chat: { id: string; client_name: string; phone_number: string } | null;
+    receipt_payments: Array<{ payment_method: string; value: number }>;
+  }>>([]);
+  
   const [showModal, setShowModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<PaymentWithDetails | null>(null);
   const [editingReceipt, setEditingReceipt] = useState<ClinicReceipt | null>(null);
@@ -195,6 +207,28 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
         })
       );
 
+      // Buscar lançamentos diretos (sem payment_id)
+      const directReceiptsData = ((receiptsData || []) as any[])
+        .filter((r: any) => r.payment_id === null)
+        .map((r: any) => ({
+          ...r,
+          chat: null // Será preenchido abaixo
+        }));
+      
+      // Buscar dados dos chats para lançamentos diretos
+      if (directReceiptsData.length > 0) {
+        const chatIds = [...new Set(directReceiptsData.map(r => r.chat_id))];
+        const { data: chatsData } = await supabase
+          .from('chats')
+          .select('id, client_name, phone_number')
+          .in('id', chatIds);
+        
+        directReceiptsData.forEach(r => {
+          r.chat = (chatsData as any[] || []).find(c => c.id === r.chat_id) || null;
+        });
+      }
+      
+      setDirectReceipts(directReceiptsData);
       setPayments(paymentsWithDetails);
       if (sourcesData) setSources(sourcesData as unknown as LeadSource[]);
       if (usersData) setAttendants(usersData as unknown as Attendant[]);
@@ -433,15 +467,36 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
 
   const metrics = useMemo(() => {
     const totalComercial = filteredAndSortedPayments.reduce((sum, p) => sum + Number(p.value), 0);
-    const totalRecebido = filteredAndSortedPayments.reduce((sum, p) => sum + p.receipts.reduce((rSum, r) => rSum + Number(r.total_value), 0), 0);
-    const totalRecebimentos = filteredAndSortedPayments.reduce((sum, p) => sum + p.receipts.length, 0);
+    const totalRecebidoComercial = filteredAndSortedPayments.reduce((sum, p) => sum + p.receipts.reduce((rSum, r) => rSum + Number(r.total_value), 0), 0);
+    const totalRecebimentosComercial = filteredAndSortedPayments.reduce((sum, p) => sum + p.receipts.length, 0);
+    
+    // Lançamentos diretos (sem comercial)
+    const totalRecebidoDireto = directReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
+    const totalRecebimentosDiretos = directReceipts.length;
+    
+    // Totais combinados
+    const totalRecebido = totalRecebidoComercial + totalRecebidoDireto;
+    const totalRecebimentos = totalRecebimentosComercial + totalRecebimentosDiretos;
+    
     const vendasComRecebimento = filteredAndSortedPayments.filter(p => p.receipts.length > 0).length;
     const vendasPendentes = filteredAndSortedPayments.filter(p => p.receipts.length === 0).length;
-    const roi = totalComercial > 0 ? ((totalRecebido / totalComercial) * 100).toFixed(1) : '0';
+    const roi = totalComercial > 0 ? ((totalRecebidoComercial / totalComercial) * 100).toFixed(1) : '0';
     const ticketMedio = totalRecebimentos > 0 ? totalRecebido / totalRecebimentos : 0;
     
-    return { totalComercial, totalRecebido, totalRecebimentos, vendasComRecebimento, vendasPendentes, roi, ticketMedio, totalVendas: filteredAndSortedPayments.length };
-  }, [filteredAndSortedPayments]);
+    return { 
+      totalComercial, 
+      totalRecebido, 
+      totalRecebidoComercial,
+      totalRecebidoDireto,
+      totalRecebimentos, 
+      totalRecebimentosDiretos,
+      vendasComRecebimento, 
+      vendasPendentes, 
+      roi, 
+      ticketMedio, 
+      totalVendas: filteredAndSortedPayments.length 
+    };
+  }, [filteredAndSortedPayments, directReceipts]);
 
   const exportToCSV = () => {
     const clinic = state.selectedClinic;
@@ -553,7 +608,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
           <p className="text-amber-100 text-xs mt-1">{metrics.totalVendas} venda(s)</p>
         </div>
         <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl p-4 text-white">
-          <p className="text-emerald-100 text-xs mb-1">Receita Clinica</p>
+          <p className="text-emerald-100 text-xs mb-1">Receita da Clinica</p>
           <p className="text-2xl font-bold">{formatCurrency(metrics.totalRecebido)}</p>
           <p className="text-emerald-100 text-xs mt-1">{metrics.totalRecebimentos} recebimento(s)</p>
         </div>
@@ -628,87 +683,127 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
       </div>
 
       <div className="space-y-3">
-        {paginatedPayments.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center text-slate-500">Nenhuma venda encontrada</div>
+        {paginatedPayments.length === 0 && directReceipts.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center text-slate-500">Nenhum lancamento encontrado</div>
         ) : (
-          paginatedPayments.map((payment) => {
-            const isExpanded = expandedPayments.has(payment.id);
-            const totalReceiptsValue = payment.receipts.reduce((sum, r) => sum + Number(r.total_value), 0);
-            const hasReceipts = payment.receipts.length > 0;
+          <>
+            {paginatedPayments.map((payment) => {
+              const isExpanded = expandedPayments.has(payment.id);
+              const totalReceiptsValue = payment.receipts.reduce((sum, r) => sum + Number(r.total_value), 0);
+              const hasReceipts = payment.receipts.length > 0;
+              
+              return (
+                <div key={payment.id} className={`bg-white rounded-xl shadow-sm border overflow-hidden ${hasReceipts ? 'border-emerald-200' : 'border-slate-200'}`}>
+                  <div className="p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50" onClick={() => toggleExpanded(payment.id)}>
+                    <button className="p-1 text-slate-400">{isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}</button>
+                    <div className={`w-2 h-2 rounded-full ${hasReceipts ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-slate-800">{payment.chat?.client_name || 'Cliente'}</span>
+                        {payment.source && <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: `${payment.source.color}20`, color: payment.source.color }}>{payment.source.name}</span>}
+                        {hasReceipts && <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700"><CheckCircle className="w-3 h-3" />Recebido</span>}
+                      </div>
+                      <div className="text-sm text-slate-500 flex items-center gap-2 flex-wrap">
+                        <span>{payment.description || 'Sem descricao'}</span>
+                        <span>-</span>
+                        <span>{new Date(payment.payment_date).toLocaleDateString('pt-BR')}</span>
+                        {payment.creator && <><span>-</span><span className="flex items-center gap-1"><User className="w-3 h-3" />{payment.creator.name}</span></>}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-slate-400">Comercial</div>
+                      <div className="font-bold text-amber-600">{formatCurrency(Number(payment.value))}</div>
+                    </div>
+                    <div className="w-px h-10 bg-slate-200"></div>
+                    <div className="text-right min-w-[100px]">
+                      <div className="text-xs text-slate-400">Recebido</div>
+                      <div className={`font-bold ${totalReceiptsValue > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{totalReceiptsValue > 0 ? formatCurrency(totalReceiptsValue) : '-'}</div>
+                    </div>
+                    {canAddReceipt && (
+                      <button onClick={(e) => { e.stopPropagation(); openAddReceiptModal(payment); }} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-600 text-sm font-medium rounded-lg hover:bg-emerald-100">
+                        <Plus className="w-4 h-4" />Lancar
+                      </button>
+                    )}
+                  </div>
+                  {isExpanded && payment.receipts.length > 0 && (
+                    <div className="border-t border-slate-100 bg-slate-50 p-4">
+                      <div className="text-xs font-semibold text-slate-400 uppercase mb-3">Recebimentos ({payment.receipts.length})</div>
+                      <div className="space-y-2">
+                        {payment.receipts.map((receipt) => (
+                          <div key={receipt.id} className="bg-white rounded-lg border border-slate-200 p-3 flex items-center gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-emerald-600">{formatCurrency(Number(receipt.total_value))}</span>
+                                <span className="text-sm text-slate-400">{new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
+                              </div>
+                              {receipt.description && <div className="text-sm text-slate-500">{receipt.description}</div>}
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {receipt.receipt_payments?.map((rp, idx) => (
+                                  <span key={idx} className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600">
+                                    {getPaymentMethodLabel(rp.payment_method)}{rp.installments > 1 && ` ${rp.installments}x`}: {formatCurrency(Number(rp.value))}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            {canEditReceipt && (
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => openEditReceiptModal(payment, receipt)} className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded"><Edit className="w-4 h-4" /></button>
+                                <button onClick={() => handleDeleteReceipt(receipt.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {isExpanded && payment.receipts.length === 0 && (
+                    <div className="border-t border-slate-100 bg-amber-50 p-4 text-center">
+                      <Clock className="w-5 h-5 text-amber-400 mx-auto mb-1" />
+                      <p className="text-sm text-amber-600">Nenhum recebimento lancado</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             
-            return (
-              <div key={payment.id} className={`bg-white rounded-xl shadow-sm border overflow-hidden ${hasReceipts ? 'border-emerald-200' : 'border-slate-200'}`}>
-                <div className="p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50" onClick={() => toggleExpanded(payment.id)}>
-                  <button className="p-1 text-slate-400">{isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}</button>
-                  <div className={`w-2 h-2 rounded-full ${hasReceipts ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+            {/* Lançamentos Diretos (sem comercial) */}
+            {directReceipts.map((receipt) => (
+              <div key={`direct-${receipt.id}`} className="bg-white rounded-xl shadow-sm border overflow-hidden border-teal-200">
+                <div className="p-4 flex items-center gap-4">
+                  <div className="p-1 text-teal-400">
+                    <CheckCircle className="w-5 h-5" />
+                  </div>
+                  <div className="w-2 h-2 rounded-full bg-teal-500" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-slate-800">{payment.chat?.client_name || 'Cliente'}</span>
-                      {payment.source && <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: `${payment.source.color}20`, color: payment.source.color }}>{payment.source.name}</span>}
-                      {hasReceipts && <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700"><CheckCircle className="w-3 h-3" />Recebido</span>}
+                      <span className="font-semibold text-slate-800">{receipt.chat?.client_name || 'Cliente'}</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">Direto</span>
                     </div>
                     <div className="text-sm text-slate-500 flex items-center gap-2 flex-wrap">
-                      <span>{payment.description || 'Sem descricao'}</span>
+                      <span>{receipt.description || 'Lancamento direto'}</span>
                       <span>-</span>
-                      <span>{new Date(payment.payment_date).toLocaleDateString('pt-BR')}</span>
-                      {payment.creator && <><span>-</span><span className="flex items-center gap-1"><User className="w-3 h-3" />{payment.creator.name}</span></>}
+                      <span>{new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
+                      {receipt.receipt_payments?.[0]?.payment_method && (
+                        <>
+                          <span>-</span>
+                          <span>{getPaymentMethodLabel(receipt.receipt_payments[0].payment_method)}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-xs text-slate-400">Comercial</div>
-                    <div className="font-bold text-amber-600">{formatCurrency(Number(payment.value))}</div>
+                    <div className="font-bold text-slate-300">-</div>
                   </div>
                   <div className="w-px h-10 bg-slate-200"></div>
                   <div className="text-right min-w-[100px]">
                     <div className="text-xs text-slate-400">Recebido</div>
-                    <div className={`font-bold ${totalReceiptsValue > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{totalReceiptsValue > 0 ? formatCurrency(totalReceiptsValue) : '-'}</div>
+                    <div className="font-bold text-teal-600">{formatCurrency(Number(receipt.total_value))}</div>
                   </div>
-                  {canAddReceipt && (
-                    <button onClick={(e) => { e.stopPropagation(); openAddReceiptModal(payment); }} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-600 text-sm font-medium rounded-lg hover:bg-emerald-100">
-                      <Plus className="w-4 h-4" />Lancar
-                    </button>
-                  )}
                 </div>
-                {isExpanded && payment.receipts.length > 0 && (
-                  <div className="border-t border-slate-100 bg-slate-50 p-4">
-                    <div className="text-xs font-semibold text-slate-400 uppercase mb-3">Recebimentos ({payment.receipts.length})</div>
-                    <div className="space-y-2">
-                      {payment.receipts.map((receipt) => (
-                        <div key={receipt.id} className="bg-white rounded-lg border border-slate-200 p-3 flex items-center gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-emerald-600">{formatCurrency(Number(receipt.total_value))}</span>
-                              <span className="text-sm text-slate-400">{new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
-                            </div>
-                            {receipt.description && <div className="text-sm text-slate-500">{receipt.description}</div>}
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {receipt.receipt_payments?.map((rp, idx) => (
-                                <span key={idx} className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600">
-                                  {getPaymentMethodLabel(rp.payment_method)}{rp.installments > 1 && ` ${rp.installments}x`}: {formatCurrency(Number(rp.value))}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          {canEditReceipt && (
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => openEditReceiptModal(payment, receipt)} className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded"><Edit className="w-4 h-4" /></button>
-                              <button onClick={() => handleDeleteReceipt(receipt.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {isExpanded && payment.receipts.length === 0 && (
-                  <div className="border-t border-slate-100 bg-amber-50 p-4 text-center">
-                    <Clock className="w-5 h-5 text-amber-400 mx-auto mb-1" />
-                    <p className="text-sm text-amber-600">Nenhum recebimento lancado</p>
-                  </div>
-                )}
               </div>
-            );
-          })
+            ))}
+          </>
         )}
       </div>
 
