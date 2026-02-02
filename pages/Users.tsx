@@ -20,7 +20,9 @@ interface WhatsAppInstance {
 
 const Users: React.FC<UsersProps> = ({ state, setState }) => {
   const { users, loading, updateUserStatus, updateUserRole, refetch } = useUsers();
-  const { clinic, user } = useAuth();
+  const { clinic, user, isImpersonating, impersonatedClinic } = useAuth();
+  // Usar clinicId do impersonate se estiver ativo
+  const clinicId = isImpersonating ? impersonatedClinic?.id : (clinic?.id || user?.clinicId);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Comercial', default_instance_id: '' });
   const [canCreateUsers, setCanCreateUsers] = useState(false);
@@ -38,39 +40,39 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
 
   useEffect(() => {
     const checkPermission = async () => {
-      if (!clinic?.id) return;
+      if (!clinicId) return;
       
       const { data } = await supabase
         .from('clinics')
         .select('can_create_users')
-        .eq('id', clinic.id)
+        .eq('id', clinicId)
         .single();
       
       setCanCreateUsers(data?.can_create_users || false);
     };
     
     checkPermission();
-  }, [clinic?.id]);
+  }, [clinicId]);
 
   // Buscar instâncias WhatsApp da clínica
   useEffect(() => {
     const fetchInstances = async () => {
-      if (!clinic?.id) return;
+      if (!clinicId) return;
       
       const { data } = await supabase
         .from('whatsapp_instances' as any)
         .select('id, instance_name, display_name, status')
-        .eq('clinic_id', clinic.id)
+        .eq('clinic_id', clinicId)
         .eq('status', 'connected');
       
       setWhatsappInstances((data || []) as WhatsAppInstance[]);
     };
     
     fetchInstances();
-  }, [clinic?.id]);
+  }, [clinicId]);
 
   const handleCreateUser = async () => {
-    if (!newUser.name || !newUser.email || !newUser.password || !clinic?.id) {
+    if (!newUser.name || !newUser.email || !newUser.password || !clinicId) {
       setCreateUserError('Preencha todos os campos');
       return;
     }
@@ -99,7 +101,7 @@ const Users: React.FC<UsersProps> = ({ state, setState }) => {
           email: newUser.email,
           password: newUser.password,
           role: newUser.role,
-          clinic_id: clinic.id,
+          clinic_id: clinicId,
           default_instance_id: newUser.default_instance_id || null,
         }),
       });

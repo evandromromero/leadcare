@@ -57,7 +57,9 @@ interface ClickInteraction {
 export default function LinkConversations() {
   const { linkId } = useParams<{ linkId: string }>();
   const navigate = useNavigate();
-  const { clinic } = useAuth();
+  const { clinic, user, isImpersonating, impersonatedClinic } = useAuth();
+  // Usar clinicId do impersonate se estiver ativo
+  const clinicId = isImpersonating ? impersonatedClinic?.id : (clinic?.id || user?.clinicId);
   
   const [link, setLink] = useState<LinkInfo | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -79,18 +81,18 @@ export default function LinkConversations() {
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
-    if (linkId && clinic?.id) {
+    if (linkId && clinicId) {
       fetchLinkInfo();
       fetchConversations();
     }
-  }, [linkId, clinic?.id, dateFilter]);
+  }, [linkId, clinicId, dateFilter]);
 
   const fetchLinkInfo = async () => {
     const { data } = await supabase
       .from('trackable_links')
       .select('id, name, code, source_id')
       .eq('id', linkId)
-      .eq('clinic_id', clinic?.id)
+      .eq('clinic_id', clinicId)
       .single();
     
     if (data) {
@@ -125,10 +127,11 @@ export default function LinkConversations() {
 
     // Estratégia 1: Buscar mensagens com o código do link [CODIGO] no período selecionado
     // Isso captura tanto clientes novos quanto antigos que viram uma publicação
+    // Buscar mensagens com o código do link (colchetes ou parênteses)
     const { data: messagesWithCode } = await (supabase as any)
       .from('messages')
       .select('chat_id, created_at')
-      .ilike('content', `%[${linkData.code}]%`)
+      .or(`content.ilike.%[${linkData.code}]%,content.ilike.%(${linkData.code})%`)
       .gte('created_at', startDate.toISOString());
     
     const chatIdsFromMessages = [...new Set((messagesWithCode || []).map((m: any) => m.chat_id))];

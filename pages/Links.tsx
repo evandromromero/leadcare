@@ -27,8 +27,9 @@ interface LeadSource {
 
 export default function Links() {
   const navigate = useNavigate();
-  const { clinic, user } = useAuth();
-  const clinicId = clinic?.id;
+  const { clinic, user, isImpersonating, impersonatedClinic } = useAuth();
+  // Usar clinicId do impersonate se estiver ativo, senão usar do usuário/clínica
+  const clinicId = isImpersonating ? impersonatedClinic?.id : (clinic?.id || user?.clinicId);
   
   const [links, setLinks] = useState<TrackableLink[]>([]);
   const [sources, setSources] = useState<LeadSource[]>([]);

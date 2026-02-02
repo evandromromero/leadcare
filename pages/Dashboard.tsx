@@ -92,6 +92,19 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const [metaAdsConfigured, setMetaAdsConfigured] = useState(false);
   const [expandedCampaignSections, setExpandedCampaignSections] = useState<{ active: boolean; paused: boolean; other: boolean; performance: boolean }>({ active: true, paused: false, other: false, performance: true });
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
+  const [metaAdsVisibility, setMetaAdsVisibility] = useState<{
+    impressions: boolean;
+    clicks: boolean;
+    ctr: boolean;
+    cpc: boolean;
+    spent: boolean;
+    campaign_performance: boolean;
+    active_campaigns: boolean;
+    paused_campaigns: boolean;
+  }>({
+    impressions: true, clicks: true, ctr: true, cpc: true,
+    spent: true, campaign_performance: true, active_campaigns: true, paused_campaigns: true
+  });
   
   // Estados para aba Tarefas
   const [tasks, setTasks] = useState<Array<{ id: string; chat_id: string; title: string; description: string | null; due_date: string | null; completed: boolean; completed_at: string | null; created_by: string | null; created_at: string; client_name?: string }>>([]);
@@ -1230,6 +1243,19 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
       setMetaAdsConfigured(true);
       setLoadingMetaAdsApi(true);
       
+      // Buscar configurações de visibilidade da clínica (apenas se não for SuperAdmin)
+      if (user?.role !== 'SuperAdmin') {
+        const { data: clinicData } = await (supabase as any)
+          .from('clinics')
+          .select('meta_ads_visibility')
+          .eq('id', clinicId)
+          .single();
+        
+        if (clinicData?.meta_ads_visibility) {
+          setMetaAdsVisibility(clinicData.meta_ads_visibility);
+        }
+      }
+      
       try {
         const datePreset = campaignPeriod === 'today' ? 'today' : campaignPeriod === '7d' ? 'last_7d' : campaignPeriod === '30d' ? 'last_30d' : 'last_90d';
         
@@ -1483,8 +1509,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                 Visão Geral
               </span>
             </button>
-            {/* Abas dinâmicas para cada conta Meta Ads - Apenas para Admin */}
-            {user?.role === 'Admin' && metaAdsAccounts.map((account) => (
+            {/* Abas dinâmicas para cada conta Meta Ads - Admin e SuperAdmin */}
+            {(user?.role === 'Admin' || user?.role === 'SuperAdmin') && metaAdsAccounts.map((account) => (
               <button
                 key={account.id}
                 onClick={() => {
@@ -2261,7 +2287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                 className="w-3 h-3 rounded-full flex-shrink-0"
                                 style={{ backgroundColor: source.tag_color || source.color }}
                               ></span>
-                              <span className="text-sm text-slate-700 truncate">{source.name}</span>
+                              <span className="text-sm text-slate-700 truncate">{source.code || source.name}</span>
                               {source.tag_name && (
                                 <span
                                   className="text-[10px] text-white px-1.5 py-0.5 rounded font-medium ml-auto"
@@ -2320,7 +2346,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <span className="size-3 rounded-full" style={{ backgroundColor: source.tag_color || source.color }}></span>
-                            <span className="font-medium text-slate-800">{source.name}</span>
+                            <span className="font-medium text-slate-800">{source.code || source.name}</span>
                             {source.tag_name && (
                               <span 
                                 className="text-[10px] text-white px-1.5 py-0.5 rounded font-medium"
@@ -2328,9 +2354,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                               >
                                 {source.tag_name}
                               </span>
-                            )}
-                            {source.code && (
-                              <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{source.code}</span>
                             )}
                           </div>
                         </td>
@@ -2924,7 +2947,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     {metaAdsApiData ? (
                       <div className="space-y-6">
                         {/* Cards de Métricas Totais */}
-                        {metaAdsApiData.insights.length > 0 && (
+                        {metaAdsApiData.insights.length > 0 && (metaAdsVisibility.impressions || metaAdsVisibility.clicks || metaAdsVisibility.ctr || metaAdsVisibility.cpc || metaAdsVisibility.spent) && (
                           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                             {(() => {
                               const totals = metaAdsApiData.insights.reduce((acc, i) => ({
@@ -2936,6 +2959,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                               const cpc = totals.clicks > 0 ? (totals.spend / totals.clicks) : 0;
                               return (
                                 <>
+                                  {metaAdsVisibility.impressions && (
                                   <div className="p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl text-white text-center relative group">
                                     <div className="absolute top-2 right-2">
                                       <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
@@ -2946,6 +2970,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                     <p className="text-2xl font-black">{totals.impressions.toLocaleString()}</p>
                                     <p className="text-xs text-blue-100 mt-1">Impressões</p>
                                   </div>
+                                  )}
+                                  {metaAdsVisibility.clicks && (
                                   <div className="p-4 bg-gradient-to-br from-green-500 to-green-600 rounded-xl text-white text-center relative group">
                                     <div className="absolute top-2 right-2">
                                       <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
@@ -2956,6 +2982,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                     <p className="text-2xl font-black">{totals.clicks.toLocaleString()}</p>
                                     <p className="text-xs text-green-100 mt-1">Cliques</p>
                                   </div>
+                                  )}
+                                  {metaAdsVisibility.ctr && (
                                   <div className="p-4 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl text-white text-center relative group">
                                     <div className="absolute top-2 right-2">
                                       <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
@@ -2966,6 +2994,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                     <p className="text-2xl font-black">{ctr.toFixed(2)}%</p>
                                     <p className="text-xs text-amber-100 mt-1">CTR</p>
                                   </div>
+                                  )}
+                                  {metaAdsVisibility.cpc && (
                                   <div className="p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl text-white text-center relative group">
                                     <div className="absolute top-2 right-2">
                                       <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
@@ -2976,6 +3006,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                     <p className="text-2xl font-black">R$ {cpc.toFixed(2)}</p>
                                     <p className="text-xs text-purple-100 mt-1">CPC Médio</p>
                                   </div>
+                                  )}
+                                  {metaAdsVisibility.spent && (
                                   <div className="p-4 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl text-white text-center relative group">
                                     <div className="absolute top-2 right-2">
                                       <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
@@ -2986,6 +3018,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                     <p className="text-2xl font-black">R$ {totals.spend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                     <p className="text-xs text-pink-100 mt-1">Investido</p>
                                   </div>
+                                  )}
                                 </>
                               );
                             })()}
@@ -2993,7 +3026,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                         )}
 
                         {/* Tabela de Performance por Campanha */}
-                        {metaAdsApiData.campaignInsights && metaAdsApiData.campaignInsights.length > 0 && (
+                        {metaAdsVisibility.campaign_performance && metaAdsApiData.campaignInsights && metaAdsApiData.campaignInsights.length > 0 && (
                           <div className="rounded-xl border border-purple-200 overflow-hidden">
                             <button 
                               onClick={() => setExpandedCampaignSections(prev => ({ ...prev, performance: !prev.performance }))}
@@ -3013,11 +3046,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                   <thead>
                                     <tr className="border-b border-slate-200 bg-white">
                                       <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase">Campanha</th>
-                                      <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Impressões</th>
-                                      <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Cliques</th>
-                                      <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">CTR</th>
-                                      <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">CPC</th>
-                                      <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Gasto</th>
+                                      {metaAdsVisibility.impressions && <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Impressões</th>}
+                                      {metaAdsVisibility.clicks && <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Cliques</th>}
+                                      {metaAdsVisibility.ctr && <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">CTR</th>}
+                                      {metaAdsVisibility.cpc && <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">CPC</th>}
+                                      {metaAdsVisibility.spent && <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase">Gasto</th>}
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-100 bg-white">
@@ -3065,23 +3098,33 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                                   )}
                                                 </div>
                                               </td>
+                                              {metaAdsVisibility.impressions && (
                                               <td className="py-3 px-4 text-right">
                                                 <span className="text-sm text-slate-600">{impressions.toLocaleString()}</span>
                                               </td>
+                                              )}
+                                              {metaAdsVisibility.clicks && (
                                               <td className="py-3 px-4 text-right">
                                                 <span className="text-sm font-semibold text-green-600">{clicks.toLocaleString()}</span>
                                               </td>
+                                              )}
+                                              {metaAdsVisibility.ctr && (
                                               <td className="py-3 px-4 text-right">
                                                 <span className={`text-sm font-semibold ${ctr >= 2 ? 'text-green-600' : ctr >= 1 ? 'text-amber-600' : 'text-red-500'}`}>
                                                   {ctr.toFixed(2)}%
                                                 </span>
                                               </td>
+                                              )}
+                                              {metaAdsVisibility.cpc && (
                                               <td className="py-3 px-4 text-right">
                                                 <span className="text-sm text-purple-600">R$ {cpc.toFixed(2)}</span>
                                               </td>
+                                              )}
+                                              {metaAdsVisibility.spent && (
                                               <td className="py-3 px-4 text-right">
                                                 <span className="text-sm font-bold text-pink-600">R$ {spend.toFixed(2)}</span>
                                               </td>
+                                              )}
                                             </tr>
                                             {/* Conjuntos de Anúncios (Ad Sets) */}
                                             {isExpanded && campaignAdsets.map((adset) => {
@@ -3119,23 +3162,33 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                                       </div>
                                                     </div>
                                                   </td>
+                                                  {metaAdsVisibility.impressions && (
                                                   <td className="py-2 px-4 text-right">
                                                     <span className="text-xs text-slate-600">{adsetImpressions > 0 ? adsetImpressions.toLocaleString() : '-'}</span>
                                                   </td>
+                                                  )}
+                                                  {metaAdsVisibility.clicks && (
                                                   <td className="py-2 px-4 text-right">
                                                     <span className="text-xs font-semibold text-green-600">{adsetClicks > 0 ? adsetClicks.toLocaleString() : '-'}</span>
                                                   </td>
+                                                  )}
+                                                  {metaAdsVisibility.ctr && (
                                                   <td className="py-2 px-4 text-right">
                                                     <span className={`text-xs font-semibold ${adsetCtr >= 2 ? 'text-green-600' : adsetCtr >= 1 ? 'text-amber-600' : adsetCtr > 0 ? 'text-red-500' : 'text-slate-400'}`}>
                                                       {adsetCtr > 0 ? `${adsetCtr.toFixed(2)}%` : '-'}
                                                     </span>
                                                   </td>
+                                                  )}
+                                                  {metaAdsVisibility.cpc && (
                                                   <td className="py-2 px-4 text-right">
                                                     <span className="text-xs text-purple-600">{adsetCpc > 0 ? `R$ ${adsetCpc.toFixed(2)}` : '-'}</span>
                                                   </td>
+                                                  )}
+                                                  {metaAdsVisibility.spent && (
                                                   <td className="py-2 px-4 text-right">
                                                     <span className="text-xs font-bold text-pink-600">{adsetSpend > 0 ? `R$ ${adsetSpend.toFixed(2)}` : '-'}</span>
                                                   </td>
+                                                  )}
                                                 </tr>
                                               );
                                             })}
@@ -3196,10 +3249,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                       <thead>
                                         <tr className="border-b border-slate-200 bg-white">
                                           <th className="text-left py-2 px-4 text-xs font-bold text-slate-500 uppercase">Campanha</th>
-                                          <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">Cliques</th>
-                                          <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">CTR</th>
-                                          <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">CPC</th>
-                                          <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">Gasto</th>
+                                          {metaAdsVisibility.clicks && <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">Cliques</th>}
+                                          {metaAdsVisibility.ctr && <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">CTR</th>}
+                                          {metaAdsVisibility.cpc && <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">CPC</th>}
+                                          {metaAdsVisibility.spent && <th className="text-right py-2 px-4 text-xs font-bold text-slate-500 uppercase">Gasto</th>}
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-slate-100 bg-white">
@@ -3210,11 +3263,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                               <td className="py-2.5 px-4">
                                                 <span className="font-medium text-slate-800 text-sm">{campaign.name}</span>
                                               </td>
+                                              {metaAdsVisibility.clicks && (
                                               <td className="py-2.5 px-4 text-right">
                                                 <span className="text-sm font-semibold text-green-600">
                                                   {metrics?.clicks?.toLocaleString() || '-'}
                                                 </span>
                                               </td>
+                                              )}
+                                              {metaAdsVisibility.ctr && (
                                               <td className="py-2.5 px-4 text-right">
                                                 <span className={`text-sm font-semibold ${
                                                   (metrics?.ctr || 0) >= 2 ? 'text-green-600' : 
@@ -3224,16 +3280,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                                   {metrics?.ctr?.toFixed(2) || '0.00'}%
                                                 </span>
                                               </td>
+                                              )}
+                                              {metaAdsVisibility.cpc && (
                                               <td className="py-2.5 px-4 text-right">
                                                 <span className="text-sm text-purple-600">
                                                   R$ {metrics?.cpc?.toFixed(2) || '0.00'}
                                                 </span>
                                               </td>
+                                              )}
+                                              {metaAdsVisibility.spent && (
                                               <td className="py-2.5 px-4 text-right">
                                                 <span className="text-sm font-bold text-pink-600">
                                                   R$ {metrics?.spend?.toFixed(2) || '0.00'}
                                                 </span>
                                               </td>
+                                              )}
                                             </tr>
                                           );
                                         })}
@@ -3247,8 +3308,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                           
                           return (
                             <div className="space-y-4">
-                              {renderCampaignTable(activeCampaigns, 'Campanhas Ativas', 'play_circle', 'bg-green-50 text-green-700', 'border-green-200', 'active')}
-                              {renderCampaignTable(pausedCampaigns, 'Campanhas Pausadas', 'pause_circle', 'bg-slate-100 text-slate-600', 'border-slate-200', 'paused')}
+                              {metaAdsVisibility.active_campaigns && renderCampaignTable(activeCampaigns, 'Campanhas Ativas', 'play_circle', 'bg-green-50 text-green-700', 'border-green-200', 'active')}
+                              {metaAdsVisibility.paused_campaigns && renderCampaignTable(pausedCampaigns, 'Campanhas Pausadas', 'pause_circle', 'bg-slate-100 text-slate-600', 'border-slate-200', 'paused')}
                               {renderCampaignTable(otherCampaigns, 'Outras Campanhas', 'help', 'bg-amber-50 text-amber-700', 'border-amber-200', 'other')}
                             </div>
                           );

@@ -196,6 +196,16 @@ interface ClinicDetail {
   meta_funnel_events?: Record<string, string> | null;
   meta_ads_account_id?: string | null;
   meta_ads_access_token?: string | null;
+  meta_ads_visibility?: {
+    impressions: boolean;
+    clicks: boolean;
+    ctr: boolean;
+    cpc: boolean;
+    spent: boolean;
+    campaign_performance: boolean;
+    active_campaigns: boolean;
+    paused_campaigns: boolean;
+  } | null;
 }
 
 interface ClinicUser {
@@ -248,6 +258,15 @@ interface MassMessageCampaign {
   sent_count: number;
   delivered_count: number;
   failed_count: number;
+  created_at: string;
+}
+
+interface MetaAdsAccount {
+  id: string;
+  account_id: string;
+  account_name: string;
+  access_token: string;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -426,6 +445,14 @@ const AdminClinicDetail: React.FC = () => {
   // Estado para modal de ajuda Meta Conversions
   const [showMetaHelpModal, setShowMetaHelpModal] = useState(false);
   
+  // Estados para gerenciamento de contas Meta Ads
+  const [metaAdsAccounts, setMetaAdsAccounts] = useState<MetaAdsAccount[]>([]);
+  const [showMetaAdsModal, setShowMetaAdsModal] = useState(false);
+  const [editingMetaAccount, setEditingMetaAccount] = useState<MetaAdsAccount | null>(null);
+  const [metaAdsForm, setMetaAdsForm] = useState({ account_id: '', account_name: '', access_token: '' });
+  const [savingMetaAds, setSavingMetaAds] = useState(false);
+  const [deletingMetaAccountId, setDeletingMetaAccountId] = useState<string | null>(null);
+  
   // Estados para modal de teste SMTP
   const [showSmtpTestModal, setShowSmtpTestModal] = useState(false);
   const [smtpTestEmail, setSmtpTestEmail] = useState('');
@@ -550,6 +577,15 @@ const AdminClinicDetail: React.FC = () => {
 
       // Buscar faturamento
       await fetchBillingStats(usersData || []);
+
+      // Buscar contas Meta Ads
+      const { data: metaAccountsData } = await (supabase as any)
+        .from('clinic_meta_accounts')
+        .select('id, account_id, account_name, access_token, is_active, created_at')
+        .eq('clinic_id', id)
+        .order('created_at', { ascending: true });
+      
+      setMetaAdsAccounts(metaAccountsData || []);
 
     } catch (error) {
       console.error('Error fetching clinic details:', error);
@@ -891,6 +927,86 @@ const AdminClinicDetail: React.FC = () => {
       console.error('Error fetching metrics:', error);
     } finally {
       setLoadingMetrics(false);
+    }
+  };
+
+  // Funções para gerenciar contas Meta Ads
+  const handleSaveMetaAdsAccount = async () => {
+    if (!id || !metaAdsForm.account_id || !metaAdsForm.account_name || !metaAdsForm.access_token) return;
+    
+    setSavingMetaAds(true);
+    try {
+      if (editingMetaAccount) {
+        // Atualizar conta existente
+        await (supabase as any)
+          .from('clinic_meta_accounts')
+          .update({
+            account_id: metaAdsForm.account_id,
+            account_name: metaAdsForm.account_name,
+            access_token: metaAdsForm.access_token,
+          })
+          .eq('id', editingMetaAccount.id);
+      } else {
+        // Criar nova conta
+        await (supabase as any)
+          .from('clinic_meta_accounts')
+          .insert({
+            clinic_id: id,
+            account_id: metaAdsForm.account_id,
+            account_name: metaAdsForm.account_name,
+            access_token: metaAdsForm.access_token,
+            is_active: true,
+          });
+      }
+      
+      // Recarregar contas
+      const { data: metaAccountsData } = await (supabase as any)
+        .from('clinic_meta_accounts')
+        .select('id, account_id, account_name, access_token, is_active, created_at')
+        .eq('clinic_id', id)
+        .order('created_at', { ascending: true });
+      
+      setMetaAdsAccounts(metaAccountsData || []);
+      setShowMetaAdsModal(false);
+      setEditingMetaAccount(null);
+      setMetaAdsForm({ account_id: '', account_name: '', access_token: '' });
+    } catch (error) {
+      console.error('Error saving Meta Ads account:', error);
+    } finally {
+      setSavingMetaAds(false);
+    }
+  };
+
+  const handleDeleteMetaAdsAccount = async (accountId: string) => {
+    if (!id) return;
+    
+    setDeletingMetaAccountId(accountId);
+    try {
+      await (supabase as any)
+        .from('clinic_meta_accounts')
+        .delete()
+        .eq('id', accountId);
+      
+      setMetaAdsAccounts(prev => prev.filter(a => a.id !== accountId));
+    } catch (error) {
+      console.error('Error deleting Meta Ads account:', error);
+    } finally {
+      setDeletingMetaAccountId(null);
+    }
+  };
+
+  const handleToggleMetaAdsAccount = async (accountId: string, isActive: boolean) => {
+    try {
+      await (supabase as any)
+        .from('clinic_meta_accounts')
+        .update({ is_active: isActive })
+        .eq('id', accountId);
+      
+      setMetaAdsAccounts(prev => prev.map(a => 
+        a.id === accountId ? { ...a, is_active: isActive } : a
+      ));
+    } catch (error) {
+      console.error('Error toggling Meta Ads account:', error);
     }
   };
 
@@ -1271,12 +1387,6 @@ const AdminClinicDetail: React.FC = () => {
         details: { clinic_name: clinic.name },
       });
 
-      // Usar a função do useAuth para iniciar impersonate
-      const { startImpersonate } = await import('../../hooks/useAuth').then(m => {
-        // Precisamos chamar via contexto, então vamos usar sessionStorage
-        return { startImpersonate: () => {} };
-      });
-
       // Salvar dados do impersonate no sessionStorage
       sessionStorage.setItem('impersonateClinic', JSON.stringify({
         id: clinic.id,
@@ -1285,9 +1395,11 @@ const AdminClinicDetail: React.FC = () => {
         logoUrl: null,
       }));
 
-      // Redirecionar diretamente para o dashboard com reload completo
-      // Usar window.location.href em vez de navigate + reload para evitar condição de corrida
-      window.location.href = '/dashboard';
+      // Abrir nova aba para o dashboard (mantém /admin aberto)
+      window.open('/dashboard', '_blank');
+      
+      // Resetar estado após abrir a aba
+      setImpersonating(false);
       
     } catch (error) {
       console.error('Error impersonating:', error);
@@ -3212,21 +3324,101 @@ const AdminClinicDetail: React.FC = () => {
             </div>
           </div>
 
-          {/* Meta Ads API (Marketing API) */}
+          {/* Meta Ads API (Marketing API) - Múltiplas Contas */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
             <div className="p-6 border-b border-slate-200">
-              <div className="flex items-center gap-3">
-                <div className="size-10 rounded-lg bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-white">ads_click</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-lg bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-white">ads_click</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800">Meta Ads API</h3>
+                    <p className="text-sm text-slate-500">Gerencie múltiplas contas de anúncios do Meta Ads Manager</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-800">Meta Ads API</h3>
-                  <p className="text-sm text-slate-500">Buscar dados de campanhas e anúncios do Meta Ads Manager</p>
-                </div>
+                <button
+                  onClick={() => {
+                    setEditingMetaAccount(null);
+                    setMetaAdsForm({ account_id: '', account_name: '', access_token: '' });
+                    setShowMetaAdsModal(true);
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg text-sm font-medium hover:from-pink-600 hover:to-rose-700 transition-all flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">add</span>
+                  Adicionar Conta
+                </button>
               </div>
             </div>
             
             <div className="p-6 space-y-4">
+              {metaAdsAccounts.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="size-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="material-symbols-outlined text-pink-500 text-3xl">ads_click</span>
+                  </div>
+                  <h4 className="text-lg font-medium text-slate-800 mb-2">Nenhuma conta configurada</h4>
+                  <p className="text-sm text-slate-500 mb-4">Adicione contas do Meta Ads para ver dados de campanhas no Dashboard</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-slate-700">Contas Configuradas ({metaAdsAccounts.length})</p>
+                  {metaAdsAccounts.map((account) => (
+                    <div key={account.id} className={`flex items-center justify-between p-4 rounded-xl border ${account.is_active ? 'border-green-200 bg-green-50/50' : 'border-slate-200 bg-slate-50'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`size-10 rounded-full flex items-center justify-center ${account.is_active ? 'bg-green-100' : 'bg-slate-200'}`}>
+                          <span className={`material-symbols-outlined ${account.is_active ? 'text-green-600' : 'text-slate-400'}`}>
+                            {account.is_active ? 'check_circle' : 'pause_circle'}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-800">{account.account_name}</p>
+                          <p className="text-xs text-slate-500">ID: ***{account.account_id.slice(-6)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleMetaAdsAccount(account.id, !account.is_active)}
+                          className={`p-2 rounded-lg transition-colors ${account.is_active ? 'text-amber-600 hover:bg-amber-50' : 'text-green-600 hover:bg-green-50'}`}
+                          title={account.is_active ? 'Desativar' : 'Ativar'}
+                        >
+                          <span className="material-symbols-outlined text-[20px]">
+                            {account.is_active ? 'pause' : 'play_arrow'}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingMetaAccount(account);
+                            setMetaAdsForm({
+                              account_id: account.account_id,
+                              account_name: account.account_name,
+                              access_token: account.access_token,
+                            });
+                            setShowMetaAdsModal(true);
+                          }}
+                          className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Editar"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMetaAdsAccount(account.id)}
+                          disabled={deletingMetaAccountId === account.id}
+                          className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                          title="Excluir"
+                        >
+                          {deletingMetaAccountId === account.id ? (
+                            <div className="size-5 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
+                          ) : (
+                            <span className="material-symbols-outlined text-[20px]">delete</span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
                 <div className="flex items-start gap-3">
                   <span className="material-symbols-outlined text-pink-600 mt-0.5">info</span>
@@ -3238,49 +3430,65 @@ const AdminClinicDetail: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-medium text-slate-600 uppercase">ID da Conta de Anúncios</label>
-                  <input
-                    type="text"
-                    value={clinic.meta_ads_account_id || ''}
-                    onChange={async (e) => {
-                      const newValue = e.target.value;
-                      setClinic(prev => prev ? { ...prev, meta_ads_account_id: newValue } : prev);
-                      await (supabase as any).from('clinics').update({ meta_ads_account_id: newValue || null }).eq('id', clinic.id);
-                    }}
-                    placeholder="Ex: 1195915652265933"
-                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">Encontre em: Meta Business Suite → Configurações → Conta de anúncios</p>
+              {/* Controle de Visibilidade para o Cliente */}
+              {metaAdsAccounts.length > 0 && (
+                <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="material-symbols-outlined text-slate-600">visibility</span>
+                    <h4 className="font-semibold text-slate-800">O que o cliente pode ver</h4>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-4">Configure quais métricas e seções o cliente terá acesso no Dashboard</p>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { key: 'impressions', label: 'Impressões', icon: 'visibility', color: 'blue' },
+                      { key: 'clicks', label: 'Cliques', icon: 'ads_click', color: 'green' },
+                      { key: 'ctr', label: 'CTR', icon: 'percent', color: 'amber' },
+                      { key: 'cpc', label: 'CPC Médio', icon: 'payments', color: 'purple' },
+                      { key: 'spent', label: 'Investido', icon: 'attach_money', color: 'pink' },
+                      { key: 'campaign_performance', label: 'Performance', icon: 'campaign', color: 'indigo' },
+                      { key: 'active_campaigns', label: 'Ativas', icon: 'play_circle', color: 'emerald' },
+                      { key: 'paused_campaigns', label: 'Pausadas', icon: 'pause_circle', color: 'slate' },
+                    ].map((item) => {
+                      const visibility = clinic.meta_ads_visibility || {
+                        impressions: true, clicks: true, ctr: true, cpc: true,
+                        spent: true, campaign_performance: true, active_campaigns: true, paused_campaigns: true
+                      };
+                      const isVisible = visibility[item.key as keyof typeof visibility] ?? true;
+                      
+                      return (
+                        <label
+                          key={item.key}
+                          className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${
+                            isVisible 
+                              ? `bg-${item.color}-50 border-${item.color}-200` 
+                              : 'bg-slate-100 border-slate-200 opacity-60'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isVisible}
+                            onChange={async (e) => {
+                              const newVisibility = {
+                                ...visibility,
+                                [item.key]: e.target.checked
+                              };
+                              await (supabase as any)
+                                .from('clinics')
+                                .update({ meta_ads_visibility: newVisibility })
+                                .eq('id', clinic.id);
+                              setClinic(prev => prev ? { ...prev, meta_ads_visibility: newVisibility } : prev);
+                            }}
+                            className="w-4 h-4 text-pink-600 rounded focus:ring-pink-500"
+                          />
+                          <span className="material-symbols-outlined text-sm text-slate-600">{item.icon}</span>
+                          <span className="text-xs font-medium text-slate-700">{item.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-600 uppercase">Access Token (Meta Ads)</label>
-                  <input
-                    type="password"
-                    value={clinic.meta_ads_access_token || ''}
-                    onChange={async (e) => {
-                      const newValue = e.target.value;
-                      setClinic(prev => prev ? { ...prev, meta_ads_access_token: newValue } : prev);
-                      await (supabase as any).from('clinics').update({ meta_ads_access_token: newValue || null }).eq('id', clinic.id);
-                    }}
-                    placeholder="Token com permissões ads_read, ads_management"
-                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">Gere em: developers.facebook.com → Ferramentas → Graph API Explorer</p>
-                </div>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-lg">
-                <p className="text-xs text-slate-600">
-                  <span className="font-medium">Status:</span>{' '}
-                  {clinic.meta_ads_account_id && clinic.meta_ads_access_token ? (
-                    <span className="text-green-600 font-medium">✓ Configurado</span>
-                  ) : (
-                    <span className="text-amber-600 font-medium">⚠ Não configurado</span>
-                  )}
-                </p>
-              </div>
+              )}
             </div>
           </div>
 
@@ -5451,6 +5659,85 @@ const AdminClinicDetail: React.FC = () => {
                 className="w-full h-11 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Adicionar/Editar Conta Meta Ads */}
+      {showMetaAdsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowMetaAdsModal(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+            <div className="p-6 bg-gradient-to-r from-pink-500 to-rose-600">
+              <h3 className="text-lg font-bold text-white">
+                {editingMetaAccount ? 'Editar Conta Meta Ads' : 'Adicionar Conta Meta Ads'}
+              </h3>
+              <p className="text-pink-100 text-sm mt-1">Configure os dados da conta de anúncios</p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-slate-700">Nome da Conta</label>
+                <input
+                  type="text"
+                  value={metaAdsForm.account_name}
+                  onChange={(e) => setMetaAdsForm(prev => ({ ...prev, account_name: e.target.value }))}
+                  placeholder="Ex: Clínica Principal"
+                  className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-slate-700">ID da Conta de Anúncios</label>
+                <input
+                  type="text"
+                  value={metaAdsForm.account_id}
+                  onChange={(e) => setMetaAdsForm(prev => ({ ...prev, account_id: e.target.value }))}
+                  placeholder="Ex: 1195915652265933"
+                  className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">Encontre em: Meta Business Suite → Configurações → Conta de anúncios</p>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-slate-700">Access Token</label>
+                <input
+                  type="password"
+                  value={metaAdsForm.access_token}
+                  onChange={(e) => setMetaAdsForm(prev => ({ ...prev, access_token: e.target.value }))}
+                  placeholder="Token com permissões ads_read, ads_management"
+                  className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">Gere em: developers.facebook.com → Ferramentas → Graph API Explorer</p>
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-slate-200 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowMetaAdsModal(false);
+                  setEditingMetaAccount(null);
+                  setMetaAdsForm({ account_id: '', account_name: '', access_token: '' });
+                }}
+                className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveMetaAdsAccount}
+                disabled={savingMetaAds || !metaAdsForm.account_id || !metaAdsForm.account_name || !metaAdsForm.access_token}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg hover:from-pink-600 hover:to-rose-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingMetaAds ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  editingMetaAccount ? 'Salvar Alterações' : 'Adicionar Conta'
+                )}
               </button>
             </div>
           </div>

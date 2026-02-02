@@ -47,7 +47,9 @@ export default function LinkSettings() {
   const { linkId } = useParams<{ linkId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { clinic } = useAuth();
+  const { clinic, user, isImpersonating, impersonatedClinic } = useAuth();
+  // Usar clinicId do impersonate se estiver ativo
+  const clinicId = isImpersonating ? impersonatedClinic?.id : (clinic?.id || user?.clinicId);
   const [link, setLink] = useState<TrackableLink | null>(null);
   const [clicks, setClicks] = useState<LinkClick[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,18 +74,18 @@ export default function LinkSettings() {
   const baseUrl = 'https://belitx.com.br/w';
 
   useEffect(() => {
-    if (linkId && clinic?.id) {
+    if (linkId && clinicId) {
       fetchLink();
       fetchClicks();
     }
-  }, [linkId, clinic?.id]);
+  }, [linkId, clinicId]);
 
   const fetchLink = async () => {
     const { data, error } = await supabase
       .from('trackable_links')
       .select('*, lead_sources(name, color)')
       .eq('id', linkId)
-      .eq('clinic_id', clinic?.id)
+      .eq('clinic_id', clinicId)
       .single();
 
     if (!error && data) {
@@ -675,7 +677,7 @@ export default function LinkSettings() {
     k.src = script;
     c.appendChild(k);
   }
-  window.belitx.clinicId = '${clinic?.id}';
+  window.belitx.clinicId = '${clinicId}';
 })(window, document, 'https://belitx.com.br/pixel/belitx-1.0.js');
 </script>`;
               copyToClipboard(pixelCode, 'pixel');
@@ -700,7 +702,7 @@ export default function LinkSettings() {
     k.src = script;
     c.appendChild(k);
   }
-  window.belitx.clinicId = '${clinic?.id}';
+  window.belitx.clinicId = '${clinicId}';
 })(window, document, 'https://belitx.com.br/pixel/belitx-1.0.js');
 </script>`}
         </pre>

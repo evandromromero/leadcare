@@ -515,15 +515,16 @@ serve(async (req) => {
           .maybeSingle()
         
         if (trackableLink) {
-          // Buscar o clique mais recente (últimos 30 min) deste link que ainda não tem chat_id
-          const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+          // Buscar o clique mais recente (últimos 7 dias) deste link que ainda não tem chat_id
+          // Janela de 7 dias para capturar remarketing (pessoa clica hoje, envia mensagem amanhã)
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
           
           const { data: recentClicks } = await supabase
             .from('link_clicks')
             .select('id')
             .eq('link_id', trackableLink.id)
             .is('chat_id', null)
-            .gte('clicked_at', thirtyMinAgo)
+            .gte('clicked_at', sevenDaysAgo)
             .order('clicked_at', { ascending: false })
             .limit(1)
           
@@ -540,9 +541,9 @@ serve(async (req) => {
               })
               .eq('id', recentClick.id)
             
-            console.log('Clique associado ao chat:', recentClick.id, '-> chat:', chat.id, 'código:', detectedCode)
+            console.log('Clique associado ao chat (remarketing):', recentClick.id, '-> chat:', chat.id, 'código:', detectedCode)
           } else {
-            console.log('Nenhum clique recente encontrado para associar. Link:', trackableLink.id, 'código:', detectedCode)
+            console.log('Nenhum clique encontrado nos últimos 7 dias para associar. Link:', trackableLink.id, 'código:', detectedCode)
           }
         } else {
           console.log('Trackable link não encontrado para código:', detectedCode)

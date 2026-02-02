@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
   Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area,
   FunnelChart, Funnel, LabelList
 } from 'recharts';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 interface DashboardChartsTabProps {
   clinicId: string | undefined;
@@ -165,6 +167,13 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
     return saved ? JSON.parse(saved) : DEFAULT_CHARTS;
   });
   const [tempChartsConfig, setTempChartsConfig] = useState<ChartConfig[]>([]);
+  
+  // Estados para exportação PDF
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportConfig, setExportConfig] = useState<ChartConfig[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [clinicName, setClinicName] = useState<string>('');
+  const chartsContainerRef = useRef<HTMLDivElement>(null);
 
   const getPeriodDays = () => {
     switch (period) {
@@ -232,7 +241,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         // 2. Leads por Dia e Origem
         const { data: chatsData } = await (supabase as any)
           .from('chats')
-          .select('id, created_at, ad_source_id, source_id, status, meta_campaign_name, meta_ad_name')
+          .select('id, created_at, ad_source_id, source_id, status, meta_campaign_name, meta_ad_name, ad_title')
           .eq('clinic_id', clinicId)
           .eq('is_group', false)
           .gte('created_at', startDate)
@@ -360,7 +369,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
           .from('users')
           .select('id, name')
           .eq('clinic_id', clinicId)
-          .in('role', ['admin', 'attendant']);
+          .in('role', ['Admin', 'Atendente', 'Comercial']);
         
         if (usersData && chatsData) {
           const performance: AttendantPerformance[] = [];
@@ -386,6 +395,40 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
               name: user.name?.split(' ')[0] || 'Sem nome',
               leads: assignedChats?.length || 0,
               conversoes: conversions?.length || 0,
+              tempo_resposta: 0
+            });
+          }
+          
+          // Contar chats respondidos fora do sistema (sem assigned_to mas com respostas)
+          const { data: chatsForaBelitx } = await (supabase as any)
+            .from('chats')
+            .select('id')
+            .eq('clinic_id', clinicId)
+            .eq('is_group', false)
+            .is('assigned_to', null)
+            .gte('created_at', startDate);
+          
+          // Verificar quais têm respostas (respondidos fora do sistema)
+          let leadsForaBelitx = 0;
+          if (chatsForaBelitx && chatsForaBelitx.length > 0) {
+            const chatIds = chatsForaBelitx.map((c: any) => c.id);
+            const { data: chatsComResposta } = await (supabase as any)
+              .from('messages')
+              .select('chat_id')
+              .in('chat_id', chatIds)
+              .eq('is_from_client', false);
+            
+            // Contar chats únicos com resposta
+            const chatsUnicosComResposta = new Set((chatsComResposta || []).map((m: any) => m.chat_id));
+            leadsForaBelitx = chatsUnicosComResposta.size;
+          }
+          
+          // Adicionar "Fora da Belitx" se houver leads
+          if (leadsForaBelitx > 0) {
+            performance.push({
+              name: 'Fora da Belitx',
+              leads: leadsForaBelitx,
+              conversoes: 0,
               tempo_resposta: 0
             });
           }
@@ -595,7 +638,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
           
           chatsData.forEach((chat: any) => {
             if (chat.ad_source_id) {
-              const nome = chat.meta_campaign_name || chat.meta_ad_name || 'Campanha sem nome';
+              const nome = chat.meta_campaign_name || chat.meta_ad_name || chat.ad_title || 'Campanha sem nome';
               if (!campanhas[chat.ad_source_id]) {
                 campanhas[chat.ad_source_id] = { nome, leads: 0, ad_source_id: chat.ad_source_id };
               }
@@ -618,11 +661,11 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
           for (const link of trackableLinks) {
             if (!link.code) continue;
             
-            // Buscar mensagens com o código do link no período
+            // Buscar mensagens com o código do link no período (colchetes ou parênteses)
             const { data: messagesWithCode } = await (supabase as any)
               .from('messages')
               .select('chat_id')
-              .ilike('content', `%[${link.code}]%`)
+              .or(`content.ilike.%[${link.code}]%,content.ilike.%(${link.code})%`)
               .gte('created_at', startDate);
             
             const uniqueChatIds = [...new Set((messagesWithCode || []).map((m: any) => m.chat_id))];
@@ -725,6 +768,161 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
     return chartsConfig.filter(c => c.visible).map(c => c.id);
   };
 
+  // Funções de exportação PDF
+  const openExportModal = () => {
+    // Inicializar com os gráficos visíveis marcados
+    setExportConfig(chartsConfig.map(c => ({ ...c, visible: c.visible })));
+    setShowExportModal(true);
+  };
+
+  const toggleExportChart = (id: string) => {
+    setExportConfig(prev => prev.map(c => 
+      c.id === id ? { ...c, visible: !c.visible } : c
+    ));
+  };
+
+  const selectAllExport = () => {
+    setExportConfig(prev => prev.map(c => ({ ...c, visible: true })));
+  };
+
+  const deselectAllExport = () => {
+    setExportConfig(prev => prev.map(c => ({ ...c, visible: false })));
+  };
+
+  const getPeriodLabel = () => {
+    switch (period) {
+      case 'today': return 'Hoje';
+      case '7d': return 'Últimos 7 dias';
+      case '15d': return 'Últimos 15 dias';
+      case '30d': return 'Últimos 30 dias';
+    }
+  };
+
+  const exportToPDF = async () => {
+    if (!chartsContainerRef.current) return;
+    
+    setExporting(true);
+    
+    try {
+      // Buscar nome da clínica
+      let clinicDisplayName = 'Relatório';
+      if (clinicId) {
+        const { data } = await (supabase as any)
+          .from('clinics')
+          .select('name')
+          .eq('id', clinicId)
+          .single();
+        if (data?.name) clinicDisplayName = data.name;
+      }
+
+      const chartsToExport = exportConfig.filter(c => c.visible).map(c => c.id);
+      
+      // Criar PDF
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      let yPosition = margin;
+
+      // Cabeçalho
+      pdf.setFontSize(20);
+      pdf.setTextColor(16, 185, 129); // emerald-500
+      pdf.text(clinicDisplayName, margin, yPosition);
+      yPosition += 10;
+
+      pdf.setFontSize(12);
+      pdf.setTextColor(100, 116, 139); // slate-500
+      pdf.text(`Relatório de Análise Comercial - ${getPeriodLabel()}`, margin, yPosition);
+      yPosition += 6;
+
+      pdf.setFontSize(10);
+      pdf.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, margin, yPosition);
+      yPosition += 15;
+
+      // Linha separadora
+      pdf.setDrawColor(226, 232, 240); // slate-200
+      pdf.line(margin, yPosition, pageWidth - margin, yPosition);
+      yPosition += 10;
+
+      // Capturar cada gráfico selecionado
+      const chartElements = chartsContainerRef.current.querySelectorAll('[data-chart-id]');
+      
+      for (const element of chartElements) {
+        const chartId = element.getAttribute('data-chart-id');
+        if (!chartId || !chartsToExport.includes(chartId)) continue;
+
+        const chartConfig = exportConfig.find(c => c.id === chartId);
+        if (!chartConfig) continue;
+
+        // Verificar se precisa de nova página
+        if (yPosition > pageHeight - 100) {
+          pdf.addPage();
+          yPosition = margin;
+        }
+
+        // Título do gráfico
+        pdf.setFontSize(14);
+        pdf.setTextColor(30, 41, 59); // slate-800
+        pdf.text(chartConfig.name, margin, yPosition);
+        yPosition += 8;
+
+        try {
+          // Capturar o elemento como imagem
+          const canvas = await html2canvas(element as HTMLElement, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            logging: false,
+            useCORS: true,
+          });
+
+          const imgData = canvas.toDataURL('image/png');
+          const imgWidth = pageWidth - (margin * 2);
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+          // Verificar se a imagem cabe na página
+          if (yPosition + imgHeight > pageHeight - margin) {
+            pdf.addPage();
+            yPosition = margin;
+          }
+
+          pdf.addImage(imgData, 'PNG', margin, yPosition, imgWidth, Math.min(imgHeight, 120));
+          yPosition += Math.min(imgHeight, 120) + 15;
+        } catch (err) {
+          console.error(`Erro ao capturar gráfico ${chartId}:`, err);
+        }
+      }
+
+      // Rodapé na última página
+      pdf.setFontSize(8);
+      pdf.setTextColor(148, 163, 184); // slate-400
+      pdf.text('Gerado pelo LeadCare', pageWidth / 2, pageHeight - 10, { align: 'center' });
+
+      // Salvar PDF
+      const fileName = `relatorio-${clinicDisplayName.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(fileName);
+
+      setShowExportModal(false);
+    } catch (error) {
+      console.error('Erro ao exportar PDF:', error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Buscar nome da clínica ao carregar
+  useEffect(() => {
+    const fetchClinicName = async () => {
+      if (!clinicId) return;
+      const { data } = await (supabase as any)
+        .from('clinics')
+        .select('name')
+        .eq('id', clinicId)
+        .single();
+      if (data?.name) setClinicName(data.name);
+    };
+    fetchClinicName();
+  }, [clinicId]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -739,6 +937,14 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-slate-900">Análise Comercial</h2>
         <div className="flex items-center gap-3">
+          <button
+            onClick={openExportModal}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors"
+            title="Exportar para PDF"
+          >
+            <span className="material-symbols-outlined text-xl">picture_as_pdf</span>
+            <span className="text-sm font-medium hidden sm:inline">Exportar PDF</span>
+          </button>
           <button
             onClick={openConfigModal}
             className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
@@ -854,9 +1060,116 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         </div>
       )}
 
+      {/* Modal de Exportação PDF */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => !exporting && setShowExportModal(false)}></div>
+          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl max-h-[80vh] flex flex-col">
+            <div className="p-5 border-b border-slate-200 bg-gradient-to-r from-red-500 to-rose-600 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <span className="material-symbols-outlined">picture_as_pdf</span>
+                    Exportar para PDF
+                  </h3>
+                  <p className="text-sm text-red-100">Selecione os gráficos para incluir no relatório</p>
+                </div>
+                <button 
+                  onClick={() => !exporting && setShowExportModal(false)} 
+                  className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                  disabled={exporting}
+                >
+                  <span className="material-symbols-outlined text-white">close</span>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="text-sm text-slate-600">
+                <span className="font-medium">{exportConfig.filter(c => c.visible).length}</span> de {exportConfig.length} selecionados
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={selectAllExport}
+                  className="text-xs px-2 py-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                >
+                  Selecionar todos
+                </button>
+                <button
+                  onClick={deselectAllExport}
+                  className="text-xs px-2 py-1 text-slate-500 hover:bg-slate-100 rounded"
+                >
+                  Limpar
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="space-y-2">
+                {exportConfig.map((chart) => (
+                  <label 
+                    key={chart.id}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      chart.visible 
+                        ? 'bg-red-50 border-red-200' 
+                        : 'bg-slate-50 border-slate-200 opacity-60'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={chart.visible}
+                      onChange={() => toggleExportChart(chart.id)}
+                      className="w-4 h-4 text-red-600 rounded focus:ring-red-500"
+                    />
+                    <span className={`flex-1 text-sm font-medium ${chart.visible ? 'text-slate-900' : 'text-slate-400'}`}>
+                      {chart.name}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-slate-200 flex items-center justify-between">
+              <div className="text-xs text-slate-500">
+                Período: <span className="font-medium">{getPeriodLabel()}</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  disabled={exporting}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={exportToPDF}
+                  disabled={exporting || exportConfig.filter(c => c.visible).length === 0}
+                  className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {exporting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Gerando...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-sm">download</span>
+                      Exportar PDF
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Container com ref para captura dos gráficos */}
+      <div ref={chartsContainerRef}>
+
       {/* Cards Comparativos */}
       {isChartVisible('cards') && comparison && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div data-chart-id="cards" className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl p-4 border border-slate-200">
             <p className="text-xs text-slate-500 mb-1">Leads Hoje</p>
             <p className="text-2xl font-bold text-slate-900">{comparison.leadsHoje}</p>
@@ -889,9 +1202,9 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       )}
 
       {/* Linha 1: Funil + Origem */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Funil de Conversão */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="funnel" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Funil de Conversão<HelpTooltip text="Mostra a jornada dos leads desde a entrada até a conversão. Identifique gargalos no processo de vendas." /></h3>
           {funnelData.length > 0 ? (
             <div className="h-80" style={{ minWidth: 0, minHeight: 320 }}>
@@ -929,7 +1242,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         </div>
 
         {/* Leads por Origem */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="origin" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Leads por Origem<HelpTooltip text="Distribuição dos leads por canal de aquisição: Meta Ads, Links Rastreáveis ou Orgânico (sem origem identificada)." /></h3>
           {leadsByOrigin.length > 0 && leadsByOrigin.some(l => l.value > 0) ? (
           <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
@@ -972,7 +1285,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       </div>
 
       {/* Linha 2: Leads por Dia */}
-      <div className="bg-white rounded-xl p-6 border border-slate-200">
+      <div data-chart-id="leadsByDay" className="bg-white rounded-xl p-6 border border-slate-200 mb-6">
         <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Leads por Dia<HelpTooltip text="Evolução diária de novos leads separados por origem. Acompanhe tendências e identifique dias de maior movimento." /></h3>
         {leadsByDay.length > 0 ? (
         <div className="h-72" style={{ minWidth: 0, minHeight: 288 }}>
@@ -1001,7 +1314,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       {/* Linha 3: Tempo de Resposta + Vendas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Tempo Médio de Resposta */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="responseTime" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Tempo Médio de Resposta (min)<HelpTooltip text="Tempo médio entre a primeira mensagem do cliente e a primeira resposta da equipe. Meta ideal: até 5 minutos." /></h3>
           {responseTimeData.length > 0 ? (
           <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
@@ -1044,7 +1357,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         </div>
 
         {/* Vendas por Dia */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="salesByDay" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Vendas por Dia<HelpTooltip text="Quantidade de vendas e valor total faturado por dia. Acompanhe o desempenho comercial diário." /></h3>
           {salesData.length > 0 ? (
           <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
@@ -1078,7 +1391,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       {/* Linha 4: Taxa de Resposta + Performance */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Taxa de Resposta */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="responseDistribution" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Distribuição do Tempo de Resposta<HelpTooltip text="Percentual de leads respondidos em cada faixa de tempo. Quanto mais rápido, maior a chance de conversão." /></h3>
           {responseRate && (
             <div className="space-y-4">
@@ -1143,7 +1456,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         </div>
 
         {/* Performance por Atendente */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="attendantPerformance" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Performance por Atendente<HelpTooltip text="Comparativo de leads atribuídos e conversões realizadas por cada atendente da equipe." /></h3>
           {attendantPerformance.length > 0 ? (
             <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
@@ -1172,7 +1485,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       {/* Linha 5: Horário de Pico + Dia da Semana */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Horário de Pico de Leads */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="hourlyPeak" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Horário de Pico de Leads<HelpTooltip text="Distribuição de leads por hora do dia. Use para escalar atendentes nos horários de maior demanda." /></h3>
           {hourlyData.length > 0 ? (
             <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
@@ -1197,7 +1510,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         </div>
 
         {/* Leads por Dia da Semana */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="weekday" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Leads por Dia da Semana<HelpTooltip text="Quais dias da semana têm mais leads. Útil para planejar escalas e campanhas de marketing." /></h3>
           {weekdayData.length > 0 ? (
             <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
@@ -1225,7 +1538,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       {/* Linha 6: Taxa de Conversão + Ticket Médio */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Taxa de Conversão por Origem */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="conversionRate" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Taxa de Conversão por Origem<HelpTooltip text="Percentual de leads que se tornaram clientes por canal. Identifique qual origem traz leads mais qualificados." /></h3>
           {conversionRateData.length > 0 ? (
             <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
@@ -1263,7 +1576,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         </div>
 
         {/* Ticket Médio por Origem */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="avgTicket" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Ticket Médio por Origem<HelpTooltip text="Valor médio de venda por canal de aquisição. Descubra qual origem gera mais receita por cliente." /></h3>
           {ticketData.length > 0 ? (
             <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
@@ -1301,7 +1614,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       </div>
 
       {/* Linha 7: Mapa de Calor */}
-      <div className="bg-white rounded-xl p-6 border border-slate-200">
+      <div data-chart-id="heatmap" className="bg-white rounded-xl p-6 border border-slate-200 mb-6">
         <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Mapa de Calor - Leads por Horário e Dia<HelpTooltip text="Visualização de quando chegam mais leads combinando dia da semana e hora. Cores mais intensas = mais leads." /></h3>
         {heatmapData.length > 0 ? (
           <div className="overflow-x-auto">
@@ -1363,7 +1676,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       {/* Linha 8: Evolução Semanal + Top Campanhas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Evolução Semanal */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="weeklyEvolution" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Evolução Semanal<HelpTooltip text="Comparativo de leads e conversões por semana. Acompanhe tendências e crescimento ao longo do tempo." /></h3>
           {weeklyEvolution.length > 0 ? (
             <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
@@ -1389,7 +1702,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         </div>
 
         {/* Top Campanhas Meta Ads */}
-        <div className="bg-white rounded-xl p-6 border border-slate-200">
+        <div data-chart-id="topCampaigns" className="bg-white rounded-xl p-6 border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Top Campanhas Meta Ads<HelpTooltip text="Ranking das campanhas de anúncios Meta (Facebook/Instagram) que mais geraram leads. Identifique os anúncios mais eficientes." /></h3>
           {topCampaigns.length > 0 ? (
             <div className="space-y-3">
@@ -1424,7 +1737,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       </div>
 
       {/* Linha 9: Top Links Rastreáveis */}
-      <div className="bg-white rounded-xl p-6 border border-slate-200">
+      <div data-chart-id="topLinks" className="bg-white rounded-xl p-6 border border-slate-200">
         <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Top Links Rastreáveis<HelpTooltip text="Ranking dos links rastreáveis que mais geraram leads. Mostra também a taxa de conversão de cada link." /></h3>
         {topLinks.length > 0 ? (
           <div className="overflow-x-auto">
@@ -1483,6 +1796,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
           </div>
         )}
       </div>
+      </div> {/* Fechamento do chartsContainerRef */}
     </div>
   );
 };

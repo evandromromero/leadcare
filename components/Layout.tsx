@@ -98,7 +98,15 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
 
   const handleExitImpersonate = () => {
     stopImpersonate();
-    navigate('/admin/clinics');
+    
+    // Se a janela foi aberta via window.open (nova aba), fechar a aba
+    // window.opener existe quando a janela foi aberta por outra janela
+    if (window.opener) {
+      window.close();
+    } else {
+      // Fallback: se não conseguir fechar (ex: usuário recarregou a página), navegar para /admin
+      navigate('/admin/clinics');
+    }
   };
 
   // Sincronizar status do WhatsApp com o estado global
