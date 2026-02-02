@@ -53,6 +53,7 @@ interface WebhookLog {
 interface AlertSetting {
   id: string;
   alert_phone: string;
+  alert_instance_name: string | null;
   enabled: boolean;
 }
 
@@ -89,6 +90,7 @@ const AdminWhatsApp: React.FC = () => {
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [alertSettings, setAlertSettings] = useState<AlertSetting | null>(null);
   const [alertPhone, setAlertPhone] = useState('');
+  const [alertInstanceName, setAlertInstanceName] = useState('');
   const [savingAlert, setSavingAlert] = useState(false);
   const [connectionHistory, setConnectionHistory] = useState<ConnectionHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -157,6 +159,7 @@ const AdminWhatsApp: React.FC = () => {
     if (data) {
       setAlertSettings(data as AlertSetting);
       setAlertPhone((data as AlertSetting).alert_phone);
+      setAlertInstanceName((data as AlertSetting).alert_instance_name || '');
     }
   }, []);
 
@@ -207,12 +210,12 @@ const AdminWhatsApp: React.FC = () => {
       if (alertSettings) {
         await (supabase as any)
           .from('alert_settings')
-          .update({ alert_phone: alertPhone })
+          .update({ alert_phone: alertPhone, alert_instance_name: alertInstanceName || null })
           .eq('id', alertSettings.id);
       } else {
         await (supabase as any)
           .from('alert_settings')
-          .insert({ alert_phone: alertPhone, enabled: true });
+          .insert({ alert_phone: alertPhone, alert_instance_name: alertInstanceName || null, enabled: true });
       }
       setMessage({ type: 'success', text: 'Configuração de alertas salva!' });
       fetchAlertSettings();
@@ -768,6 +771,26 @@ const AdminWhatsApp: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-2">
                   Formato: código do país + DDD + número (ex: 5567992400040)
                 </p>
+                
+                <label className="block text-sm font-medium text-slate-700 mb-2 mt-4">
+                  Instância para enviar alertas
+                </label>
+                <select
+                  value={alertInstanceName}
+                  onChange={(e) => setAlertInstanceName(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                >
+                  <option value="">Selecione uma instância</option>
+                  {instances.filter(i => i.status === 'connected').map(instance => (
+                    <option key={instance.id} value={instance.instance_name}>
+                      {instance.display_name || instance.instance_name} ({instance.clinic_name})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-2">
+                  Escolha qual instância WhatsApp enviará os alertas. Deve ser uma instância sua (interna).
+                </p>
+                
                 {alertSettings && (
                   <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-xl">
                     <div className="flex items-center gap-2">
