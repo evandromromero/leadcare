@@ -264,13 +264,13 @@ serve(async (req) => {
           // Usar o título completo como código (limitado a 20 chars)
           detectedCode = metaAdInfo.title.substring(0, 20).toUpperCase().replace(/[^A-Z0-9]/g, '_')
         }
-      )
+      }
       
-      if (mediaResponse.ok) {
-        const mediaData = await mediaResponse.json()
-        if (mediaData.base64) {
-          // Temos a mídia em base64, vamos fazer upload direto
-          tempMediaUrl = `data:${mediaData.mimetype || 'application/octet-stream'};base64,${mediaData.base64}`
+      // PRIORIDADE 2: Buscar código na mensagem (padrões conhecidos)
+      if (!detectedCode) {
+        const codePatterns = [
+          /\[([A-Z0-9]{4,10})\]/i,                    // [CODIGO] - formato padrão
+          /\b(AV[0-9]{1,2})\b/i,                      // AV1, AV2 em qualquer lugar
           /\b(KR[0-9]{1,2})\b/i,                      // KR3, KR5 em qualquer lugar
         ]
         
@@ -540,6 +540,9 @@ serve(async (req) => {
                 converted_at: new Date().toISOString()
               })
               .eq('id', recentClick.id)
+            
+            // Incrementar leads_count do link rastreável
+            await supabase.rpc('increment_leads_count', { link_id: trackableLink.id })
             
             console.log('Clique associado ao chat (remarketing):', recentClick.id, '-> chat:', chat.id, 'código:', detectedCode)
           } else {

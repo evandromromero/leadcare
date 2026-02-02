@@ -10,7 +10,16 @@ import {
   Clock,
   Building2,
   Phone,
-  RotateCcw
+  RotateCcw,
+  Activity,
+  MessageSquare,
+  Bell,
+  History,
+  QrCode,
+  Send,
+  Eye,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -24,6 +33,36 @@ interface WhatsAppInstance {
   clinic_id: string;
   clinic_name?: string;
   api_status?: 'open' | 'connecting' | 'close' | 'unknown';
+  last_webhook_at?: string | null;
+  webhook_errors_count?: number;
+}
+
+interface WebhookLog {
+  id: string;
+  instance_name: string;
+  clinic_id: string | null;
+  event_type: string;
+  status: string;
+  error_message: string | null;
+  phone_number: string | null;
+  message_preview: string | null;
+  execution_time_ms: number | null;
+  created_at: string;
+}
+
+interface AlertSetting {
+  id: string;
+  alert_phone: string;
+  enabled: boolean;
+}
+
+interface ConnectionHistory {
+  id: string;
+  instance_id: string;
+  status: string;
+  changed_at: string;
+  instance_name?: string;
+  clinic_name?: string;
 }
 
 interface Settings {
@@ -43,6 +82,18 @@ const AdminWhatsApp: React.FC = () => {
   const [restarting, setRestarting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
+  
+  // Novos estados
+  const [activeTab, setActiveTab] = useState<'instances' | 'logs' | 'alerts' | 'history'>('instances');
+  const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [alertSettings, setAlertSettings] = useState<AlertSetting | null>(null);
+  const [alertPhone, setAlertPhone] = useState('');
+  const [savingAlert, setSavingAlert] = useState(false);
+  const [connectionHistory, setConnectionHistory] = useState<ConnectionHistory[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [expandedInstance, setExpandedInstance] = useState<string | null>(null);
+  const [testingWebhook, setTestingWebhook] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     const { data } = await supabase
@@ -66,6 +117,8 @@ const AdminWhatsApp: React.FC = () => {
         status,
         connected_at,
         clinic_id,
+        last_webhook_at,
+        webhook_errors_count,
         clinics!inner(name)
       `)
       .order('created_at', { ascending: false });
@@ -80,10 +133,116 @@ const AdminWhatsApp: React.FC = () => {
     setLoading(false);
   }, []);
 
+  const fetchWebhookLogs = useCallback(async () => {
+    setLoadingLogs(true);
+    const { data } = await (supabase as any)
+      .from('webhook_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    
+    if (data) {
+      setWebhookLogs(data as WebhookLog[]);
+    }
+    setLoadingLogs(false);
+  }, []);
+
+  const fetchAlertSettings = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from('alert_settings')
+      .select('*')
+      .eq('enabled', true)
+      .single();
+    
+    if (data) {
+      setAlertSettings(data as AlertSetting);
+      setAlertPhone((data as AlertSetting).alert_phone);
+    }
+  }, []);
+
+  const fetchConnectionHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    const { data } = await (supabase as any)
+      .from('instance_connection_history')
+      .select(`
+        id,
+        instance_id,
+        status,
+        changed_at,
+        whatsapp_instances!inner(instance_name, clinics(name))
+      `)
+      .order('changed_at', { ascending: false })
+      .limit(50);
+    
+    if (data) {
+      const mapped = data.map((item: any) => ({
+        ...item,
+        instance_name: item.whatsapp_instances?.instance_name,
+        clinic_name: item.whatsapp_instances?.clinics?.name
+      }));
+      setConnectionHistory(mapped);
+    }
+    setLoadingHistory(false);
+  }, []);
+
   useEffect(() => {
     fetchSettings();
     fetchInstances();
-  }, [fetchSettings, fetchInstances]);
+    fetchAlertSettings();
+  }, [fetchSettings, fetchInstances, fetchAlertSettings]);
+
+  useEffect(() => {
+    if (activeTab === 'logs') fetchWebhookLogs();
+    if (activeTab === 'history') fetchConnectionHistory();
+  }, [activeTab, fetchWebhookLogs, fetchConnectionHistory]);
+
+  const saveAlertSettings = async () => {
+    if (!alertPhone) {
+      setMessage({ type: 'error', text: 'Informe o número de telefone para alertas' });
+      return;
+    }
+    
+    setSavingAlert(true);
+    try {
+      if (alertSettings) {
+        await (supabase as any)
+          .from('alert_settings')
+          .update({ alert_phone: alertPhone })
+          .eq('id', alertSettings.id);
+      } else {
+        await (supabase as any)
+          .from('alert_settings')
+          .insert({ alert_phone: alertPhone, enabled: true });
+      }
+      setMessage({ type: 'success', text: 'Configuração de alertas salva!' });
+      fetchAlertSettings();
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Erro ao salvar configuração' });
+    } finally {
+      setSavingAlert(false);
+    }
+  };
+
+  const testHealthCheck = async () => {
+    setTestingWebhook(true);
+    setMessage(null);
+    try {
+      const response = await supabase.functions.invoke('check-instances-health');
+      if (response.error) throw response.error;
+      
+      const result = response.data;
+      setMessage({ 
+        type: 'success', 
+        text: `Verificação concluída: ${result.checked} instâncias, ${result.disconnected} desconectadas` 
+      });
+      fetchInstances();
+      fetchConnectionHistory();
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Erro ao executar verificação de saúde' });
+    } finally {
+      setTestingWebhook(false);
+    }
+  };
 
   const checkAllConnections = async () => {
     if (!settings?.evolution_api_url || !settings?.evolution_api_key) {
@@ -249,6 +408,14 @@ const AdminWhatsApp: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-3">
             <button
+              onClick={testHealthCheck}
+              disabled={testingWebhook || loading}
+              className="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50"
+            >
+              <Activity className={`w-5 h-5 ${testingWebhook ? 'animate-pulse' : ''}`} />
+              {testingWebhook ? 'Verificando...' : 'Health Check'}
+            </button>
+            <button
               onClick={checkAllConnections}
               disabled={checking || loading}
               className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50"
@@ -336,6 +503,49 @@ const AdminWhatsApp: React.FC = () => {
           </p>
         )}
 
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+          <button
+            onClick={() => setActiveTab('instances')}
+            className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === 'instances' ? 'bg-cyan-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Server className="w-4 h-4" />
+            Instâncias
+          </button>
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === 'logs' ? 'bg-cyan-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            Logs Webhook
+          </button>
+          <button
+            onClick={() => setActiveTab('alerts')}
+            className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === 'alerts' ? 'bg-cyan-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Bell className="w-4 h-4" />
+            Alertas
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === 'history' ? 'bg-cyan-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            Histórico
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'instances' && (
+        <>
         {/* Instances Table */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="p-4 md:p-6 border-b border-slate-100">
@@ -458,6 +668,177 @@ const AdminWhatsApp: React.FC = () => {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+        </>
+        )}
+
+        {/* Logs Tab */}
+        {activeTab === 'logs' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-4 md:p-6 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900">Logs do Webhook</h2>
+              <button
+                onClick={fetchWebhookLogs}
+                disabled={loadingLogs}
+                className="text-cyan-600 hover:text-cyan-700 font-medium text-sm flex items-center gap-1"
+              >
+                <RefreshCw className={`w-4 h-4 ${loadingLogs ? 'animate-spin' : ''}`} />
+                Atualizar
+              </button>
+            </div>
+            {loadingLogs ? (
+              <div className="p-8 text-center text-slate-500">
+                <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />
+                Carregando logs...
+              </div>
+            ) : webhookLogs.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">
+                Nenhum log encontrado
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                {webhookLogs.map((log) => (
+                  <div key={log.id} className="p-4 hover:bg-slate-50">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                            log.status === 'success' ? 'bg-green-100 text-green-700' :
+                            log.status === 'error' ? 'bg-red-100 text-red-700' :
+                            'bg-slate-100 text-slate-600'
+                          }`}>
+                            {log.status}
+                          </span>
+                          <span className="text-xs text-slate-500 font-mono">{log.event_type}</span>
+                          {log.execution_time_ms && (
+                            <span className="text-xs text-slate-400">{log.execution_time_ms}ms</span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium text-slate-900 truncate">{log.instance_name}</p>
+                        {log.phone_number && (
+                          <p className="text-xs text-slate-500">{log.phone_number}</p>
+                        )}
+                        {log.message_preview && (
+                          <p className="text-xs text-slate-400 truncate mt-1">{log.message_preview}</p>
+                        )}
+                        {log.error_message && (
+                          <p className="text-xs text-red-500 mt-1">{log.error_message}</p>
+                        )}
+                      </div>
+                      <span className="text-xs text-slate-400 whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Alerts Tab */}
+        {activeTab === 'alerts' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-4 md:p-6 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">Configuração de Alertas</h2>
+              <p className="text-sm text-slate-500 mt-1">Receba alertas no WhatsApp quando uma instância desconectar</p>
+            </div>
+            <div className="p-6">
+              <div className="max-w-md">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Número para alertas (com DDD)
+                </label>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={alertPhone}
+                    onChange={(e) => setAlertPhone(e.target.value.replace(/\D/g, ''))}
+                    placeholder="5567992400040"
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                  />
+                  <button
+                    onClick={saveAlertSettings}
+                    disabled={savingAlert}
+                    className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold px-6 py-2 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    {savingAlert ? 'Salvando...' : 'Salvar'}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  Formato: código do país + DDD + número (ex: 5567992400040)
+                </p>
+                {alertSettings && (
+                  <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <span className="text-sm text-green-700 font-medium">
+                        Alertas configurados para: {alertSettings.alert_phone}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* History Tab */}
+        {activeTab === 'history' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-4 md:p-6 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900">Histórico de Conexões</h2>
+              <button
+                onClick={fetchConnectionHistory}
+                disabled={loadingHistory}
+                className="text-cyan-600 hover:text-cyan-700 font-medium text-sm flex items-center gap-1"
+              >
+                <RefreshCw className={`w-4 h-4 ${loadingHistory ? 'animate-spin' : ''}`} />
+                Atualizar
+              </button>
+            </div>
+            {loadingHistory ? (
+              <div className="p-8 text-center text-slate-500">
+                <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />
+                Carregando histórico...
+              </div>
+            ) : connectionHistory.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">
+                Nenhum histórico encontrado
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                {connectionHistory.map((item) => (
+                  <div key={item.id} className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {item.status === 'connected' ? (
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <Wifi className="w-4 h-4 text-green-600" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                          <WifiOff className="w-4 h-4 text-red-600" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-medium text-slate-900">{item.clinic_name || item.instance_name}</p>
+                        <p className="text-xs text-slate-500">{item.instance_name}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        item.status === 'connected' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {item.status === 'connected' ? 'Conectou' : 'Desconectou'}
+                      </span>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {new Date(item.changed_at).toLocaleString('pt-BR')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

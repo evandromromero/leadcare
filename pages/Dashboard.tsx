@@ -816,22 +816,36 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         const trackableLinkSourceIds = new Set(trackableLinks?.map((l: any) => l.source_id).filter(Boolean) || []);
         const trackableLinkCodes = new Set(trackableLinks?.map((l: any) => l.code?.toUpperCase()).filter(Boolean) || []);
         
+        // Buscar conversões de links rastreáveis de HOJE (mesmo que chat já existisse)
+        const { data: linkConversionsHoje } = await (supabase as any)
+          .from('link_clicks')
+          .select('id, chat_id')
+          .eq('clinic_id', clinicId)
+          .eq('converted_to_lead', true)
+          .gte('converted_at', todayStart);
+        
+        // Buscar conversões de links rastreáveis de ONTEM
+        const { data: linkConversionsOntem } = await (supabase as any)
+          .from('link_clicks')
+          .select('id, chat_id')
+          .eq('clinic_id', clinicId)
+          .eq('converted_to_lead', true)
+          .gte('converted_at', yesterdayStart)
+          .lte('converted_at', yesterdayEndStr);
+        
         // Classificar leads de hoje
         const leadsHojeArr = leadsHoje || [];
         const leadsOntemArr = leadsOntem || [];
+        const linkConversionsHojeArr = linkConversionsHoje || [];
+        const linkConversionsOntemArr = linkConversionsOntem || [];
         
         // Meta Ads = tem ad_source_id
         const leadsMetaAdsHoje = leadsHojeArr.filter((l: any) => l.ad_source_id).length;
         const leadsMetaAdsOntem = leadsOntemArr.filter((l: any) => l.ad_source_id).length;
         
-        // Links Rastreáveis = source_id está na lista de links OU código do source está na lista
-        const leadsLinksHoje = leadsHojeArr.filter((l: any) => {
-          if (!l.source_id) return false;
-          if (trackableLinkSourceIds.has(l.source_id)) return true;
-          const sourceCode = (l.lead_sources as any)?.code?.toUpperCase();
-          return sourceCode && trackableLinkCodes.has(sourceCode);
-        }).length;
-        const leadsLinksOntem = leadsOntemArr.filter((l: any) => trackableLinkSourceIds.has(l.source_id)).length;
+        // Links Rastreáveis = conversões de link_clicks hoje (inclui remarketing)
+        const leadsLinksHoje = linkConversionsHojeArr.length;
+        const leadsLinksOntem = linkConversionsOntemArr.length;
         
         // Orgânico = sem source_id e sem ad_source_id
         const leadsOrganicoHoje = leadsHojeArr.filter((l: any) => !l.source_id && !l.ad_source_id).length;

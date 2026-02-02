@@ -314,7 +314,7 @@ serve(async (req) => {
     // Detectar se é mobile
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
-    let seconds = 5;
+    let seconds = 2;
     let progress = 0;
     
     function redirect() {
@@ -333,10 +333,10 @@ serve(async (req) => {
     }
     
     const interval = setInterval(() => {
-      progress += 2;
+      progress += 5;
       document.getElementById('progress').style.width = progress + '%';
       
-      if (progress % 20 === 0) {
+      if (progress % 50 === 0) {
         seconds--;
         document.getElementById('seconds').textContent = seconds;
       }

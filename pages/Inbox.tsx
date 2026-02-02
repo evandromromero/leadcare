@@ -1187,21 +1187,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     if (!user?.id) return;
     
     try {
-      // Verificar se é bloqueio de encaminhamento (tem assigned_to)
-      const { data: chatData } = await supabase
-        .from('chats')
-        .select('assigned_to, locked_by')
-        .eq('id', chatId)
-        .single();
-      
-      const chat = chatData as any;
-      
-      // Se tem assigned_to E locked_by, é bloqueio de encaminhamento - NÃO desbloquear automaticamente
-      if (chat?.assigned_to && chat?.locked_by) {
-        return;
-      }
-      
-      // Desbloquear apenas bloqueio temporário
+      // Desbloquear apenas se o bloqueio é do usuário atual
+      // O .eq('locked_by', user.id) garante que só desbloqueia se foi ele quem bloqueou
       await supabase
         .from('chats')
         .update({ locked_by: null, locked_at: null } as any)
@@ -2290,8 +2277,17 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     setCurrentSearchIndex(0);
   }, [selectedChatId]);
 
-  // Bloquear chat quando selecionado, desbloquear quando sair
+  // Ref para manter o chatId anterior (para desbloquear corretamente)
+  const previousChatIdRef = useRef<string | null>(null);
+
+  // Bloquear chat quando selecionado, desbloquear o anterior
   useEffect(() => {
+    // Desbloquear chat anterior se existir
+    if (previousChatIdRef.current && previousChatIdRef.current !== selectedChatId) {
+      unlockChat(previousChatIdRef.current);
+    }
+    
+    // Bloquear novo chat
     if (selectedChatId) {
       lockChat(selectedChatId);
       fetchChatAssignment(selectedChatId);
@@ -2303,10 +2299,13 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       }
     }
     
-    // Cleanup: desbloquear ao sair da conversa
+    // Atualizar ref com o chatId atual
+    previousChatIdRef.current = selectedChatId;
+    
+    // Cleanup: desbloquear ao desmontar componente
     return () => {
-      if (selectedChatId) {
-        unlockChat(selectedChatId);
+      if (previousChatIdRef.current) {
+        unlockChat(previousChatIdRef.current);
       }
     };
   }, [selectedChatId]);
@@ -2740,7 +2739,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       const [settingsResult, clinicConfigResult, instancesResult] = await Promise.all([
         supabase.from('settings').select('evolution_api_url, evolution_api_key').single(),
         supabase.from('clinics').select('whatsapp_provider, cloud_api_phone_number_id, cloud_api_access_token').eq('id', clinicId).single(),
-        supabase.from('whatsapp_instances').select('instance_name, status').eq('clinic_id', clinicId).eq('status', 'connected').limit(1),
+        supabase.from('whatsapp_instances').select('id, instance_name, status').eq('clinic_id', clinicId).eq('status', 'connected').limit(1),
       ]);
       
       const settings = settingsResult.data;
@@ -2778,157 +2777,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           console.error('Cloud API error:', errorData);
         }
       }
-      // Enviar via Evolution API se conectado
-      else if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
-        // Verificar conexão real antes de enviar (preflight)
-        const connectionCheck = await ensureInstanceConnected();
-        if (!connectionCheck.connected) {
-          if (connectionCheck.needsQrCode) {
-            setConnectionModal({
-              show: true,
-              title: 'WhatsApp Desconectado',
-              message: connectionCheck.error || 'Não foi possível reconectar. Escaneie o QR Code em Configurações > WhatsApp.',
-              needsQrCode: true
-            });
-          } else {
-            setConnectionError(connectionCheck.error || 'Erro de conexão');
-          }
-          // Remover mensagem otimista - conexão falhou
-          updateOptimisticMessage(currentChatId, tempId, null);
-          return;
-        }
-        
-        // Verificar rate limit antes de enviar
-        const rateLimitCheck = checkRateLimit(instance.instance_name);
-        if (!rateLimitCheck.allowed) {
-          setRateLimitModal({
-            show: true,
-            message: rateLimitCheck.reason || 'Aguarde alguns segundos antes de enviar outra mensagem.',
-            waitSeconds: Math.ceil(rateLimitCheck.waitMs / 1000)
-          });
-          // Remover mensagem otimista - rate limit
-          updateOptimisticMessage(currentChatId, tempId, null);
-          return;
-        }
-
-        // Aguardar delay mínimo entre mensagens
-        await waitForRateLimit(instance.instance_name);
-
-        // Verificar se é grupo ou conversa individual
-        const isGroupChat = (selectedChat as any).is_group === true;
-        const groupId = (selectedChat as any).group_id;
-
-        let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
-        if (!isGroupChat && !formattedPhone.startsWith('55')) {
-          formattedPhone = '55' + formattedPhone;
-        }
-        
-        // Preparar body da requisição (diferente para grupos)
-        const messageBody: any = {
-          number: isGroupChat ? groupId : formattedPhone,
-          text: whatsappMessage,
-        };
-        
-        // Adicionar quote se estiver respondendo uma mensagem
-        if (currentReplyingTo) {
-          // Buscar remote_message_id da mensagem original
-          const { data: originalMsg } = await (supabase as any)
-            .from('messages')
-            .select('remote_message_id')
-            .eq('id', currentReplyingTo.id)
-            .single();
-          
-          if (originalMsg?.remote_message_id) {
-            messageBody.quoted = {
-              key: {
-                remoteJid: isGroupChat ? groupId : `${formattedPhone}@s.whatsapp.net`,
-                fromMe: !currentReplyingTo.isFromClient,
-                id: originalMsg.remote_message_id,
-              },
-              message: {
-                conversation: currentReplyingTo.content,
-              },
-            };
-          }
-        }
-        
-        console.log('[Evolution] Sending message:', { url: `${settings.evolution_api_url}/message/sendText/${instance.instance_name}`, body: messageBody });
-        
-        const response = await fetch(`${settings.evolution_api_url}/message/sendText/${instance.instance_name}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': settings.evolution_api_key,
-          },
-          body: JSON.stringify(messageBody),
-        });
-        
-        // Capturar remote_message_id da resposta
-        if (response.ok) {
-          const responseData = await response.json().catch(() => ({}));
-          remoteMessageId = responseData?.key?.id || null;
-          console.log('WhatsApp message sent, messageId:', remoteMessageId);
-          
-          // Registrar envio no rate limiter
-          recordMessageSent(instance.instance_name);
-          
-          // Marcar mensagens recebidas como lidas no WhatsApp (zera contador no celular)
-          try {
-            // Buscar mensagens não lidas do cliente neste chat
-            const { data: unreadMessages } = await supabase
-              .from('messages')
-              .select('remote_message_id')
-              .eq('chat_id', selectedChatId)
-              .eq('is_from_client', true)
-              .not('remote_message_id', 'is', null);
-            
-            if (unreadMessages && unreadMessages.length > 0) {
-              const remoteJid = isGroupChat ? groupId : `${formattedPhone}@s.whatsapp.net`;
-              const readMessages = unreadMessages
-                .filter((m: any) => m.remote_message_id)
-                .map((m: any) => ({
-                  remoteJid,
-                  id: m.remote_message_id,
-                }));
-              
-              if (readMessages.length > 0) {
-                // Marcar mensagens recebidas como lidas
-                const payload = {
-                  readMessages: readMessages.map((m: any) => ({
-                    remoteJid: m.remoteJid,
-                    fromMe: false,
-                    id: m.id,
-                  })),
-                };
-                
-                await fetch(`${settings.evolution_api_url}/chat/markMessageAsRead/${instance.instance_name}`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'apikey': settings.evolution_api_key,
-                  },
-                  body: JSON.stringify(payload),
-                });
-              }
-            }
-          } catch (readErr) {
-            console.error('[Evolution] Error marking messages as read:', readErr);
-          }
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          console.error('[Evolution] Error sending message:', response.status, JSON.stringify(errorData, null, 2));
-          
-          // Se instância não existe ou está desconectada, mostrar erro amigável
-          if (errorData?.response?.message?.includes('not found') || errorData?.response?.message?.includes('disconnected')) {
-            alert('WhatsApp desconectado. Reconecte em Configurações > WhatsApp.');
-            // Remover mensagem otimista - WhatsApp desconectado
-            updateOptimisticMessage(currentChatId, tempId, null);
-            return;
-          }
-        }
-      }
-        
-      // Salvar mensagem no banco com remote_message_id
+      // Salvar mensagem no banco PRIMEIRO (aparece instantaneamente no painel)
       const { data: newMsg, error: insertError } = await supabase.from('messages').insert({
         chat_id: currentChatId,
         content: messageContent,
@@ -2938,12 +2787,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         quoted_message_id: currentReplyingTo?.id || null,
         quoted_content: currentReplyingTo?.content || null,
         quoted_sender_name: currentReplyingTo?.senderName || null,
-        remote_message_id: remoteMessageId,
       }).select().single();
       
       if (insertError) {
         console.error('Error inserting message:', insertError);
-        // Remover mensagem otimista em caso de erro
         updateOptimisticMessage(currentChatId, tempId, null);
         alert('Erro ao salvar mensagem');
         return;
@@ -2954,13 +2801,87 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         updateOptimisticMessage(currentChatId, tempId, newMsg as any);
       }
       
-      // Atualizar chat no banco (em background, não bloqueia)
-      // Não precisa de refetch - a atualização otimista já atualizou a UI
+      // Atualizar chat no banco
       supabase.from('chats').update({
         last_message: messageContent,
         last_message_time: new Date().toISOString(),
         last_message_from_client: false,
       }).eq('id', currentChatId);
+
+      // Enviar via Evolution API - adicionar na fila de envio
+      if (instance?.status === 'connected' && settings?.evolution_api_url && selectedChat.phone_number) {
+        const isGroupChat = (selectedChat as any).is_group === true;
+        const groupId = (selectedChat as any).group_id;
+        let formattedPhone = selectedChat.phone_number.replace(/\D/g, '');
+        if (!isGroupChat && !formattedPhone.startsWith('55')) {
+          formattedPhone = '55' + formattedPhone;
+        }
+
+        // Buscar remote_message_id da mensagem original (se for resposta)
+        let quotedMessageId: string | null = null;
+        let quotedContent: string | null = null;
+        if (currentReplyingTo) {
+          const { data: originalMsg } = await (supabase as any)
+            .from('messages')
+            .select('remote_message_id')
+            .eq('id', currentReplyingTo.id)
+            .single();
+          if (originalMsg?.remote_message_id) {
+            quotedMessageId = originalMsg.remote_message_id;
+            quotedContent = currentReplyingTo.content;
+          }
+        }
+
+        // Adicionar na fila de envio (será processada pela Edge Function)
+        const { error: queueError } = await (supabase as any).from('message_queue').insert({
+          clinic_id: clinicId,
+          instance_id: instance.id,
+          chat_id: currentChatId,
+          message_id: newMsg?.id,
+          content: whatsappMessage,
+          phone_number: formattedPhone,
+          is_group: isGroupChat,
+          group_id: isGroupChat ? groupId : null,
+          quoted_message_id: quotedMessageId,
+          quoted_content: quotedContent,
+          sent_by: user.id,
+          scheduled_at: new Date().toISOString(),
+        });
+
+        if (queueError) {
+          console.error('Error adding to queue:', queueError);
+        } else {
+          console.log('[Queue] Message added to queue for sending (cron will process)');
+        }
+      }
+      // Enviar via Cloud API se configurado (mantém envio direto)
+      else if (isCloudApi && selectedChat.phone_number) {
+        // Cloud API não precisa de fila - já é gerenciada pela Meta
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        
+        fetch(`${supabaseUrl}/functions/v1/cloud-api-send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+          },
+          body: JSON.stringify({
+            clinic_id: clinicId,
+            action: 'send_text',
+            phone: selectedChat.phone_number,
+            message: whatsappMessage,
+          }),
+        }).then(async (response) => {
+          if (response.ok) {
+            const responseData = await response.json().catch(() => ({}));
+            const remoteId = responseData?.message_id || null;
+            if (remoteId && newMsg) {
+              await supabase.from('messages').update({ remote_message_id: remoteId }).eq('id', newMsg.id);
+            }
+          }
+        }).catch(console.error);
+      }
       
     } catch (err) {
       console.error('Error sending message:', err);
@@ -4209,7 +4130,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     </>
                   )}
                 </div>
-                {chatLock && chatLock.locked_by !== user?.id && chatAssignedTo?.id !== user?.id ? (
+                {chatLock && chatLock.locked_by !== user?.id ? (
                   <div className="flex-1 flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
                     <span className="material-symbols-outlined text-lg">lock</span>
                     <span className="text-sm font-medium">{chatLock.locked_by_name} está respondendo esta conversa</span>

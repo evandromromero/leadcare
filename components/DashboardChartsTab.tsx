@@ -255,11 +255,27 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         
         const linkSourceIds = new Set((trackableLinks || []).map((l: any) => l.source_id));
         
+        // Buscar conversões de links rastreáveis no período (inclui remarketing)
+        const { data: linkConversions } = await (supabase as any)
+          .from('link_clicks')
+          .select('id, chat_id, converted_at')
+          .eq('clinic_id', clinicId)
+          .eq('converted_to_lead', true)
+          .gte('converted_at', startDate);
+        
+        // Criar mapa de chat_id -> data de conversão do link
+        const linkConversionsByChat = new Map<string, string>();
+        (linkConversions || []).forEach((lc: any) => {
+          if (lc.chat_id && lc.converted_at) {
+            linkConversionsByChat.set(lc.chat_id, lc.converted_at);
+          }
+        });
+        
         if (chatsData) {
           
-          // Agrupar por dia
+          // Agrupar por dia - chats criados no período
           const byDay: Record<string, { meta_ads: number; organico: number; links: number; total: number }> = {};
-          let metaTotal = 0, organicoTotal = 0, linksTotal = 0;
+          let metaTotal = 0, organicoTotal = 0;
           
           chatsData.forEach((chat: any) => {
             const date = new Date(chat.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -270,14 +286,24 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
             if (chat.ad_source_id) {
               byDay[date].meta_ads++;
               metaTotal++;
-            } else if (chat.source_id && linkSourceIds.has(chat.source_id)) {
-              byDay[date].links++;
-              linksTotal++;
             } else {
               byDay[date].organico++;
               organicoTotal++;
             }
             byDay[date].total++;
+          });
+          
+          // Adicionar conversões de links rastreáveis por dia (baseado em converted_at)
+          let linksTotal = 0;
+          (linkConversions || []).forEach((lc: any) => {
+            if (lc.converted_at) {
+              const date = new Date(lc.converted_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+              if (!byDay[date]) {
+                byDay[date] = { meta_ads: 0, organico: 0, links: 0, total: 0 };
+              }
+              byDay[date].links++;
+              linksTotal++;
+            }
           });
           
           setLeadsByDay(Object.entries(byDay).map(([date, data]) => ({ date, ...data })));
