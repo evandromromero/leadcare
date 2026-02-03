@@ -38,7 +38,7 @@ interface MetaAdsAccount {
 const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const clinicId = state.selectedClinic?.id;
   const { chats, loading } = useChats(clinicId, user?.id);
   const { todayTasks, upcomingTasks, overdueTasks, weekTasks, toggleTask } = useTasks(clinicId, user?.id);
@@ -255,6 +255,44 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   // Estado para contar pagamentos ativos (vendas concluídas)
   const [activePaymentsCount, setActivePaymentsCount] = useState(0);
   
+  // Estados para deletar origem (só admin)
+  const [deleteSourceModal, setDeleteSourceModal] = useState<{ id: string; name: string; leadsCount: number } | null>(null);
+  const [deletingSource, setDeletingSource] = useState(false);
+  
+  // Verificar se usuário pode deletar origens (Admin real ou SuperAdmin fazendo impersonate)
+  const canDeleteSources = isAdmin;
+  
+  // Função para deletar origem
+  const handleDeleteSource = async () => {
+    if (!deleteSourceModal || !clinicId) return;
+    
+    setDeletingSource(true);
+    try {
+      // 1. Desvincular chats da origem
+      await supabase
+        .from('chats')
+        .update({ source_id: null })
+        .eq('source_id', deleteSourceModal.id);
+      
+      // 2. Deletar a origem
+      const { error } = await supabase
+        .from('lead_sources')
+        .delete()
+        .eq('id', deleteSourceModal.id);
+      
+      if (error) throw error;
+      
+      // 3. Atualizar lista local
+      setLeadSourceStats(prev => prev.filter(s => s.id !== deleteSourceModal.id));
+      setDeleteSourceModal(null);
+    } catch (error) {
+      console.error('Erro ao deletar origem:', error);
+      alert('Erro ao deletar origem. Tente novamente.');
+    } finally {
+      setDeletingSource(false);
+    }
+  };
+  
   // Filtrar leadSourceStats baseado nas origens selecionadas
   const filteredLeadSourceStats = useMemo(() => {
     if (selectedSources === null) return leadSourceStats;
@@ -448,26 +486,28 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               
               switch (period) {
                 case 'today':
-                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  // Usar meia-noite do dia atual no fuso local
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
                   break;
                 case 'yesterday':
-                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-                  endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+                  endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
                   break;
                 case '7d':
-                  startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
                   break;
                 case '30d':
-                  startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
                   break;
                 case 'month':
-                  startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                  startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
                   break;
                 default:
                   return allChats;
               }
               
               // Filtrar por criação OU último clique no período (remarketing)
+              // Converter created_at para Date local para comparação correta
               return allChats.filter(c => {
                 const createdAt = new Date(c.created_at);
                 const lastClick = lastClickByChat[c.id];
@@ -496,20 +536,20 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               
               switch (period) {
                 case 'today':
-                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
                   break;
                 case 'yesterday':
-                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-                  endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+                  endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
                   break;
                 case '7d':
-                  startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
                   break;
                 case '30d':
-                  startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
                   break;
                 case 'month':
-                  startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                  startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
                   break;
                 default:
                   return allPayments;
@@ -778,16 +818,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
       if (!clinicId) return;
       
       try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Usar fuso horário local para calcular início do dia
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
         const todayStart = today.toISOString();
         
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        yesterday.setHours(0, 0, 0, 0);
+        const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
         const yesterdayStart = yesterday.toISOString();
-        const yesterdayEnd = new Date(yesterday);
-        yesterdayEnd.setHours(23, 59, 59, 999);
+        const yesterdayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
         const yesterdayEndStr = yesterdayEnd.toISOString();
         
         // Buscar leads criados HOJE com mais detalhes
@@ -1202,6 +1240,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             .gte('created_at', startDate.toISOString())
             .not('source_id', 'is', null);
           
+          // Filtrar por conta Meta se uma aba específica estiver selecionada
+          if (accountIdFromTab) {
+            chatsWithStatusQuery = (chatsWithStatusQuery as any).eq('meta_account_id', accountIdFromTab);
+          }
+          
           if (campaignPeriod === 'custom' && customDateRange?.end) {
             chatsWithStatusQuery = chatsWithStatusQuery.lte('created_at', endDate.toISOString());
           }
@@ -1524,7 +1567,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               </span>
             </button>
             {/* Abas dinâmicas para cada conta Meta Ads - Admin e SuperAdmin */}
-            {(user?.role === 'Admin' || user?.role === 'SuperAdmin') && metaAdsAccounts.map((account) => (
+            {isAdmin && metaAdsAccounts.map((account) => (
               <button
                 key={account.id}
                 onClick={() => {
@@ -2339,6 +2382,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Comercial</th>
                     <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Receita Clínica</th>
                     <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Total</th>
+                    {canDeleteSources && (
+                      <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-16">Ações</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -2397,6 +2443,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                             R$ {(source.revenue + source.clinic_revenue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
                         </td>
+                        {canDeleteSources && (
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              onClick={() => setDeleteSourceModal({ 
+                                id: source.id, 
+                                name: source.code || source.name, 
+                                leadsCount: source.total_leads 
+                              })}
+                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Deletar origem"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -2425,6 +2486,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     <td className="py-3 px-4 text-right font-black text-cyan-600">
                       R$ {filteredLeadSourceStats.reduce((sum, s) => sum + s.revenue + s.clinic_revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
+                    {canDeleteSources && <td></td>}
                   </tr>
                 </tfoot>
                 )}
@@ -3773,7 +3835,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                 </div>
 
                 {/* Tabela de produtividade por usuário */}
-                {(user?.role === 'Admin' || user?.role === 'SuperAdmin') && productivityData.length > 0 && (
+                {isAdmin && productivityData.length > 0 && (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="p-4 border-b border-slate-200 flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -4054,6 +4116,64 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               >
                 <span className="material-symbols-outlined text-sm">chat</span>
                 Ver Conversa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação para deletar origem */}
+      {deleteSourceModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="size-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-red-600 text-2xl">delete_forever</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Deletar Origem</h3>
+                  <p className="text-sm text-slate-500">Esta ação não pode ser desfeita</p>
+                </div>
+              </div>
+              
+              <div className="bg-slate-50 rounded-xl p-4 mb-4">
+                <p className="text-sm text-slate-600">
+                  Tem certeza que deseja deletar a origem <strong className="text-slate-800">"{deleteSourceModal.name}"</strong>?
+                </p>
+                {deleteSourceModal.leadsCount > 0 && (
+                  <p className="text-sm text-amber-600 mt-2 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">warning</span>
+                    {deleteSourceModal.leadsCount} lead{deleteSourceModal.leadsCount > 1 ? 's' : ''} vinculado{deleteSourceModal.leadsCount > 1 ? 's' : ''} ficará{deleteSourceModal.leadsCount > 1 ? 'ão' : ''} sem origem.
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-slate-200 flex gap-3">
+              <button
+                onClick={() => setDeleteSourceModal(null)}
+                disabled={deletingSource}
+                className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-slate-700 font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteSource}
+                disabled={deletingSource}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deletingSource ? (
+                  <>
+                    <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                    Deletando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-sm">delete</span>
+                    Deletar
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -66,6 +66,20 @@
 <body class="bg-[#f8fafc] text-slate-900">
     <div id="root"></div>
 <script type="module" src="/index.tsx"></script>
+
+<!-- Facebook SDK for Embedded Signup -->
+<script>
+  window.fbAsyncInit = function() {
+    FB.init({
+      appId: window.META_APP_ID || '4089997527889758',
+      cookie: true,
+      xfbml: true,
+      version: 'v18.0'
+    });
+  };
+</script>
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/pt_BR/sdk.js"></script>
+
 <script>
   // Register Service Worker for PWA
   if ('serviceWorker' in navigator) {

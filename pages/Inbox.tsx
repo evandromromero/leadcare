@@ -25,8 +25,9 @@ type ChannelType = 'whatsapp' | 'instagram' | 'facebook';
 
 const PIPELINE_STAGES = [
   { value: 'Novo Lead', label: 'Novo Lead', color: '#0891b2', hint: 'Lead que acabou de entrar em contato' },
-  { value: 'Agendado', label: 'Agendado', color: '#8b5cf6', hint: 'Consulta ou procedimento agendado' },
   { value: 'Em Atendimento', label: 'Em Atendimento', color: '#f59e0b', hint: 'Em negociação ou atendimento ativo' },
+  { value: 'Follow-up', label: 'Follow-up', color: '#f59e0b', hint: 'Aguardando retorno do cliente. Use as etiquetas Follow 1, 2, 3, 4+ para controlar as tentativas.' },
+  { value: 'Agendado', label: 'Agendado', color: '#8b5cf6', hint: 'Consulta ou procedimento agendado' },
   { value: 'Convertido', label: 'Convertido', color: '#10b981', hint: 'Fechou negócio / realizou procedimento' },
   { value: 'Recorrente', label: 'Recorrente', color: '#0e7490', hint: 'Paciente que já é da clínica e retornou' },
   { value: 'Mentoria', label: 'Mentoria', color: '#ca8a04', hint: 'Lead interessado em mentoria/consultoria' },
@@ -34,7 +35,7 @@ const PIPELINE_STAGES = [
 ];
 
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const clinicId = state.selectedClinic?.id;
@@ -4397,7 +4398,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         <strong>{chatLock.locked_by_name}</strong> está atendendo esta conversa
                       </p>
                     </div>
-                    {(user?.role === 'Admin' || user?.role === 'SuperAdmin' || user?.role === 'Gerente') && (
+                    {(isAdmin || user?.role === 'Gerente') && (
                       <button
                         onClick={handleReleaseChat}
                         className="mt-2 w-full text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1"

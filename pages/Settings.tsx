@@ -46,13 +46,13 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const clinicId = state.selectedClinic?.id;
   
   const canEditTags = hasPermission(user?.role, 'edit_tags');
   const canEditQuickReplies = hasPermission(user?.role, 'edit_quick_replies');
   const canEditClinicProfile = hasPermission(user?.role, 'edit_clinic_profile');
-  const canConfigureCloudApi = user?.role === 'Admin' || user?.role === 'Gerente';
+  const canConfigureCloudApi = isAdmin || user?.role === 'Gerente';
   
   // Estados para etiquetas
   const [tags, setTags] = useState<Tag[]>([]);

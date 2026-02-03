@@ -848,13 +848,20 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     }
   };
 
-  // Buscar e atualizar foto de perfil do WhatsApp
+  // Buscar e atualizar foto de perfil do WhatsApp (salva no Storage para não expirar)
   const fetchAndUpdateAvatar = async (chatId: string, phoneNumber: string) => {
     if (!whatsappInstance || whatsappInstance.status !== 'connected' || !evolutionSettings) return;
+    
+    // Verificar se já tem avatar salvo no Storage (não precisa buscar novamente)
+    const existingChat = chats.find(c => c.id === chatId);
+    if (existingChat?.avatar_url && existingChat.avatar_url.includes('supabase.co/storage')) {
+      return; // Já tem avatar permanente
+    }
     
     const formattedPhone = phoneNumber.replace(/\D/g, '');
     
     try {
+      // Buscar URL do avatar na Evolution API
       const response = await fetch(`${evolutionSettings.apiUrl}/chat/fetchProfilePictureUrl/${whatsappInstance.instanceName}`, {
         method: 'POST',
         headers: {
@@ -869,18 +876,37 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
       if (!response.ok) return;
       
       const data = await response.json();
-      const avatarUrl = data.profilePictureUrl || data.picture || null;
+      const tempAvatarUrl = data.profilePictureUrl || data.picture || null;
       
-      if (avatarUrl) {
-        // Atualizar no banco de dados
-        await supabase
-          .from('chats')
-          .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
-          .eq('id', chatId);
+      if (tempAvatarUrl) {
+        // Chamar Edge Function para baixar e salvar no Storage
+        const { data: saveResult, error: saveError } = await supabase.functions.invoke('save-avatar', {
+          body: {
+            chatId,
+            phoneNumber: formattedPhone,
+            avatarUrl: tempAvatarUrl,
+          },
+        });
+        
+        if (saveError) {
+          console.error('Error saving avatar to storage:', saveError);
+          // Fallback: usar URL temporária
+          await supabase
+            .from('chats')
+            .update({ avatar_url: tempAvatarUrl, updated_at: new Date().toISOString() })
+            .eq('id', chatId);
+          
+          setChats(prev => prev.map(c => 
+            c.id === chatId ? { ...c, avatar_url: tempAvatarUrl } : c
+          ));
+          return;
+        }
+        
+        const permanentUrl = saveResult?.avatarUrl || tempAvatarUrl;
         
         // Atualizar no estado local
         setChats(prev => prev.map(c => 
-          c.id === chatId ? { ...c, avatar_url: avatarUrl } : c
+          c.id === chatId ? { ...c, avatar_url: permanentUrl } : c
         ));
       }
     } catch (err) {

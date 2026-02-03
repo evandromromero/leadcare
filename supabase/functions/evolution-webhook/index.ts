@@ -253,33 +253,44 @@ serve(async (req) => {
     let detectedSourceId: string | null = null
     let detectedCode: string | null = null
     
+    // Lista de marcadores de mídia que NÃO devem ser considerados códigos
+    const mediaMarkers = ['AUDIO', 'IMAGEM', 'VIDEO', 'DOCUMENTO', 'STICKER', 'LOCALIZACAO', 'CONTATO', 'FIGURINHA', 'IMAGE', 'DOCUMENT', 'LOCATION', 'CONTACT']
+    
     if (message && !isFromMe && !isGroup) {
-      // PRIORIDADE 1: Se veio de anúncio Meta, usar o título do anúncio como código
-      if (isFromMetaAd && metaAdInfo?.title) {
-        // Tentar extrair código do título do anúncio (ex: "Campanha AV1 - Dra Kamylle")
-        const titleMatch = metaAdInfo.title.match(/\b([A-Z]{2,5}[0-9]{1,4})\b/i)
+      // PRIORIDADE 1: Buscar código na mensagem (padrões conhecidos) - códigos entre () ou []
+      const codePatterns = [
+        /\[([A-Z]{1,5}[0-9]{1,4})\]/i,              // [K1], [AV2], [KR1] - código entre colchetes (prioridade)
+        /\(([A-Z]{1,5}[0-9]{1,3})\)/i,              // (AV2), (KR1) - código entre parênteses
+        /\b(AV[0-9]{1,2})\b/i,                      // AV1, AV2 em qualquer lugar
+        /\b(KR[0-9]{1,2})\b/i,                      // KR3, KR5 em qualquer lugar
+        /\b(ACV[0-9]{1,2})\b/i,                     // ACV1, ACV3 em qualquer lugar
+        /\b(K[0-9]{1,2})\b/i,                       // K1, K2 em qualquer lugar
+        /\b(T[0-9]{1,2})\b/i,                       // T1, T2 em qualquer lugar
+        /\b(A[0-9]{1,2})\b/i,                       // A1, A2, A3 em qualquer lugar
+      ]
+      
+      for (const pattern of codePatterns) {
+        const match = message.match(pattern)
+        if (match && match[1]) {
+          const potentialCode = match[1].toUpperCase()
+          // Ignorar se for um marcador de mídia
+          if (!mediaMarkers.includes(potentialCode)) {
+            detectedCode = potentialCode
+            break
+          }
+        }
+      }
+      
+      // PRIORIDADE 2: Se não encontrou código na mensagem e veio de anúncio Meta, usar título do anúncio
+      if (!detectedCode && isFromMetaAd && metaAdInfo?.title) {
+        // Tentar extrair código do título do anúncio (ex: "Campanha AV1 - Dra Kamylle", "A9", "T1")
+        // Aceita 1-5 letras + 1-4 números (A9, T1, AV1, KR5, etc.)
+        const titleMatch = metaAdInfo.title.match(/\b([A-Z]{1,5}[0-9]{1,4})\b/i)
         if (titleMatch) {
           detectedCode = titleMatch[1].toUpperCase()
         } else {
           // Usar o título completo como código (limitado a 20 chars)
           detectedCode = metaAdInfo.title.substring(0, 20).toUpperCase().replace(/[^A-Z0-9]/g, '_')
-        }
-      }
-      
-      // PRIORIDADE 2: Buscar código na mensagem (padrões conhecidos)
-      if (!detectedCode) {
-        const codePatterns = [
-          /\[([A-Z0-9]{4,10})\]/i,                    // [CODIGO] - formato padrão
-          /\b(AV[0-9]{1,2})\b/i,                      // AV1, AV2 em qualquer lugar
-          /\b(KR[0-9]{1,2})\b/i,                      // KR3, KR5 em qualquer lugar
-        ]
-        
-        for (const pattern of codePatterns) {
-          const match = message.match(pattern)
-          if (match && match[1]) {
-            detectedCode = match[1].toUpperCase()
-            break
-          }
         }
       }
       
@@ -352,30 +363,148 @@ serve(async (req) => {
         ? groupName 
         : (isFromMe ? phone : (pushName || 'Cliente'))
       
-      const { data: newChat } = await supabase
+      // Identificar conta Meta Ads se for anúncio
+      let metaAccountId: string | null = null
+      if (isFromMetaAd && metaAdInfo?.sourceId) {
+        try {
+          // Buscar contas Meta da clínica
+          const { data: metaAccounts } = await supabase
+            .from('clinic_meta_accounts')
+            .select('account_id, access_token')
+            .eq('clinic_id', clinicId)
+          
+          if (metaAccounts && metaAccounts.length > 0) {
+            // Tentar identificar qual conta possui o anúncio
+            for (const account of metaAccounts) {
+              if (!account.access_token) continue
+              try {
+                const adResponse = await fetch(
+                  `https://graph.facebook.com/v18.0/${metaAdInfo.sourceId}?fields=account_id&access_token=${account.access_token}`
+                )
+                if (adResponse.ok) {
+                  const adData = await adResponse.json()
+                  if (adData.account_id) {
+                    metaAccountId = adData.account_id
+                    console.log('Meta account identificado para anúncio:', metaAccountId)
+                    break
+                  }
+                }
+              } catch (e) {
+                // Continuar tentando outras contas
+              }
+            }
+            // Se não conseguiu identificar via API, usar a primeira conta como fallback
+            if (!metaAccountId && metaAccounts.length === 1) {
+              metaAccountId = metaAccounts[0].account_id
+            }
+          }
+        } catch (e) {
+          console.error('Erro ao identificar conta Meta:', e)
+        }
+      }
+      
+      const chatData = {
+        clinic_id: clinicId,
+        client_name: clientName,
+        phone_number: isGroup ? phone : phone,
+        group_id: groupId,
+        is_group: isGroup,
+        status: isFromMe ? 'Em Atendimento' : 'Novo Lead',
+        unread_count: isFromMe ? 0 : 1,
+        last_message: isGroup ? `${senderName}: ${message}` : message,
+        last_message_time: new Date().toISOString(),
+        instance_id: instance.id,
+        source_id: detectedSourceId,
+        // Dados do anúncio Meta (Click to WhatsApp)
+        ad_title: isFromMetaAd ? metaAdInfo?.title : null,
+        ad_body: isFromMetaAd ? metaAdInfo?.body : null,
+        ad_source_id: isFromMetaAd ? metaAdInfo?.sourceId : null,
+        ad_source_url: isFromMetaAd ? metaAdInfo?.sourceUrl : null,
+        ad_source_type: isFromMetaAd ? metaAdInfo?.sourceType : null,
+        meta_account_id: metaAccountId
+      }
+      
+      const { data: newChat, error: chatError } = await supabase
         .from('chats')
-        .insert({
-          clinic_id: clinicId,
-          client_name: clientName,
-          phone_number: isGroup ? phone : phone,
-          group_id: groupId,
-          is_group: isGroup,
-          status: isFromMe ? 'Em Atendimento' : 'Novo Lead',
-          unread_count: isFromMe ? 0 : 1,
-          last_message: isGroup ? `${senderName}: ${message}` : message,
-          last_message_time: new Date().toISOString(),
-          instance_id: instance.id,
-          source_id: detectedSourceId,
-          // Dados do anúncio Meta (Click to WhatsApp)
-          ad_title: isFromMetaAd ? metaAdInfo?.title : null,
-          ad_body: isFromMetaAd ? metaAdInfo?.body : null,
-          ad_source_id: isFromMetaAd ? metaAdInfo?.sourceId : null,
-          ad_source_url: isFromMetaAd ? metaAdInfo?.sourceUrl : null,
-          ad_source_type: isFromMetaAd ? metaAdInfo?.sourceType : null
-        })
+        .insert(chatData)
         .select('id, unread_count')
         .single()
-      chat = newChat
+      
+      if (chatError) {
+        console.error('ERRO CRÍTICO ao criar chat:', chatError, 'Dados:', JSON.stringify(chatData))
+        // Tentar novamente uma vez
+        const { data: retryChat, error: retryError } = await supabase
+          .from('chats')
+          .insert(chatData)
+          .select('id, unread_count')
+          .single()
+        
+        if (retryError) {
+          console.error('ERRO CRÍTICO (retry) ao criar chat:', retryError)
+          throw new Error(`Falha ao criar chat após retry: ${retryError.message}`)
+        }
+        chat = retryChat
+      } else {
+        chat = newChat
+      }
+      
+      if (!chat) {
+        console.error('ERRO CRÍTICO: Chat não foi criado e não houve erro. Dados:', JSON.stringify(chatData))
+        throw new Error('Chat não foi criado - resultado null sem erro')
+      }
+      
+      // Se não detectou código na mensagem, tentar cruzar com clique recente (últimos 5 minutos)
+      if (!detectedSourceId && !isFromMe && !isGroup && newChat) {
+        try {
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+          
+          // Buscar clique mais recente da clínica que ainda não foi convertido
+          const { data: recentClicks } = await supabase
+            .from('link_clicks')
+            .select('id, link_id, clicked_at')
+            .eq('clinic_id', clinicId)
+            .is('chat_id', null)
+            .gte('clicked_at', fiveMinutesAgo)
+            .order('clicked_at', { ascending: false })
+            .limit(1)
+          
+          if (recentClicks && recentClicks.length > 0) {
+            const recentClick = recentClicks[0]
+            
+            // Buscar o source_id do link
+            const { data: linkData } = await supabase
+              .from('trackable_links')
+              .select('source_id')
+              .eq('id', recentClick.link_id)
+              .single()
+            
+            if (linkData?.source_id) {
+              // Atualizar o chat com o source_id
+              await supabase
+                .from('chats')
+                .update({ source_id: linkData.source_id })
+                .eq('id', newChat.id)
+              
+              // Marcar o clique como convertido
+              await supabase
+                .from('link_clicks')
+                .update({ 
+                  chat_id: newChat.id, 
+                  converted_to_lead: true,
+                  converted_at: new Date().toISOString()
+                })
+                .eq('id', recentClick.id)
+              
+              // Incrementar contador de leads do link
+              await supabase.rpc('increment_leads_count', { link_id: recentClick.link_id })
+              
+              console.log('Clique cruzado por tempo (5min):', recentClick.id, '-> chat:', newChat.id, 'source_id:', linkData.source_id)
+            }
+          }
+        } catch (e) {
+          console.error('Erro ao cruzar clique por tempo:', e)
+        }
+      }
       
       // Enviar evento Contact para Meta Conversions API (novo lead)
       if (newChat && !isFromMe && !isGroup) {
@@ -631,7 +760,7 @@ serve(async (req) => {
     }
 
     // Save message (incluindo sender_name para grupos)
-    await supabase.from('messages').insert({
+    const messageData = {
       chat_id: chat!.id,
       content: message || '[Sem texto]',
       type: mediaType || 'text',
@@ -639,7 +768,20 @@ serve(async (req) => {
       is_from_client: !isFromMe,
       remote_message_id: messageId || null,
       sender_name: isGroup && !isFromMe ? senderName : null
-    })
+    }
+    
+    const { error: msgError } = await supabase.from('messages').insert(messageData)
+    
+    if (msgError) {
+      console.error('ERRO CRÍTICO ao salvar mensagem:', msgError, 'Dados:', JSON.stringify(messageData))
+      // Tentar novamente uma vez
+      const { error: retryMsgError } = await supabase.from('messages').insert(messageData)
+      if (retryMsgError) {
+        console.error('ERRO CRÍTICO (retry) ao salvar mensagem:', retryMsgError)
+        // Não lançar erro aqui para não perder o chat já criado
+        // Mas logar para investigação
+      }
+    }
 
     // Enviar Broadcast para notificar o cliente em tempo real
     const channel = supabase.channel('leadcare-updates')

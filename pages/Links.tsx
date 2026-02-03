@@ -27,7 +27,7 @@ interface LeadSource {
 
 export default function Links() {
   const navigate = useNavigate();
-  const { clinic, user, isImpersonating, impersonatedClinic } = useAuth();
+  const { clinic, user, isImpersonating, impersonatedClinic, isAdmin } = useAuth();
   // Usar clinicId do impersonate se estiver ativo, senão usar do usuário/clínica
   const clinicId = isImpersonating ? impersonatedClinic?.id : (clinic?.id || user?.clinicId);
   
@@ -234,7 +234,7 @@ export default function Links() {
   };
 
   // Verificar permissão
-  if (user?.role !== 'Admin' && user?.role !== 'SuperAdmin') {
+  if (!isAdmin) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[60vh]">
         <div className="text-center">

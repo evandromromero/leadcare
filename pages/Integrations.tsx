@@ -23,7 +23,15 @@ interface MetaConnection {
   meta_connected_at: string | null;
 }
 
-type TabType = 'email' | 'instagram' | 'facebook' | 'meta_ads';
+interface WhatsAppCloudConfig {
+  cloud_api_enabled: boolean;
+  cloud_api_phone_number_id: string | null;
+  cloud_api_phone_number: string | null;
+  cloud_api_waba_id: string | null;
+  cloud_api_connected_at: string | null;
+}
+
+type TabType = 'email' | 'instagram' | 'facebook' | 'meta_ads' | 'whatsapp';
 
 interface MetaAdsConfig {
   meta_ads_account_id: string | null;
@@ -77,6 +85,8 @@ export default function Integrations() {
   const [disconnectingMeta, setDisconnectingMeta] = useState(false);
   const [showMetaHelpModal, setShowMetaHelpModal] = useState(false);
   const [showMetaAdsHelpModal, setShowMetaAdsHelpModal] = useState(false);
+  const [whatsappCloudConfig, setWhatsappCloudConfig] = useState<WhatsAppCloudConfig | null>(null);
+  const [connectingWhatsApp, setConnectingWhatsApp] = useState(false);
   
   // Estados para modal de teste SMTP
   const [showTestModal, setShowTestModal] = useState(false);
@@ -106,7 +116,7 @@ export default function Integrations() {
       try {
         const { data, error } = await (supabase as any)
           .from('clinics')
-          .select('email_marketing_enabled, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name, smtp_encryption, facebook_page_id, facebook_page_name, facebook_enabled, instagram_business_account_id, instagram_enabled, meta_connected_at, meta_ads_account_id, meta_ads_access_token')
+          .select('email_marketing_enabled, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name, smtp_encryption, facebook_page_id, facebook_page_name, facebook_enabled, instagram_business_account_id, instagram_enabled, meta_connected_at, meta_ads_account_id, meta_ads_access_token, cloud_api_enabled, cloud_api_phone_number_id, cloud_api_phone_number, cloud_api_waba_id, cloud_api_connected_at')
           .eq('id', clinicId)
           .single();
         
@@ -169,6 +179,15 @@ export default function Integrations() {
               has_token: !!a.access_token
             })));
           }
+          
+          // WhatsApp Cloud API config
+          setWhatsappCloudConfig({
+            cloud_api_enabled: data.cloud_api_enabled || false,
+            cloud_api_phone_number_id: data.cloud_api_phone_number_id || null,
+            cloud_api_phone_number: data.cloud_api_phone_number || null,
+            cloud_api_waba_id: data.cloud_api_waba_id || null,
+            cloud_api_connected_at: data.cloud_api_connected_at || null,
+          });
         }
       } catch (err) {
         console.error('Erro ao buscar configurações:', err);
@@ -367,26 +386,27 @@ export default function Integrations() {
     
     let authUrl: string;
     
+    // Usar PHP callback para evitar problemas com Edge Functions
+    const phpCallbackUrl = 'https://belitx.com.br/api/meta-callback.php';
+    
     if (platform === 'instagram') {
-      // Instagram usa OAuth separado com instagram-oauth-callback
+      // Instagram usa OAuth separado
       const instagramAppId = '4177299802587376'; // ID do app do Instagram
-      const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/instagram-oauth-callback`;
       const scope = 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments';
       
       authUrl = `https://www.instagram.com/oauth/authorize?` +
         `client_id=${instagramAppId}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+        `redirect_uri=${encodeURIComponent(phpCallbackUrl)}&` +
         `scope=${scope}&` +
         `state=${clinicId}&` +
         `response_type=code`;
     } else {
-      // Facebook usa facebook-oauth-callback
-      const redirectUri = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facebook-oauth-callback`;
+      // Facebook OAuth
       const scope = 'pages_show_list,pages_messaging,pages_manage_metadata';
       
       authUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
         `client_id=${metaAppId}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+        `redirect_uri=${encodeURIComponent(phpCallbackUrl)}&` +
         `scope=${scope}&` +
         `state=${clinicId}&` +
         `response_type=code`;
@@ -413,6 +433,168 @@ export default function Integrations() {
         window.location.reload();
       }
     }, 500);
+  };
+
+  // Estado para modo de conexão
+  const [connectionMode, setConnectionMode] = useState<'new' | 'coexistence'>('new');
+  
+  // Config ID para Embedded Signup (criado no Meta for Developers > Login do Facebook para Empresas > Configurações)
+  const WHATSAPP_CONFIG_ID = '879185288339459';
+
+  // Conectar WhatsApp via Embedded Signup (com suporte a Coexistência)
+  const handleConnectWhatsApp = () => {
+    if (!metaAppId || !clinicId) {
+      setTestResult({ success: false, message: 'Integração Meta não configurada. Entre em contato com o suporte.' });
+      return;
+    }
+    
+    setConnectingWhatsApp(true);
+    
+    // Modo "Número Novo" usa OAuth tradicional (sempre funciona)
+    // Modo "Coexistência" requer Embedded Signup com config_id
+    if (connectionMode === 'new') {
+      handleConnectWhatsAppFallback();
+      return;
+    }
+    
+    // Coexistência requer config_id
+    if (!WHATSAPP_CONFIG_ID) {
+      setTestResult({ 
+        success: false, 
+        message: 'Modo Coexistência não configurado. Entre em contato com o suporte para habilitar.' 
+      });
+      setConnectingWhatsApp(false);
+      return;
+    }
+    
+    // Verificar se o SDK do Facebook está carregado
+    if (typeof (window as any).FB === 'undefined') {
+      setTestResult({ success: false, message: 'SDK do Facebook não carregou. Tente novamente.' });
+      setConnectingWhatsApp(false);
+      return;
+    }
+    
+    // Usar Embedded Signup com SDK do Facebook para Coexistência
+    (window as any).FB.login(
+      (response: any) => {
+        if (response.authResponse) {
+          const code = response.authResponse.code;
+          processWhatsAppCode(code);
+        } else {
+          setConnectingWhatsApp(false);
+          setTestResult({ success: false, message: 'Conexão cancelada pelo usuário.' });
+        }
+      },
+      {
+        config_id: WHATSAPP_CONFIG_ID,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: 'whatsapp_business_app_onboarding',
+          sessionInfoVersion: '3'
+        }
+      }
+    );
+  };
+  
+  // Fallback para OAuth tradicional (sem SDK)
+  const handleConnectWhatsAppFallback = () => {
+    const phpCallbackUrl = 'https://belitx.com.br/api/whatsapp-callback.php';
+    const scope = 'whatsapp_business_messaging,whatsapp_business_management,business_management';
+    
+    const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
+      `client_id=${metaAppId}&` +
+      `redirect_uri=${encodeURIComponent(phpCallbackUrl)}&` +
+      `scope=${scope}&` +
+      `state=${clinicId}&` +
+      `response_type=code`;
+    
+    const width = 600;
+    const height = 700;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    const popup = window.open(
+      authUrl,
+      'whatsapp_oauth',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+    );
+    
+    const checkPopup = setInterval(() => {
+      if (!popup || popup.closed) {
+        clearInterval(checkPopup);
+        setConnectingWhatsApp(false);
+        window.location.reload();
+      }
+    }, 500);
+  };
+  
+  // Processar code do Embedded Signup
+  const processWhatsAppCode = async (code: string) => {
+    try {
+      // Chamar endpoint PHP para trocar code por token
+      const response = await fetch('https://belitx.com.br/api/whatsapp-callback.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          clinic_id: clinicId,
+          mode: connectionMode
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setTestResult({ success: true, message: 'WhatsApp conectado com sucesso!' });
+        window.location.reload();
+      } else {
+        setTestResult({ success: false, message: data.error || 'Erro ao conectar WhatsApp.' });
+      }
+    } catch (error) {
+      console.error('Erro ao processar code:', error);
+      setTestResult({ success: false, message: 'Erro ao processar conexão.' });
+    } finally {
+      setConnectingWhatsApp(false);
+    }
+  };
+
+  // Desconectar WhatsApp Cloud API
+  const handleDisconnectWhatsApp = async () => {
+    if (!clinicId) return;
+    
+    setConnectingWhatsApp(true);
+    
+    try {
+      const { error } = await (supabase as any)
+        .from('clinics')
+        .update({
+          cloud_api_enabled: false,
+          cloud_api_phone_number_id: null,
+          cloud_api_phone_number: null,
+          cloud_api_waba_id: null,
+          cloud_api_access_token: null,
+          cloud_api_connected_at: null,
+        })
+        .eq('id', clinicId);
+      
+      if (error) throw error;
+      
+      setWhatsappCloudConfig({
+        cloud_api_enabled: false,
+        cloud_api_phone_number_id: null,
+        cloud_api_phone_number: null,
+        cloud_api_waba_id: null,
+        cloud_api_connected_at: null,
+      });
+      
+      setTestResult({ success: true, message: 'WhatsApp desconectado com sucesso!' });
+    } catch (error: any) {
+      setTestResult({ success: false, message: 'Erro ao desconectar: ' + error.message });
+    }
+    
+    setConnectingWhatsApp(false);
   };
 
   const handleDisconnectMeta = async (platform: 'facebook' | 'instagram') => {
@@ -460,6 +642,64 @@ export default function Integrations() {
     setDisconnectingMeta(false);
   };
 
+  // Estado para controlar loading do Meta Business
+  const [connectingMetaBusiness, setConnectingMetaBusiness] = useState(false);
+
+  // Conectar Meta Business (fluxo unificado - WhatsApp, Instagram, Facebook)
+  const handleConnectMetaBusiness = () => {
+    if (!metaAppId || !clinicId) {
+      setTestResult({ success: false, message: 'Integração Meta não configurada. Entre em contato com o suporte.' });
+      return;
+    }
+    
+    setConnectingMetaBusiness(true);
+    
+    // Todas as permissões necessárias para WhatsApp, Instagram e Facebook
+    const scope = [
+      // WhatsApp
+      'whatsapp_business_messaging',
+      'whatsapp_business_management',
+      // Facebook
+      'pages_show_list',
+      'pages_messaging',
+      'pages_manage_metadata',
+      'pages_read_engagement',
+      // Instagram
+      'instagram_basic',
+      'instagram_manage_messages',
+      // Business
+      'business_management'
+    ].join(',');
+    
+    const phpCallbackUrl = 'https://belitx.com.br/api/meta-business-callback.php';
+    
+    const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
+      `client_id=${metaAppId}&` +
+      `redirect_uri=${encodeURIComponent(phpCallbackUrl)}&` +
+      `scope=${scope}&` +
+      `state=${clinicId}&` +
+      `response_type=code`;
+    
+    const width = 700;
+    const height = 800;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    const popup = window.open(
+      authUrl,
+      'meta_business_oauth',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+    );
+    
+    const checkPopup = setInterval(() => {
+      if (!popup || popup.closed) {
+        clearInterval(checkPopup);
+        setConnectingMetaBusiness(false);
+        window.location.reload();
+      }
+    }, 500);
+  };
+
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center">
@@ -498,6 +738,71 @@ export default function Integrations() {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Integrações</h1>
           <p className="text-slate-500">Configure suas integrações externas</p>
         </div>
+
+        {/* Card Conectar Meta Business - Fluxo Unificado */}
+        {metaAppId && (
+          <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-2xl p-6 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                  <span className="material-symbols-outlined text-3xl">link</span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Conectar Meta Business</h2>
+                  <p className="text-white/80 text-sm">WhatsApp, Instagram e Facebook em um único login</p>
+                </div>
+              </div>
+              <button
+                onClick={handleConnectMetaBusiness}
+                disabled={connectingMetaBusiness}
+                className="px-6 py-3 bg-white text-purple-700 rounded-xl font-semibold hover:bg-white/90 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {connectingMetaBusiness ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin"></div>
+                    Conectando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[20px]">add_link</span>
+                    Conectar Canais
+                  </>
+                )}
+              </button>
+            </div>
+            
+            {/* Status dos canais conectados */}
+            <div className="flex gap-4 mt-4 pt-4 border-t border-white/20">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">chat</span>
+                <span className="text-sm">WhatsApp</span>
+                {whatsappCloudConfig?.cloud_api_enabled ? (
+                  <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                ) : (
+                  <span className="w-2 h-2 bg-white/40 rounded-full"></span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">photo_camera</span>
+                <span className="text-sm">Instagram</span>
+                {metaConnection.instagram_enabled ? (
+                  <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                ) : (
+                  <span className="w-2 h-2 bg-white/40 rounded-full"></span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">thumb_up</span>
+                <span className="text-sm">Facebook</span>
+                {metaConnection.facebook_enabled ? (
+                  <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                ) : (
+                  <span className="w-2 h-2 bg-white/40 rounded-full"></span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         {/* Verificar se está em localhost para habilitar Instagram/Facebook */}
@@ -560,23 +865,79 @@ export default function Integrations() {
                       <span className="w-2 h-2 bg-green-500 rounded-full"></span>
                     )}
                   </button>
+                  <button
+                    onClick={() => { setActiveTab('whatsapp'); setTestResult(null); }}
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                      activeTab === 'whatsapp'
+                        ? 'bg-white border border-b-white border-slate-200 -mb-px text-emerald-600'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">chat</span>
+                    WhatsApp API
+                    {whatsappCloudConfig?.cloud_api_enabled && whatsappCloudConfig?.cloud_api_phone_number_id && (
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    )}
+                  </button>
                   </>
               ) : (
                 <>
-                  <div className="px-6 py-3 text-sm font-medium rounded-t-lg flex items-center gap-2 text-slate-400 cursor-not-allowed">
+                  <button
+                    onClick={() => { setActiveTab('instagram'); setTestResult(null); }}
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                      activeTab === 'instagram'
+                        ? 'bg-white border border-b-white border-slate-200 -mb-px text-pink-600'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
                     <span className="material-symbols-outlined text-[20px]">photo_camera</span>
                     Instagram
-                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold animate-pulse">
-                      EM BREVE
-                    </span>
-                  </div>
-                  <div className="px-6 py-3 text-sm font-medium rounded-t-lg flex items-center gap-2 text-slate-400 cursor-not-allowed">
+                    {metaConnection.instagram_enabled && (
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab('facebook'); setTestResult(null); }}
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                      activeTab === 'facebook'
+                        ? 'bg-white border border-b-white border-slate-200 -mb-px text-blue-600'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
                     <span className="material-symbols-outlined text-[20px]">thumb_up</span>
                     Facebook
-                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold animate-pulse">
-                      EM BREVE
-                    </span>
-                  </div>
+                    {metaConnection.facebook_enabled && (
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab('meta_ads'); setTestResult(null); }}
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                      activeTab === 'meta_ads'
+                        ? 'bg-white border border-b-white border-slate-200 -mb-px text-pink-600'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">ads_click</span>
+                    Meta Ads
+                    {metaAdsConfiguredByAdmin && (
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab('whatsapp'); setTestResult(null); }}
+                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                      activeTab === 'whatsapp'
+                        ? 'bg-white border border-b-white border-slate-200 -mb-px text-emerald-600'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">chat</span>
+                    WhatsApp API
+                    {whatsappCloudConfig?.cloud_api_enabled && whatsappCloudConfig?.cloud_api_phone_number_id && (
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    )}
+                  </button>
                 </>
               )}
             </div>
@@ -818,8 +1179,8 @@ export default function Integrations() {
         </div>
         )}
 
-        {/* Instagram Tab - Apenas em localhost */}
-        {activeTab === 'instagram' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+        {/* Instagram Tab */}
+        {activeTab === 'instagram' && (
           <div className="max-w-2xl">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
               <div className="p-6 border-b border-slate-200">
@@ -958,8 +1319,8 @@ export default function Integrations() {
           </div>
         )}
 
-        {/* Facebook Tab - Apenas em localhost */}
-        {activeTab === 'facebook' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+        {/* Facebook Tab */}
+        {activeTab === 'facebook' && (
           <div className="max-w-2xl">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
               <div className="p-6 border-b border-slate-200">
@@ -1584,6 +1945,200 @@ export default function Integrations() {
                   Adicionar
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Cloud API Tab */}
+      {activeTab === 'whatsapp' && (
+        <div className="max-w-2xl">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
+            <div className="p-6 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-2xl text-emerald-600">chat</span>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-800">WhatsApp Cloud API</h2>
+                    <p className="text-sm text-slate-500">API Oficial do Meta para WhatsApp Business</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {whatsappCloudConfig?.cloud_api_enabled && whatsappCloudConfig?.cloud_api_phone_number_id ? (
+                <>
+                  <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
+                    <span className="material-symbols-outlined text-green-600">check_circle</span>
+                    <div>
+                      <p className="font-medium text-green-800">WhatsApp conectado</p>
+                      <p className="text-sm text-green-600">
+                        {whatsappCloudConfig.cloud_api_phone_number || `ID: ${whatsappCloudConfig.cloud_api_phone_number_id}`}
+                      </p>
+                      {whatsappCloudConfig.cloud_api_connected_at && (
+                        <p className="text-xs text-green-500 mt-1">
+                          Conectado em {new Date(whatsappCloudConfig.cloud_api_connected_at).toLocaleDateString('pt-BR')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-start gap-3">
+                      <span className="material-symbols-outlined text-blue-600">info</span>
+                      <div className="text-sm text-blue-700">
+                        <p className="font-medium mb-1">Pronto para usar!</p>
+                        <p>Você pode enviar e receber mensagens via API Oficial do WhatsApp.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleDisconnectWhatsApp}
+                    disabled={connectingWhatsApp}
+                    className="w-full px-4 py-3 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium flex items-center justify-center gap-2"
+                  >
+                    {connectingWhatsApp ? (
+                      <div className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
+                    ) : (
+                      <span className="material-symbols-outlined text-[18px]">link_off</span>
+                    )}
+                    Desconectar WhatsApp
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Seletor de modo de conexão */}
+                  <div className="p-4 bg-white rounded-lg border border-slate-200">
+                    <p className="font-medium text-slate-700 mb-3">Escolha o modo de conexão:</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setConnectionMode('new')}
+                        className={`p-4 rounded-lg border-2 text-left transition-all ${
+                          connectionMode === 'new'
+                            ? 'border-emerald-500 bg-emerald-50'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`material-symbols-outlined ${connectionMode === 'new' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            add_circle
+                          </span>
+                          <span className="font-medium text-slate-800">Número Novo</span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          Cadastrar um número que NÃO está no WhatsApp Business App
+                        </p>
+                      </button>
+                      
+                      <button
+                        onClick={() => setConnectionMode('coexistence')}
+                        className={`p-4 rounded-lg border-2 text-left transition-all ${
+                          connectionMode === 'coexistence'
+                            ? 'border-emerald-500 bg-emerald-50'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`material-symbols-outlined ${connectionMode === 'coexistence' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            sync
+                          </span>
+                          <span className="font-medium text-slate-800">Coexistência</span>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          Manter WhatsApp Business App + usar Cloud API (espelhamento)
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {connectionMode === 'coexistence' ? (
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-blue-600">info</span>
+                        <div className="text-sm text-blue-700">
+                          <p className="font-medium mb-1">Modo Coexistência:</p>
+                          <ul className="list-disc list-inside space-y-1">
+                            <li>Continue usando o WhatsApp Business App no celular</li>
+                            <li>Mensagens são espelhadas entre app e painel</li>
+                            <li>Histórico dos últimos 6 meses pode ser sincronizado</li>
+                            <li>Requer WhatsApp Business App 2.24.17+</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-slate-500">info</span>
+                        <div className="text-sm text-slate-600">
+                          <p className="font-medium mb-1">Número Novo:</p>
+                          <ul className="list-disc list-inside space-y-1">
+                            <li>Use um número que NÃO está registrado no WhatsApp</li>
+                            <li>O número será usado exclusivamente pela Cloud API</li>
+                            <li>Não poderá usar o WhatsApp App com esse número</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                    <div className="flex items-start gap-3">
+                      <span className="material-symbols-outlined text-amber-600">warning</span>
+                      <div className="text-sm text-amber-700">
+                        <p className="font-medium mb-1">Requisitos:</p>
+                        <ul className="list-disc list-inside space-y-1">
+                          <li>Conta WhatsApp Business (não pessoal)</li>
+                          <li>Acesso ao Meta Business Manager</li>
+                          {connectionMode === 'coexistence' && (
+                            <li>WhatsApp Business App versão 2.24.17 ou superior</li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!metaAppId && (
+                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                      <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-red-600">error</span>
+                        <div className="text-sm text-red-700">
+                          <p className="font-medium">Integração não disponível</p>
+                          <p>Entre em contato com o suporte para habilitar esta integração.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleConnectWhatsApp}
+                    disabled={!metaAppId || connectingWhatsApp}
+                    className="w-full px-4 py-3 text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {connectingWhatsApp ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                      <span className="material-symbols-outlined text-[18px]">link</span>
+                    )}
+                    {connectionMode === 'coexistence' ? 'Conectar com Coexistência' : 'Conectar WhatsApp'}
+                  </button>
+                </>
+              )}
+
+              {testResult && (
+                <div className={`p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`material-symbols-outlined ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                      {testResult.success ? 'check_circle' : 'error'}
+                    </span>
+                    <p className={testResult.success ? 'text-green-700' : 'text-red-700'}>{testResult.message}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

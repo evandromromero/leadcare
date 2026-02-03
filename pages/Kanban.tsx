@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
@@ -12,12 +12,13 @@ interface KanbanProps {
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
 }
 
-type ChatStatus = 'Novo Lead' | 'Em Atendimento' | 'Agendado' | 'Convertido' | 'Recorrente' | 'Mentoria' | 'Perdido';
+type ChatStatus = 'Novo Lead' | 'Em Atendimento' | 'Follow-up' | 'Agendado' | 'Convertido' | 'Recorrente' | 'Mentoria' | 'Perdido';
 
 // Labels padrão para as colunas do pipeline
 const DEFAULT_LABELS: Record<ChatStatus, string> = {
   'Novo Lead': 'Novos',
   'Em Atendimento': 'Atendimento',
+  'Follow-up': 'Follow-up',
   'Agendado': 'Agendados',
   'Convertido': 'Ganhos',
   'Recorrente': 'Recorrentes',
@@ -29,6 +30,7 @@ const DEFAULT_LABELS: Record<ChatStatus, string> = {
 const STAGE_HINTS: Record<ChatStatus, string> = {
   'Novo Lead': 'Lead que acabou de entrar em contato',
   'Em Atendimento': 'Em negociação ou atendimento ativo',
+  'Follow-up': 'Aguardando retorno do cliente. Use as etiquetas Follow 1, 2, 3, 4+ para controlar as tentativas de contato.',
   'Agendado': 'Consulta ou procedimento agendado',
   'Convertido': 'Fechou negócio / realizou procedimento',
   'Recorrente': 'Paciente que já é da clínica e retornou',
@@ -41,7 +43,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const navigate = useNavigate();
   const clinicId = state.selectedClinic?.id;
   const { chats, loading, updateChatStatus, refetch } = useChats(clinicId, user?.id);
-  const columns: ChatStatus[] = ['Novo Lead', 'Em Atendimento', 'Agendado', 'Convertido', 'Recorrente', 'Mentoria', 'Perdido'];
+  const columns: ChatStatus[] = ['Novo Lead', 'Em Atendimento', 'Follow-up', 'Agendado', 'Convertido', 'Recorrente', 'Mentoria', 'Perdido'];
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [quotesMap, setQuotesMap] = useState<Record<string, Array<{ service_type: string; value: number; status: string }>>>({});
   
@@ -82,6 +84,43 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [leadsEmailMap, setLeadsEmailMap] = useState<Record<string, string>>({});
+  
+  // Estado para códigos de campanha (link rastreável)
+  const [campaignCodesMap, setCampaignCodesMap] = useState<Record<string, { code: string; name: string }>>({});
+  
+  // Estado para fontes de lead (lead_sources - Meta Ads, Instagram, etc)
+  const [leadSourcesMap, setLeadSourcesMap] = useState<Record<string, { name: string; code: string | null; color: string }>>({});
+  
+  // Estados para filtro por etiqueta
+  const [availableTags, setAvailableTags] = useState<Array<{ id: string; name: string; color: string }>>([]);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+  const [showTagFilterDropdown, setShowTagFilterDropdown] = useState(false);
+
+  // Refs para sincronizar scroll horizontal
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollWidth, setScrollWidth] = useState(0);
+
+  // Sincronizar scroll do topo com o principal
+  const handleTopScroll = () => {
+    if (topScrollRef.current && mainScrollRef.current) {
+      mainScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  // Sincronizar scroll principal com o topo
+  const handleMainScroll = () => {
+    if (topScrollRef.current && mainScrollRef.current) {
+      topScrollRef.current.scrollLeft = mainScrollRef.current.scrollLeft;
+    }
+  };
+
+  // Atualizar largura do scroll quando colunas carregam
+  useEffect(() => {
+    if (mainScrollRef.current) {
+      setScrollWidth(mainScrollRef.current.scrollWidth);
+    }
+  }, [chats, loading]);
 
   // Recarregar chats quando o componente é montado
   useEffect(() => {
@@ -180,6 +219,98 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     
     fetchLeadsEmails();
   }, [clinicId, chats]);
+
+  // Buscar códigos de campanha (links rastreáveis) dos chats
+  useEffect(() => {
+    const fetchCampaignCodes = async () => {
+      if (!clinicId || chats.length === 0) return;
+      
+      const chatIds = new Set(chats.map(c => c.id));
+      
+      try {
+        // Buscar por clinic_id via trackable_links para evitar URL muito longa
+        const { data } = await supabase
+          .from('link_clicks' as any)
+          .select('chat_id, trackable_links!inner(code, name, clinic_id)')
+          .eq('trackable_links.clinic_id', clinicId)
+          .not('chat_id', 'is', null);
+        
+        if (data) {
+          const codesMap: Record<string, { code: string; name: string }> = {};
+          (data as any[]).forEach(item => {
+            // Filtrar apenas chats que estão na lista atual
+            if (item.chat_id && item.trackable_links && chatIds.has(item.chat_id)) {
+              codesMap[item.chat_id] = {
+                code: item.trackable_links.code,
+                name: item.trackable_links.name,
+              };
+            }
+          });
+          setCampaignCodesMap(codesMap);
+        }
+      } catch (err) {
+        console.error('Error fetching campaign codes:', err);
+      }
+    };
+    
+    fetchCampaignCodes();
+  }, [clinicId, chats]);
+
+  // Buscar fontes de lead (lead_sources - Meta Ads, Instagram, etc)
+  useEffect(() => {
+    const fetchLeadSources = async () => {
+      if (!clinicId || chats.length === 0) return;
+      
+      const sourceIds = chats.filter(c => c.source_id).map(c => c.source_id);
+      if (sourceIds.length === 0) return;
+      
+      try {
+        const { data } = await supabase
+          .from('lead_sources' as any)
+          .select('id, name, code, color')
+          .in('id', sourceIds);
+        
+        if (data) {
+          const sourcesMap: Record<string, { name: string; code: string | null; color: string }> = {};
+          (data as any[]).forEach(source => {
+            sourcesMap[source.id] = {
+              name: source.name,
+              code: source.code,
+              color: source.color || '#6B7280',
+            };
+          });
+          setLeadSourcesMap(sourcesMap);
+        }
+      } catch (err) {
+        console.error('Error fetching lead sources:', err);
+      }
+    };
+    
+    fetchLeadSources();
+  }, [clinicId, chats]);
+
+  // Buscar etiquetas disponíveis para filtro
+  useEffect(() => {
+    const fetchTags = async () => {
+      if (!clinicId) return;
+      
+      try {
+        const { data } = await supabase
+          .from('tags' as any)
+          .select('id, name, color')
+          .eq('clinic_id', clinicId)
+          .order('name');
+        
+        if (data) {
+          setAvailableTags(data as any[]);
+        }
+      } catch (err) {
+        console.error('Error fetching tags:', err);
+      }
+    };
+    
+    fetchTags();
+  }, [clinicId]);
 
   // Função para abrir modal de email
   const handleOpenEmailModal = (lead: any) => {
@@ -306,6 +437,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const columnConfig: Record<ChatStatus, { color: string }> = {
     'Novo Lead': { color: 'blue' },
     'Em Atendimento': { color: 'orange' },
+    'Follow-up': { color: 'amber' },
     'Agendado': { color: 'purple' },
     'Convertido': { color: 'green' },
     'Recorrente': { color: 'cyan' },
@@ -380,8 +512,14 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     return matchesName || matchesPhone;
   };
 
-  // Chats filtrados por período e busca
-  const filteredChats = chats.filter(chat => filterByPeriod(chat) && filterBySearch(chat));
+  // Filtrar por etiqueta
+  const filterByTag = (chat: any) => {
+    if (!selectedTagFilter) return true;
+    return chat.tags && chat.tags.some((tag: any) => tag.id === selectedTagFilter);
+  };
+
+  // Chats filtrados por período, busca e etiqueta
+  const filteredChats = chats.filter(chat => filterByPeriod(chat) && filterBySearch(chat) && filterByTag(chat));
 
   // Buscar informações completas do cliente
   const handleShowLeadInfo = async (lead: any) => {
@@ -614,13 +752,89 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
           </div>
         )}
         
+        {/* Filtro por etiqueta */}
+        <div className="relative ml-4">
+          <button
+            onClick={() => setShowTagFilterDropdown(!showTagFilterDropdown)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+              selectedTagFilter 
+                ? 'bg-violet-100 text-violet-700 border border-violet-200' 
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[14px]">label</span>
+            {selectedTagFilter 
+              ? availableTags.find(t => t.id === selectedTagFilter)?.name || 'Etiqueta'
+              : 'Etiqueta'
+            }
+            <span className="material-symbols-outlined text-[12px]">
+              {showTagFilterDropdown ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+          
+          {showTagFilterDropdown && (
+            <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+              <div className="p-2 border-b border-slate-100 flex justify-between items-center">
+                <span className="text-xs font-semibold text-slate-600">Filtrar por etiqueta</span>
+                {selectedTagFilter && (
+                  <button
+                    onClick={() => { setSelectedTagFilter(null); setShowTagFilterDropdown(false); }}
+                    className="text-xs text-cyan-600 hover:text-cyan-700 font-medium"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+              <div className="max-h-64 overflow-y-auto p-2 space-y-1">
+                {availableTags.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-2">Nenhuma etiqueta cadastrada</p>
+                ) : (
+                  availableTags.map(tag => (
+                    <button
+                      key={tag.id}
+                      onClick={() => { setSelectedTagFilter(tag.id); setShowTagFilterDropdown(false); }}
+                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
+                        selectedTagFilter === tag.id 
+                          ? 'bg-violet-50' 
+                          : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <span 
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: tag.color }}
+                      ></span>
+                      <span className="text-sm text-slate-700 truncate">{tag.name}</span>
+                      {selectedTagFilter === tag.id && (
+                        <span className="material-symbols-outlined text-violet-600 text-[14px] ml-auto">check</span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        
         {/* Contador de leads filtrados */}
         <span className="ml-auto text-xs text-slate-400">
           {filteredChats.length} lead{filteredChats.length !== 1 ? 's' : ''} encontrado{filteredChats.length !== 1 ? 's' : ''}
         </span>
       </div>
 
-      <div className="flex-1 overflow-x-auto overflow-y-hidden flex gap-6 pb-6 no-scrollbar">
+      {/* Scroll horizontal duplicado no topo */}
+      <div 
+        ref={topScrollRef}
+        onScroll={handleTopScroll}
+        className="overflow-x-auto overflow-y-hidden shrink-0 mb-2"
+        style={{ height: '12px' }}
+      >
+        <div style={{ width: scrollWidth, height: '1px' }}></div>
+      </div>
+
+      <div 
+        ref={mainScrollRef}
+        onScroll={handleMainScroll}
+        className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex gap-6 pb-4">
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
@@ -635,7 +849,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
           return (
             <div 
               key={column} 
-              className="w-[320px] flex flex-col shrink-0"
+              className="w-[320px] h-full flex flex-col shrink-0"
               onDragOver={onDragOver}
               onDrop={(e) => onDrop(e, column)}
             >
@@ -656,7 +870,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                 <button className="text-slate-400 hover:text-slate-600"><span className="material-symbols-outlined text-[20px]">more_horiz</span></button>
               </div>
 
-              <div className={`flex-1 overflow-y-auto space-y-4 pr-1 rounded-xl transition-colors ${draggedId ? 'bg-slate-100/50' : ''}`}>
+              <div className={`flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 rounded-xl transition-colors ${draggedId ? 'bg-slate-100/50' : ''}`}>
                 {leadsInCol.map(lead => (
                   <div 
                     key={lead.id} 
@@ -721,6 +935,31 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                     </div>
 
                     <div className="flex flex-wrap gap-1.5 mb-4">
+                      {/* Fonte do lead (Meta Ads, Instagram, etc) */}
+                      {lead.source_id && leadSourcesMap[lead.source_id] && (
+                        <span 
+                          className="px-1.5 py-0.5 rounded text-[9px] font-black border flex items-center gap-1"
+                          style={{ 
+                            backgroundColor: `${leadSourcesMap[lead.source_id].color}15`, 
+                            color: leadSourcesMap[lead.source_id].color, 
+                            borderColor: `${leadSourcesMap[lead.source_id].color}40` 
+                          }}
+                          title={`Origem: ${leadSourcesMap[lead.source_id].name}`}
+                        >
+                          <span className="material-symbols-outlined text-[10px]">ads_click</span>
+                          {leadSourcesMap[lead.source_id].code || leadSourcesMap[lead.source_id].name}
+                        </span>
+                      )}
+                      {/* Código do link rastreável (se diferente da fonte) */}
+                      {campaignCodesMap[lead.id] && (!lead.source_id || !leadSourcesMap[lead.source_id]?.code || leadSourcesMap[lead.source_id].code !== campaignCodesMap[lead.id].code) && (
+                        <span 
+                          className="px-1.5 py-0.5 rounded text-[9px] font-black border bg-violet-50 text-violet-700 border-violet-200 flex items-center gap-1"
+                          title={`Link: ${campaignCodesMap[lead.id].name}`}
+                        >
+                          <span className="material-symbols-outlined text-[10px]">link</span>
+                          {campaignCodesMap[lead.id].code}
+                        </span>
+                      )}
                       {lead.tags.map(tag => (
                         <span key={tag.id} className="px-1.5 py-0.5 rounded text-[9px] font-black border" style={{ backgroundColor: `${tag.color}20`, color: tag.color, borderColor: `${tag.color}40` }}>
                           {tag.name}

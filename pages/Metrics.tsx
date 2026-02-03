@@ -119,7 +119,7 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
   const [userCanSeeGoal, setUserCanSeeGoal] = useState<Record<string, boolean>>({});
   const [savingGoals, setSavingGoals] = useState(false);
   
-  const isAdmin = user?.role === 'Admin' || user?.role === 'SuperAdmin';
+  const { isAdmin } = useAuth();
 
   const getDateRange = (periodType: MetricsPeriod) => {
     const now = new Date();

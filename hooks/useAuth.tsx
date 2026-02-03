@@ -27,6 +27,8 @@ interface UseAuthReturn {
   error: string | null;
   isImpersonating: boolean;
   impersonatedClinic: Clinic | null;
+  effectiveRole: 'SuperAdmin' | 'Admin' | 'Atendente' | null;
+  isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   startImpersonate: (clinicId: string, clinicName: string) => void;
@@ -246,6 +248,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setImpersonatedClinic(null);
   };
 
+  // Quando SuperAdmin está fazendo impersonate, ele age como Admin da clínica
+  // Isso permite que ele edite tudo como se fosse o Admin daquela clínica
+  const effectiveRole = user?.role === 'SuperAdmin' && isImpersonating 
+    ? 'Admin' as const
+    : user?.role || null;
+  
+  // Helper para verificar se tem permissão de Admin (real ou via impersonate)
+  const isAdmin = effectiveRole === 'Admin' || user?.role === 'SuperAdmin';
+
   const value = {
     user,
     clinic,
@@ -254,6 +265,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     error,
     isImpersonating,
     impersonatedClinic,
+    effectiveRole,
+    isAdmin,
     signIn,
     signOut,
     startImpersonate,

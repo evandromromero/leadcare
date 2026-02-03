@@ -99,7 +99,8 @@ Deno.serve(async (req: Request) => {
           }
           
           // Determinar canal (Instagram ou Facebook)
-          const isInstagram = entry.id?.startsWith("17") || messaging.sender?.id?.startsWith("17");
+          // body.object será "instagram" para Instagram e "page" para Facebook Messenger
+          const isInstagram = body.object === "instagram";
           const channel = isInstagram ? "instagram" : "facebook";
           
           // Buscar perfil do usuário (nome e foto)

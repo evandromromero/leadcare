@@ -22,7 +22,7 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const forceReconnect = searchParams.get('force') === 'true';
   const [forceMode, setForceMode] = useState(false);
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   
   // Persistir forceReconnect em estado local para não perder quando selectedInstance mudar
   useEffect(() => {
@@ -59,7 +59,7 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
     hasPersonalInstance: false,
   });
 
-  const isAdmin = user?.role === 'Admin' || user?.role === 'SuperAdmin';
+  // isAdmin já vem do useAuth
 
   useEffect(() => {
     const fetchUserSettings = async () => {
