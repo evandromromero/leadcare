@@ -343,6 +343,8 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header - escondido na página Inbox para mais espaço vertical */}
+        {location.pathname !== '/inbox' && (
         <header className="h-14 md:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 z-10 shrink-0">
           <div className="flex items-center gap-2 md:gap-4">
             {/* Botão Menu Mobile */}
@@ -495,6 +497,7 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
             </div>
           </div>
         </header>
+        )}
 
         {/* Páginas com layout de altura fixa não usam flex-col nem Footer */}
         {['/inbox', '/support-panel'].includes(location.pathname) ? (

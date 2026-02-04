@@ -4083,7 +4083,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
               )}
               
-              <div className="flex items-end gap-3 bg-slate-50 rounded-2xl border border-slate-200 p-2 focus-within:ring-2 focus-within:ring-cyan-600 focus-within:border-transparent transition-all">
+              <div className="flex items-center gap-3 bg-slate-50 rounded-2xl border border-slate-200 p-3 focus-within:ring-2 focus-within:ring-cyan-600 focus-within:border-transparent transition-all">
                 <input 
                   type="file" 
                   ref={fileInputRef}
@@ -4171,7 +4171,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                       onChange={(e) => setMsgInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
                       placeholder="Digite sua mensagem..." 
-                      className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 px-0 resize-none max-h-32 min-h-[40px]"
+                      className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-3 px-0 resize-none max-h-40 min-h-[48px]"
                       rows={1}
                     />
                     <button 
