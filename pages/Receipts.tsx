@@ -533,14 +533,14 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+    <div className="p-3 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Lancamentos</h1>
-            <p className="text-slate-500 text-sm">Vendas do comercial e receitas da clinica</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Lançamentos</h1>
+            <p className="text-slate-500 text-xs sm:text-sm">Vendas e receitas</p>
           </div>
-          <div className="relative">
+          <div className="relative hidden sm:block">
             <button
               onMouseEnter={() => setShowInfoTooltip(true)}
               onMouseLeave={() => setShowInfoTooltip(false)}
@@ -595,96 +595,100 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
             )}
           </div>
         </div>
-        <button onClick={exportToCSV} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">
+        <button onClick={exportToCSV} className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-xs sm:text-sm">
           <Download className="w-4 h-4" />
-          Exportar CSV
+          <span className="hidden sm:inline">Exportar CSV</span>
+          <span className="sm:hidden">Exportar</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-4 text-white">
-          <p className="text-amber-100 text-xs mb-1">Valor Comercial</p>
-          <p className="text-2xl font-bold">{formatCurrency(metrics.totalComercial)}</p>
-          <p className="text-amber-100 text-xs mt-1">{metrics.totalVendas} venda(s)</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+        <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-2.5 sm:p-4 text-white">
+          <p className="text-amber-100 text-[10px] sm:text-xs mb-1">Comercial</p>
+          <p className="text-lg sm:text-2xl font-bold">{formatCurrency(metrics.totalComercial)}</p>
+          <p className="text-amber-100 text-[10px] sm:text-xs mt-1 hidden sm:block">{metrics.totalVendas} venda(s)</p>
         </div>
-        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl p-4 text-white">
-          <p className="text-emerald-100 text-xs mb-1">Receita da Clinica</p>
-          <p className="text-2xl font-bold">{formatCurrency(metrics.totalRecebido)}</p>
-          <p className="text-emerald-100 text-xs mt-1">{metrics.totalRecebimentos} recebimento(s)</p>
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl p-2.5 sm:p-4 text-white">
+          <p className="text-emerald-100 text-[10px] sm:text-xs mb-1">Receita</p>
+          <p className="text-lg sm:text-2xl font-bold">{formatCurrency(metrics.totalRecebido)}</p>
+          <p className="text-emerald-100 text-[10px] sm:text-xs mt-1 hidden sm:block">{metrics.totalRecebimentos} recebimento(s)</p>
         </div>
-        <div className="bg-gradient-to-r from-violet-500 to-purple-600 rounded-xl p-4 text-white">
+        <div className="bg-gradient-to-r from-violet-500 to-purple-600 rounded-xl p-2.5 sm:p-4 text-white">
           <div className="flex items-center gap-1 mb-1">
             <TrendingUp className="w-3 h-3 text-violet-200" />
-            <p className="text-violet-100 text-xs">ROI</p>
+            <p className="text-violet-100 text-[10px] sm:text-xs">ROI</p>
           </div>
-          <p className="text-2xl font-bold">{metrics.roi}%</p>
-          <p className="text-violet-100 text-xs mt-1">Retorno sobre venda</p>
+          <p className="text-lg sm:text-2xl font-bold">{metrics.roi}%</p>
+          <p className="text-violet-100 text-[10px] sm:text-xs mt-1 hidden sm:block">Retorno</p>
         </div>
-        <div className="bg-gradient-to-r from-slate-600 to-slate-700 rounded-xl p-4 text-white">
-          <p className="text-slate-300 text-xs mb-1">Ticket Medio</p>
-          <p className="text-2xl font-bold">{formatCurrency(metrics.ticketMedio)}</p>
-          <p className="text-slate-300 text-xs mt-1">Por recebimento</p>
+        <div className="bg-gradient-to-r from-slate-600 to-slate-700 rounded-xl p-2.5 sm:p-4 text-white">
+          <p className="text-slate-300 text-[10px] sm:text-xs mb-1">Ticket</p>
+          <p className="text-lg sm:text-2xl font-bold">{formatCurrency(metrics.ticketMedio)}</p>
+          <p className="text-slate-300 text-[10px] sm:text-xs mt-1 hidden sm:block">Por recebimento</p>
         </div>
       </div>
 
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => setStatusFilter('all')} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${statusFilter === 'all' ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+      <div className="flex gap-1.5 sm:gap-2 mb-3 sm:mb-4 overflow-x-auto pb-1">
+        <button onClick={() => setStatusFilter('all')} className={`px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${statusFilter === 'all' ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
           Todos ({metrics.totalVendas})
         </button>
-        <button onClick={() => setStatusFilter('pending')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium ${statusFilter === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-          <Clock className="w-3.5 h-3.5" />
-          Pendentes ({metrics.vendasPendentes})
+        <button onClick={() => setStatusFilter('pending')} className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${statusFilter === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+          <span className="hidden sm:inline">Pendentes</span> ({metrics.vendasPendentes})
         </button>
-        <button onClick={() => setStatusFilter('received')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium ${statusFilter === 'received' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-          <CheckCircle className="w-3.5 h-3.5" />
-          Com Recebimento ({metrics.vendasComRecebimento})
+        <button onClick={() => setStatusFilter('received')} className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${statusFilter === 'received' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+          <span className="hidden sm:inline">Recebido</span> ({metrics.vendasComRecebimento})
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
-        <div className="p-4 flex flex-wrap gap-3 items-center">
-          <div className="flex-1 min-w-[200px]">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm" />
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-4 sm:mb-6">
+        <div className="p-3 sm:p-4">
+          {/* Mobile: Grid layout */}
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 items-center">
+            <div className="col-span-2 sm:flex-1 sm:min-w-[200px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="w-full pl-10 pr-4 py-1.5 sm:py-2 border border-slate-200 rounded-lg text-xs sm:text-sm" />
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 hidden sm:block" />
+              <select value={dateFilter} onChange={(e) => { setDateFilter(e.target.value as any); setCurrentPage(1); }} className="w-full sm:w-auto border border-slate-200 rounded-lg px-2 py-1.5 sm:py-2 text-xs sm:text-sm">
+                <option value="all">Todo período</option>
+                <option value="7d">7 dias</option>
+                <option value="30d">30 dias</option>
+                <option value="month">Este mês</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-1">
+              <Filter className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 hidden sm:block" />
+              <select value={sourceFilter} onChange={(e) => { setSourceFilter(e.target.value); setCurrentPage(1); }} className="w-full sm:w-auto border border-slate-200 rounded-lg px-2 py-1.5 sm:py-2 text-xs sm:text-sm">
+                <option value="all">Todas origens</option>
+                {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2 sm:col-span-1 flex items-center gap-1">
+              <User className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 hidden sm:block" />
+              <select value={attendantFilter} onChange={(e) => { setAttendantFilter(e.target.value); setCurrentPage(1); }} className="w-full sm:w-auto border border-slate-200 rounded-lg px-2 py-1.5 sm:py-2 text-xs sm:text-sm">
+                <option value="all">Todos comerciais</option>
+                {attendants.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-4 h-4 text-slate-400" />
-            <select value={dateFilter} onChange={(e) => { setDateFilter(e.target.value as any); setCurrentPage(1); }} className="border border-slate-200 rounded-lg px-2 py-2 text-sm">
-              <option value="all">Todo periodo</option>
-              <option value="7d">7 dias</option>
-              <option value="30d">30 dias</option>
-              <option value="month">Este mes</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select value={sourceFilter} onChange={(e) => { setSourceFilter(e.target.value); setCurrentPage(1); }} className="border border-slate-200 rounded-lg px-2 py-2 text-sm">
-              <option value="all">Todas origens</option>
-              {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <User className="w-4 h-4 text-slate-400" />
-            <select value={attendantFilter} onChange={(e) => { setAttendantFilter(e.target.value); setCurrentPage(1); }} className="border border-slate-200 rounded-lg px-2 py-2 text-sm">
-              <option value="all">Todos comerciais</option>
-              {attendants.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
         </div>
-        <div className="border-t border-slate-100 px-4 py-2 flex items-center gap-4 text-xs text-slate-500">
-          <span>Ordenar:</span>
-          <button onClick={() => handleSort('date')} className={`flex items-center gap-1 px-2 py-1 rounded ${sortField === 'date' ? 'bg-cyan-50 text-cyan-700' : ''}`}>Data <SortIcon field="date" /></button>
-          <button onClick={() => handleSort('client')} className={`flex items-center gap-1 px-2 py-1 rounded ${sortField === 'client' ? 'bg-cyan-50 text-cyan-700' : ''}`}>Cliente <SortIcon field="client" /></button>
-          <button onClick={() => handleSort('commercial')} className={`flex items-center gap-1 px-2 py-1 rounded ${sortField === 'commercial' ? 'bg-cyan-50 text-cyan-700' : ''}`}>Comercial <SortIcon field="commercial" /></button>
-          <button onClick={() => handleSort('received')} className={`flex items-center gap-1 px-2 py-1 rounded ${sortField === 'received' ? 'bg-cyan-50 text-cyan-700' : ''}`}>Recebido <SortIcon field="received" /></button>
+        <div className="border-t border-slate-100 px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-4 text-[10px] sm:text-xs text-slate-500 overflow-x-auto">
+          <span className="hidden sm:inline">Ordenar:</span>
+          <button onClick={() => handleSort('date')} className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded whitespace-nowrap ${sortField === 'date' ? 'bg-cyan-50 text-cyan-700' : ''}`}>Data <SortIcon field="date" /></button>
+          <button onClick={() => handleSort('client')} className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded whitespace-nowrap ${sortField === 'client' ? 'bg-cyan-50 text-cyan-700' : ''}`}>Cliente <SortIcon field="client" /></button>
+          <button onClick={() => handleSort('commercial')} className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded whitespace-nowrap ${sortField === 'commercial' ? 'bg-cyan-50 text-cyan-700' : ''}`}>Comercial <SortIcon field="commercial" /></button>
+          <button onClick={() => handleSort('received')} className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded whitespace-nowrap ${sortField === 'received' ? 'bg-cyan-50 text-cyan-700' : ''}`}>Recebido <SortIcon field="received" /></button>
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2 sm:space-y-3">
         {paginatedPayments.length === 0 && directReceipts.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center text-slate-500">Nenhum lancamento encontrado</div>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 sm:p-12 text-center text-slate-500 text-sm">Nenhum lançamento encontrado</div>
         ) : (
           <>
             {paginatedPayments.map((payment) => {
@@ -694,7 +698,42 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
               
               return (
                 <div key={payment.id} className={`bg-white rounded-xl shadow-sm border overflow-hidden ${hasReceipts ? 'border-emerald-200' : 'border-slate-200'}`}>
-                  <div className="p-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50" onClick={() => toggleExpanded(payment.id)}>
+                  {/* Mobile Layout */}
+                  <div className="md:hidden p-3 cursor-pointer hover:bg-slate-50" onClick={() => toggleExpanded(payment.id)}>
+                    <div className="flex items-start gap-2 mb-2">
+                      <button className="p-0.5 text-slate-400 mt-0.5">{isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</button>
+                      <div className={`w-2 h-2 rounded-full mt-1.5 ${hasReceipts ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-slate-800 text-sm">{payment.chat?.client_name || 'Cliente'}</span>
+                          {hasReceipts && <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">
+                          {new Date(payment.payment_date).toLocaleDateString('pt-BR')}
+                          {payment.creator && ` • ${payment.creator.name}`}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pl-6">
+                      <div className="flex gap-3">
+                        <div>
+                          <div className="text-[10px] text-slate-400">Comercial</div>
+                          <div className="font-bold text-amber-600 text-sm">{formatCurrency(Number(payment.value))}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400">Recebido</div>
+                          <div className={`font-bold text-sm ${totalReceiptsValue > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{totalReceiptsValue > 0 ? formatCurrency(totalReceiptsValue) : '-'}</div>
+                        </div>
+                      </div>
+                      {canAddReceipt && (
+                        <button onClick={(e) => { e.stopPropagation(); openAddReceiptModal(payment); }} className="flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-600 text-xs font-medium rounded-lg">
+                          <Plus className="w-3 h-3" />Lançar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {/* Desktop Layout */}
+                  <div className="hidden md:flex p-4 items-center gap-4 cursor-pointer hover:bg-slate-50" onClick={() => toggleExpanded(payment.id)}>
                     <button className="p-1 text-slate-400">{isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}</button>
                     <div className={`w-2 h-2 rounded-full ${hasReceipts ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                     <div className="flex-1 min-w-0">
@@ -704,7 +743,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                         {hasReceipts && <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700"><CheckCircle className="w-3 h-3" />Recebido</span>}
                       </div>
                       <div className="text-sm text-slate-500 flex items-center gap-2 flex-wrap">
-                        <span>{payment.description || 'Sem descricao'}</span>
+                        <span>{payment.description || 'Sem descrição'}</span>
                         <span>-</span>
                         <span>{new Date(payment.payment_date).toLocaleDateString('pt-BR')}</span>
                         {payment.creator && <><span>-</span><span className="flex items-center gap-1"><User className="w-3 h-3" />{payment.creator.name}</span></>}
@@ -721,34 +760,34 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                     </div>
                     {canAddReceipt && (
                       <button onClick={(e) => { e.stopPropagation(); openAddReceiptModal(payment); }} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-600 text-sm font-medium rounded-lg hover:bg-emerald-100">
-                        <Plus className="w-4 h-4" />Lancar
+                        <Plus className="w-4 h-4" />Lançar
                       </button>
                     )}
                   </div>
                   {isExpanded && payment.receipts.length > 0 && (
-                    <div className="border-t border-slate-100 bg-slate-50 p-4">
-                      <div className="text-xs font-semibold text-slate-400 uppercase mb-3">Recebimentos ({payment.receipts.length})</div>
+                    <div className="border-t border-slate-100 bg-slate-50 p-3 sm:p-4">
+                      <div className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase mb-2 sm:mb-3">Recebimentos ({payment.receipts.length})</div>
                       <div className="space-y-2">
                         {payment.receipts.map((receipt) => (
-                          <div key={receipt.id} className="bg-white rounded-lg border border-slate-200 p-3 flex items-center gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-emerald-600">{formatCurrency(Number(receipt.total_value))}</span>
-                                <span className="text-sm text-slate-400">{new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
+                          <div key={receipt.id} className="bg-white rounded-lg border border-slate-200 p-2.5 sm:p-3 flex items-start sm:items-center gap-2 sm:gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-emerald-600 text-sm">{formatCurrency(Number(receipt.total_value))}</span>
+                                <span className="text-xs text-slate-400">{new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
                               </div>
-                              {receipt.description && <div className="text-sm text-slate-500">{receipt.description}</div>}
+                              {receipt.description && <div className="text-xs text-slate-500 truncate">{receipt.description}</div>}
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {receipt.receipt_payments?.map((rp, idx) => (
-                                  <span key={idx} className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600">
+                                  <span key={idx} className="px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs bg-slate-100 text-slate-600">
                                     {getPaymentMethodLabel(rp.payment_method)}{rp.installments > 1 && ` ${rp.installments}x`}: {formatCurrency(Number(rp.value))}
                                   </span>
                                 ))}
                               </div>
                             </div>
                             {canEditReceipt && (
-                              <div className="flex items-center gap-1">
-                                <button onClick={() => openEditReceiptModal(payment, receipt)} className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded"><Edit className="w-4 h-4" /></button>
-                                <button onClick={() => handleDeleteReceipt(receipt.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
+                              <div className="flex items-center gap-0.5 sm:gap-1">
+                                <button onClick={() => openEditReceiptModal(payment, receipt)} className="p-1 sm:p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded"><Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                                <button onClick={() => handleDeleteReceipt(receipt.id)} className="p-1 sm:p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
                               </div>
                             )}
                           </div>
@@ -757,9 +796,9 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                     </div>
                   )}
                   {isExpanded && payment.receipts.length === 0 && (
-                    <div className="border-t border-slate-100 bg-amber-50 p-4 text-center">
-                      <Clock className="w-5 h-5 text-amber-400 mx-auto mb-1" />
-                      <p className="text-sm text-amber-600">Nenhum recebimento lancado</p>
+                    <div className="border-t border-slate-100 bg-amber-50 p-3 sm:p-4 text-center">
+                      <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 mx-auto mb-1" />
+                      <p className="text-xs sm:text-sm text-amber-600">Nenhum recebimento lançado</p>
                     </div>
                   )}
                 </div>
@@ -769,7 +808,39 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
             {/* Lançamentos Diretos (sem comercial) */}
             {directReceipts.map((receipt) => (
               <div key={`direct-${receipt.id}`} className="bg-white rounded-xl shadow-sm border overflow-hidden border-teal-200">
-                <div className="p-4 flex items-center gap-4">
+                {/* Mobile Layout */}
+                <div className="md:hidden p-3">
+                  <div className="flex items-start gap-2 mb-2">
+                    <div className="p-0.5 text-teal-400">
+                      <CheckCircle className="w-4 h-4" />
+                    </div>
+                    <div className="w-2 h-2 rounded-full bg-teal-500 mt-1.5" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-slate-800 text-sm">{receipt.chat?.client_name || 'Cliente'}</span>
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-teal-100 text-teal-700">Direto</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        {new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}
+                        {receipt.receipt_payments?.[0]?.payment_method && ` • ${getPaymentMethodLabel(receipt.receipt_payments[0].payment_method)}`}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pl-6">
+                    <div className="flex gap-3">
+                      <div>
+                        <div className="text-[10px] text-slate-400">Comercial</div>
+                        <div className="font-bold text-slate-300 text-sm">-</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-400">Recebido</div>
+                        <div className="font-bold text-teal-600 text-sm">{formatCurrency(Number(receipt.total_value))}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* Desktop Layout */}
+                <div className="hidden md:flex p-4 items-center gap-4">
                   <div className="p-1 text-teal-400">
                     <CheckCircle className="w-5 h-5" />
                   </div>
@@ -780,7 +851,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">Direto</span>
                     </div>
                     <div className="text-sm text-slate-500 flex items-center gap-2 flex-wrap">
-                      <span>{receipt.description || 'Lancamento direto'}</span>
+                      <span>{receipt.description || 'Lançamento direto'}</span>
                       <span>-</span>
                       <span>{new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
                       {receipt.receipt_payments?.[0]?.payment_method && (
@@ -808,74 +879,76 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-6 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <p className="text-sm text-slate-500">Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} a {Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSortedPayments.length)} de {filteredAndSortedPayments.length}</p>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mt-4 sm:mt-6 bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4">
+          <p className="text-xs sm:text-sm text-slate-500">{((currentPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSortedPayments.length)} de {filteredAndSortedPayments.length}</p>
           <div className="flex items-center gap-2">
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg disabled:opacity-50">Anterior</button>
-            <span className="text-sm text-slate-600">Pagina {currentPage} de {totalPages}</span>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg disabled:opacity-50">Proxima</button>
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-slate-200 rounded-lg disabled:opacity-50">Anterior</button>
+            <span className="text-xs sm:text-sm text-slate-600">{currentPage}/{totalPages}</span>
+            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-slate-200 rounded-lg disabled:opacity-50">Próxima</button>
           </div>
         </div>
       )}
 
       {showModal && selectedPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
-          <div className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white p-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="relative bg-white w-full max-w-lg rounded-xl sm:rounded-2xl shadow-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white p-3 sm:p-4 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-bold text-slate-800">{editingReceipt ? 'Editar Recebimento' : 'Lancar Recebimento'}</h3>
-                <p className="text-sm text-slate-500">{selectedPayment.chat?.client_name} - Comercial: {formatCurrency(Number(selectedPayment.value))}</p>
+                <h3 className="text-base sm:text-lg font-bold text-slate-800">{editingReceipt ? 'Editar Recebimento' : 'Lançar Recebimento'}</h3>
+                <p className="text-xs sm:text-sm text-slate-500">{selectedPayment.chat?.client_name}</p>
               </div>
               <button onClick={() => setShowModal(false)} className="p-1 hover:bg-slate-100 rounded"><X className="w-5 h-5 text-slate-400" /></button>
             </div>
-            <div className="p-4 space-y-4">
-              {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="text-xs font-semibold text-amber-600 uppercase">Venda do Comercial</div>
-                <div className="text-lg font-bold text-amber-700">{formatCurrency(Number(selectedPayment.value))}</div>
-                <div className="text-sm text-amber-600">{selectedPayment.description || 'Sem descricao'}{selectedPayment.creator && ` - ${selectedPayment.creator.name}`}</div>
+            <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
+              {error && <div className="p-2.5 sm:p-3 bg-red-50 border border-red-200 rounded-lg text-xs sm:text-sm text-red-700">{error}</div>}
+              <div className="p-2.5 sm:p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="text-[10px] sm:text-xs font-semibold text-amber-600 uppercase">Venda do Comercial</div>
+                <div className="text-base sm:text-lg font-bold text-amber-700">{formatCurrency(Number(selectedPayment.value))}</div>
+                <div className="text-xs sm:text-sm text-amber-600 truncate">{selectedPayment.description || 'Sem descrição'}{selectedPayment.creator && ` - ${selectedPayment.creator.name}`}</div>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase">Data do Recebimento</label>
-                <input type="date" value={formData.receipt_date} onChange={(e) => setFormData({ ...formData, receipt_date: e.target.value })} className="w-full mt-1 h-10 rounded-lg border-slate-200 px-3" />
+                <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase">Data do Recebimento</label>
+                <input type="date" value={formData.receipt_date} onChange={(e) => setFormData({ ...formData, receipt_date: e.target.value })} className="w-full mt-1 h-9 sm:h-10 rounded-lg border-slate-200 px-3 text-sm" />
               </div>
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase">Formas de Pagamento *</label>
-                  <button type="button" onClick={addPaymentMethod} className="text-xs text-cyan-600 font-medium flex items-center gap-1"><Plus className="w-3 h-3" /> Adicionar</button>
+                  <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase">Formas de Pagamento *</label>
+                  <button type="button" onClick={addPaymentMethod} className="text-[10px] sm:text-xs text-cyan-600 font-medium flex items-center gap-1"><Plus className="w-3 h-3" /> Adicionar</button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {formData.payments.map((payment, index) => (
-                    <div key={index} className="flex gap-2 items-start p-3 bg-slate-50 rounded-lg">
-                      <input type="number" placeholder="Valor" value={payment.value} onChange={(e) => updatePaymentMethod(index, 'value', e.target.value)} className="flex-1 h-9 rounded-lg border-slate-200 px-3 text-sm" />
-                      <select value={payment.payment_method} onChange={(e) => updatePaymentMethod(index, 'payment_method', e.target.value)} className="flex-1 h-9 rounded-lg border-slate-200 px-2 text-sm">
-                        {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                      </select>
-                      {payment.payment_method === 'cartao_credito' && (
-                        <select value={payment.installments} onChange={(e) => updatePaymentMethod(index, 'installments', parseInt(e.target.value))} className="w-20 h-9 rounded-lg border-slate-200 px-2 text-sm">
-                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={n}>{n}x</option>)}
+                    <div key={index} className="flex flex-wrap sm:flex-nowrap gap-2 items-start p-2.5 sm:p-3 bg-slate-50 rounded-lg">
+                      <input type="number" placeholder="Valor" value={payment.value} onChange={(e) => updatePaymentMethod(index, 'value', e.target.value)} className="w-full sm:flex-1 h-9 rounded-lg border-slate-200 px-3 text-sm" />
+                      <div className="flex gap-2 w-full sm:w-auto">
+                        <select value={payment.payment_method} onChange={(e) => updatePaymentMethod(index, 'payment_method', e.target.value)} className="flex-1 sm:flex-none h-9 rounded-lg border-slate-200 px-2 text-xs sm:text-sm">
+                          {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                         </select>
-                      )}
-                      {formData.payments.length > 1 && <button type="button" onClick={() => removePaymentMethod(index)} className="p-2 text-red-400 hover:text-red-600 rounded"><X className="w-4 h-4" /></button>}
+                        {payment.payment_method === 'cartao_credito' && (
+                          <select value={payment.installments} onChange={(e) => updatePaymentMethod(index, 'installments', parseInt(e.target.value))} className="w-16 sm:w-20 h-9 rounded-lg border-slate-200 px-2 text-xs sm:text-sm">
+                            {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <option key={n} value={n}>{n}x</option>)}
+                          </select>
+                        )}
+                        {formData.payments.length > 1 && <button type="button" onClick={() => removePaymentMethod(index)} className="p-2 text-red-400 hover:text-red-600 rounded"><X className="w-4 h-4" /></button>}
+                      </div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 p-3 bg-emerald-50 rounded-lg flex items-center justify-between">
-                  <span className="text-sm font-medium text-emerald-700">Total:</span>
-                  <span className="text-lg font-bold text-emerald-700">{formatCurrency(calculateTotalFromPayments())}</span>
+                <div className="mt-2 sm:mt-3 p-2.5 sm:p-3 bg-emerald-50 rounded-lg flex items-center justify-between">
+                  <span className="text-xs sm:text-sm font-medium text-emerald-700">Total:</span>
+                  <span className="text-base sm:text-lg font-bold text-emerald-700">{formatCurrency(calculateTotalFromPayments())}</span>
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase">Descricao</label>
-                <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Ex: Tratamento ortodontico..." rows={2} className="w-full mt-1 rounded-lg border-slate-200 px-3 py-2 text-sm" />
+                <label className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase">Descrição</label>
+                <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Ex: Tratamento ortodôntico..." rows={2} className="w-full mt-1 rounded-lg border-slate-200 px-3 py-2 text-xs sm:text-sm" />
               </div>
             </div>
-            <div className="sticky bottom-0 bg-slate-50 p-4 flex gap-3">
-              <button onClick={handleSave} disabled={saving} className="flex-1 h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-2">
+            <div className="sticky bottom-0 bg-slate-50 p-3 sm:p-4 flex gap-2 sm:gap-3">
+              <button onClick={handleSave} disabled={saving} className="flex-1 h-10 sm:h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-2 text-sm">
                 {saving ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Salvando...</> : 'Salvar'}
               </button>
-              <button onClick={() => setShowModal(false)} className="flex-1 h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50">Cancelar</button>
+              <button onClick={() => setShowModal(false)} className="flex-1 h-10 sm:h-11 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 text-sm">Cancelar</button>
             </div>
           </div>
         </div>
