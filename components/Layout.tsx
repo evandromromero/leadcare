@@ -25,7 +25,13 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const clinicId = state.selectedClinic?.id;
   const { whatsappConnected } = useChats(clinicId, user?.id);
   const { todayTasks, upcomingTasks, overdueTasks, toggleTask } = useTasks(clinicId, user?.id);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    // Iniciar colapsado em tablets (768px - 1024px)
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 768 && window.innerWidth < 1024;
+    }
+    return false;
+  });
   const [showTasksDropdown, setShowTasksDropdown] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string>('');
@@ -93,6 +99,18 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Manter sidebar colapsado em tablets ao redimensionar
+  useEffect(() => {
+    const handleResize = () => {
+      const isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
+      if (isTablet) {
+        setSidebarCollapsed(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const totalPendingTasks = todayTasks.length + overdueTasks.length;
