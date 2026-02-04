@@ -3403,6 +3403,17 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         {/* Channel Selector + Status */}
         <div className="flex items-center justify-between gap-2 p-1.5 sm:p-2 border-b border-slate-100">
           <div className="flex items-center gap-1.5">
+            {/* Botão Menu Mobile - abre sidebar do Layout */}
+            <button
+              onClick={() => {
+                // Dispara evento customizado para abrir menu mobile no Layout
+                window.dispatchEvent(new CustomEvent('openMobileMenu'));
+              }}
+              className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors sm:hidden"
+              title="Menu"
+            >
+              <span className="material-symbols-outlined text-slate-600 text-[18px]">menu</span>
+            </button>
             {/* WhatsApp */}
             <button
               onClick={() => setActiveChannel('whatsapp')}
@@ -3624,7 +3635,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           e.stopPropagation();
                           togglePinChat(chat.id);
                         }}
-                        className={`p-1 rounded hover:bg-slate-200 transition-colors ${(chat as any).is_pinned ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
+                        className={`p-1 rounded hover:bg-slate-200 transition-colors ${(chat as any).is_pinned ? 'opacity-100' : 'hidden sm:block sm:opacity-0 sm:group-hover:opacity-100'}`}
                         title={(chat as any).is_pinned ? 'Desafixar' : 'Fixar'}
                       >
                         <span className={`material-symbols-outlined text-sm ${(chat as any).is_pinned ? 'text-cyan-600' : 'text-slate-400'}`}>

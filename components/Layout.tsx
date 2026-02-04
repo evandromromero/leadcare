@@ -113,6 +113,15 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Escutar evento customizado para abrir menu mobile (usado pela página Inbox)
+  useEffect(() => {
+    const handleOpenMobileMenu = () => {
+      setMobileMenuOpen(true);
+    };
+    window.addEventListener('openMobileMenu', handleOpenMobileMenu);
+    return () => window.removeEventListener('openMobileMenu', handleOpenMobileMenu);
+  }, []);
+
   const totalPendingTasks = todayTasks.length + overdueTasks.length;
 
   const handleExitImpersonate = () => {
