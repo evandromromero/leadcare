@@ -487,24 +487,24 @@ export default function EmailMarketing() {
   }
 
   return (
-    <div className="p-8">
-      <div className="space-y-6">
+    <div className="p-3 sm:p-6 lg:p-8">
+      <div className="space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Email Marketing</h1>
-            <p className="text-slate-500">Crie campanhas e envie emails em massa para seus leads</p>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Email Marketing</h1>
+            <p className="text-slate-500 text-xs sm:text-sm">Campanhas e emails em massa</p>
           </div>
           
           {/* Limite diário */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <span className="material-symbols-outlined text-purple-600">mail</span>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2.5 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <span className="material-symbols-outlined text-purple-600 text-[18px] sm:text-[24px]">mail</span>
               </div>
               <div>
-                <p className="text-sm text-slate-500">Limite diário</p>
-                <p className="text-lg font-bold text-slate-800">
+                <p className="text-[10px] sm:text-sm text-slate-500">Limite diário</p>
+                <p className="text-sm sm:text-lg font-bold text-slate-800">
                   <span className={remainingEmails > 20 ? 'text-emerald-600' : remainingEmails > 0 ? 'text-amber-600' : 'text-red-600'}>
                     {remainingEmails}
                   </span>
@@ -521,45 +521,46 @@ export default function EmailMarketing() {
             <div className="flex">
               <button
                 onClick={() => setActiveTab('campaigns')}
-                className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'campaigns'
                     ? 'border-purple-600 text-purple-600'
                     : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
-                <span className="material-symbols-outlined text-[18px] align-middle mr-2">campaign</span>
+                <span className="material-symbols-outlined text-[16px] sm:text-[18px] align-middle mr-1 sm:mr-2">campaign</span>
                 Campanhas
               </button>
               <button
                 onClick={() => setActiveTab('templates')}
-                className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'templates'
                     ? 'border-purple-600 text-purple-600'
                     : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
-                <span className="material-symbols-outlined text-[18px] align-middle mr-2">article</span>
+                <span className="material-symbols-outlined text-[16px] sm:text-[18px] align-middle mr-1 sm:mr-2">article</span>
                 Templates
               </button>
             </div>
           </div>
 
-          <div className="p-6">
+          <div className="p-3 sm:p-6">
             {/* Campanhas Tab */}
             {activeTab === 'campaigns' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-slate-800">Suas Campanhas</h2>
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
+                  <h2 className="text-sm sm:text-lg font-semibold text-slate-800">Suas Campanhas</h2>
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <button
                       onClick={() => {
                         setSingleEmailForm({ template_id: '', recipient_email: '', recipient_name: '' });
                         setShowSingleEmailModal(true);
                       }}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border border-purple-300 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors text-sm font-medium"
+                      className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-white border border-purple-300 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors text-xs sm:text-sm font-medium"
                     >
-                      <span className="material-symbols-outlined text-[18px]">send</span>
-                      Email Único
+                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]">send</span>
+                      <span className="hidden sm:inline">Email Único</span>
+                      <span className="sm:hidden">Único</span>
                     </button>
                     <button
                       onClick={() => {
@@ -567,79 +568,130 @@ export default function EmailMarketing() {
                         setCampaignForm({ name: '', template_id: '', target_type: 'all', target_stage_id: '', target_source_id: '', scheduled_at: '' });
                         setShowCampaignModal(true);
                       }}
-                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                      className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-xs sm:text-sm font-medium"
                     >
-                      <span className="material-symbols-outlined text-[18px]">add</span>
-                      Nova Campanha
+                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]">add</span>
+                      <span className="hidden sm:inline">Nova Campanha</span>
+                      <span className="sm:hidden">Nova</span>
                     </button>
                   </div>
                 </div>
 
                 {campaigns.length === 0 ? (
-                  <div className="text-center py-12 bg-slate-50 rounded-lg">
-                    <span className="material-symbols-outlined text-5xl text-slate-300 mb-4">campaign</span>
-                    <p className="text-slate-500">Nenhuma campanha criada ainda</p>
-                    <p className="text-sm text-slate-400 mt-1">Crie sua primeira campanha de email</p>
+                  <div className="text-center py-8 sm:py-12 bg-slate-50 rounded-lg">
+                    <span className="material-symbols-outlined text-4xl sm:text-5xl text-slate-300 mb-3 sm:mb-4">campaign</span>
+                    <p className="text-slate-500 text-sm">Nenhuma campanha criada ainda</p>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1">Crie sua primeira campanha de email</p>
                   </div>
                 ) : (
-                  <div className="grid gap-4">
+                  <div className="grid gap-3 sm:gap-4">
                     {campaigns.map((campaign) => (
                       <div
                         key={campaign.id}
-                        className="bg-slate-50 rounded-lg p-4 flex items-center justify-between"
+                        className="bg-slate-50 rounded-lg p-3 sm:p-4"
                       >
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center border border-slate-200">
-                            <span className="material-symbols-outlined text-purple-600">campaign</span>
-                          </div>
-                          <div>
-                            <h3 className="font-medium text-slate-800">{campaign.name}</h3>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[campaign.status]}`}>
-                                {statusLabels[campaign.status]}
-                              </span>
-                              {campaign.template && (
-                                <span className="text-xs text-slate-500">
-                                  Template: {campaign.template.name}
+                        {/* Mobile Layout */}
+                        <div className="md:hidden">
+                          <div className="flex items-start gap-3 mb-3">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-slate-200 flex-shrink-0">
+                              <span className="material-symbols-outlined text-purple-600 text-[20px]">campaign</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium text-slate-800 text-sm truncate">{campaign.name}</h3>
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusColors[campaign.status]}`}>
+                                  {statusLabels[campaign.status]}
                                 </span>
-                              )}
+                                {campaign.template && (
+                                  <span className="text-[10px] text-slate-500 truncate">
+                                    {campaign.template.name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => openEditCampaign(campaign)}
+                                className="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-lg"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCampaign(campaign.id, campaign.name)}
+                                className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 text-center pl-13">
+                            <div>
+                              <p className="text-[10px] text-slate-400">Enviados</p>
+                              <p className="text-xs font-bold text-slate-700">{campaign.sent_count}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-slate-400">Abertos</p>
+                              <p className="text-xs font-bold text-emerald-600">{campaign.opened_count}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-slate-400">Cliques</p>
+                              <p className="text-xs font-bold text-blue-600">{campaign.clicked_count}</p>
                             </div>
                           </div>
                         </div>
-                        
-                        <div className="flex items-center gap-6">
-                          {/* Métricas */}
-                          <div className="flex items-center gap-4 text-sm">
-                            <div className="text-center">
-                              <p className="text-slate-400">Enviados</p>
-                              <p className="font-bold text-slate-700">{campaign.sent_count}</p>
+                        {/* Desktop Layout */}
+                        <div className="hidden md:flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center border border-slate-200">
+                              <span className="material-symbols-outlined text-purple-600">campaign</span>
                             </div>
-                            <div className="text-center">
-                              <p className="text-slate-400">Abertos</p>
-                              <p className="font-bold text-emerald-600">{campaign.opened_count}</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-slate-400">Cliques</p>
-                              <p className="font-bold text-blue-600">{campaign.clicked_count}</p>
+                            <div>
+                              <h3 className="font-medium text-slate-800">{campaign.name}</h3>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[campaign.status]}`}>
+                                  {statusLabels[campaign.status]}
+                                </span>
+                                {campaign.template && (
+                                  <span className="text-xs text-slate-500">
+                                    Template: {campaign.template.name}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                           
-                          {/* Ações */}
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => openEditCampaign(campaign)}
-                              className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
-                              title="Editar"
-                            >
-                              <span className="material-symbols-outlined text-[20px]">edit</span>
-                            </button>
-                            <button
-                              onClick={() => handleDeleteCampaign(campaign.id, campaign.name)}
-                              className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Excluir"
-                            >
-                              <span className="material-symbols-outlined text-[20px]">delete</span>
-                            </button>
+                          <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-4 text-sm">
+                              <div className="text-center">
+                                <p className="text-slate-400">Enviados</p>
+                                <p className="font-bold text-slate-700">{campaign.sent_count}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-slate-400">Abertos</p>
+                                <p className="font-bold text-emerald-600">{campaign.opened_count}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-slate-400">Cliques</p>
+                                <p className="font-bold text-blue-600">{campaign.clicked_count}</p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => openEditCampaign(campaign)}
+                                className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+                                title="Editar"
+                              >
+                                <span className="material-symbols-outlined text-[20px]">edit</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCampaign(campaign.id, campaign.name)}
+                                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Excluir"
+                              >
+                                <span className="material-symbols-outlined text-[20px]">delete</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -652,59 +704,59 @@ export default function EmailMarketing() {
             {/* Templates Tab */}
             {activeTab === 'templates' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-slate-800">Seus Templates</h2>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
+                  <h2 className="text-sm sm:text-lg font-semibold text-slate-800">Seus Templates</h2>
                   <button
                     onClick={() => {
                       setEditingTemplate(null);
                       setTemplateForm({ name: '', subject: '', category: 'general', html_content: '' });
                       setShowTemplateModal(true);
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                    className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-xs sm:text-sm font-medium"
                   >
-                    <span className="material-symbols-outlined text-[18px]">add</span>
+                    <span className="material-symbols-outlined text-[16px] sm:text-[18px]">add</span>
                     Novo Template
                   </button>
                 </div>
 
                 {templates.length === 0 ? (
-                  <div className="text-center py-12 bg-slate-50 rounded-lg">
-                    <span className="material-symbols-outlined text-5xl text-slate-300 mb-4">article</span>
-                    <p className="text-slate-500">Nenhum template criado ainda</p>
-                    <p className="text-sm text-slate-400 mt-1">Crie seu primeiro template de email</p>
+                  <div className="text-center py-8 sm:py-12 bg-slate-50 rounded-lg">
+                    <span className="material-symbols-outlined text-4xl sm:text-5xl text-slate-300 mb-3 sm:mb-4">article</span>
+                    <p className="text-slate-500 text-sm">Nenhum template criado ainda</p>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1">Crie seu primeiro template de email</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     {templates.map((template) => (
                       <div
                         key={template.id}
                         className="bg-slate-50 rounded-lg overflow-hidden border border-slate-200 hover:border-purple-300 transition-colors"
                       >
-                        <div className="h-32 bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center">
-                          <span className="material-symbols-outlined text-4xl text-purple-300">mail</span>
+                        <div className="h-20 sm:h-32 bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-3xl sm:text-4xl text-purple-300">mail</span>
                         </div>
-                        <div className="p-4">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h3 className="font-medium text-slate-800">{template.name}</h3>
-                              <p className="text-sm text-slate-500 truncate">{template.subject}</p>
+                        <div className="p-3 sm:p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-medium text-slate-800 text-sm truncate">{template.name}</h3>
+                              <p className="text-xs sm:text-sm text-slate-500 truncate">{template.subject}</p>
                             </div>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[template.category]}`}>
+                            <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full flex-shrink-0 ${categoryColors[template.category]}`}>
                               {categoryLabels[template.category]}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 mt-4">
+                          <div className="flex items-center gap-2 mt-3 sm:mt-4">
                             <button
                               onClick={() => openEditTemplate(template)}
-                              className="flex-1 px-3 py-2 text-sm font-medium text-purple-600 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+                              className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-purple-600 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
                             >
                               Editar
                             </button>
                             <button
                               onClick={() => handleDeleteTemplate(template.id, template.name)}
-                              className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-1.5 sm:p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             >
-                              <span className="material-symbols-outlined text-[20px]">delete</span>
+                              <span className="material-symbols-outlined text-[18px] sm:text-[20px]">delete</span>
                             </button>
                           </div>
                         </div>
@@ -715,14 +767,14 @@ export default function EmailMarketing() {
 
                 {/* Templates Prontos */}
                 {defaultTemplates.length > 0 && (
-                  <div className="mt-8">
-                    <div className="flex items-center justify-between mb-4">
+                  <div className="mt-6 sm:mt-8">
+                    <div className="flex items-center justify-between mb-3 sm:mb-4">
                       <div>
-                        <h3 className="text-lg font-semibold text-slate-800">Templates Prontos</h3>
-                        <p className="text-sm text-slate-500">Clique para adicionar à sua biblioteca</p>
+                        <h3 className="text-sm sm:text-lg font-semibold text-slate-800">Templates Prontos</h3>
+                        <p className="text-xs sm:text-sm text-slate-500">Clique para adicionar à sua biblioteca</p>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                       {defaultTemplates.map((dt) => {
                         const alreadyAdded = templates.some(t => t.name === dt.name && t.category === dt.category);
                         const categoryIcons: Record<string, string> = {
@@ -750,37 +802,38 @@ export default function EmailMarketing() {
                                 : 'border-slate-200 hover:border-purple-300 hover:shadow-lg'
                             }`}
                           >
-                            <div className={`h-24 bg-gradient-to-br ${categoryGradients[dt.category]} flex items-center justify-center relative`}>
-                              <span className="material-symbols-outlined text-5xl text-white/80">{categoryIcons[dt.category]}</span>
+                            <div className={`h-16 sm:h-24 bg-gradient-to-br ${categoryGradients[dt.category]} flex items-center justify-center relative`}>
+                              <span className="material-symbols-outlined text-4xl sm:text-5xl text-white/80">{categoryIcons[dt.category]}</span>
                               {alreadyAdded && (
-                                <div className="absolute top-2 right-2 bg-white/90 text-green-600 text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                                  Adicionado
+                                <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-white/90 text-green-600 text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full flex items-center gap-0.5 sm:gap-1">
+                                  <span className="material-symbols-outlined text-[12px] sm:text-[14px]">check_circle</span>
+                                  <span className="hidden sm:inline">Adicionado</span>
                                 </div>
                               )}
                             </div>
-                            <div className="p-4">
-                              <div className="flex items-start justify-between mb-2">
-                                <div>
-                                  <h4 className="font-semibold text-slate-800">{dt.name}</h4>
-                                  <p className="text-xs text-slate-500 mt-0.5">{dt.subject}</p>
+                            <div className="p-3 sm:p-4">
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="font-semibold text-slate-800 text-sm truncate">{dt.name}</h4>
+                                  <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 truncate">{dt.subject}</p>
                                 </div>
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${categoryColors[dt.category]}`}>
+                                <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full flex-shrink-0 ${categoryColors[dt.category]}`}>
                                   {categoryLabels[dt.category]}
                                 </span>
                               </div>
                               {!alreadyAdded ? (
                                 <button
                                   onClick={() => handleUseDefaultTemplate(dt as any)}
-                                  className="w-full mt-3 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-lg hover:from-purple-700 hover:to-violet-700 transition-all text-sm font-medium flex items-center justify-center gap-2"
+                                  className="w-full mt-2 sm:mt-3 px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-lg hover:from-purple-700 hover:to-violet-700 transition-all text-xs sm:text-sm font-medium flex items-center justify-center gap-1 sm:gap-2"
                                 >
-                                  <span className="material-symbols-outlined text-[18px]">add</span>
-                                  Usar este Template
+                                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">add</span>
+                                  <span className="hidden sm:inline">Usar este Template</span>
+                                  <span className="sm:hidden">Usar</span>
                                 </button>
                               ) : (
                                 <button
                                   disabled
-                                  className="w-full mt-3 px-4 py-2.5 bg-slate-100 text-slate-400 rounded-lg text-sm font-medium cursor-not-allowed"
+                                  className="w-full mt-2 sm:mt-3 px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-100 text-slate-400 rounded-lg text-xs sm:text-sm font-medium cursor-not-allowed"
                                 >
                                   Já adicionado
                                 </button>
@@ -798,10 +851,10 @@ export default function EmailMarketing() {
         </div>
 
         {/* Variáveis disponíveis */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Variáveis Disponíveis</h3>
-          <p className="text-sm text-slate-500 mb-4">Use estas variáveis nos seus templates para personalizar os emails:</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-6">
+          <h3 className="text-sm sm:text-lg font-semibold text-slate-800 mb-2 sm:mb-4">Variáveis Disponíveis</h3>
+          <p className="text-xs sm:text-sm text-slate-500 mb-3 sm:mb-4">Use estas variáveis nos seus templates para personalizar os emails:</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
             {[
               { var: '{{lead_name}}', desc: 'Nome do lead' },
               { var: '{{lead_email}}', desc: 'Email do lead' },
@@ -812,9 +865,9 @@ export default function EmailMarketing() {
               { var: '{{clinic_email}}', desc: 'Email da clínica' },
               { var: '{{unsubscribe_url}}', desc: 'Link de descadastro' },
             ].map((v) => (
-              <div key={v.var} className="p-3 bg-slate-50 rounded-lg">
-                <code className="text-sm font-mono text-purple-600">{v.var}</code>
-                <p className="text-xs text-slate-500 mt-1">{v.desc}</p>
+              <div key={v.var} className="p-2 sm:p-3 bg-slate-50 rounded-lg">
+                <code className="text-[10px] sm:text-sm font-mono text-purple-600 break-all">{v.var}</code>
+                <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">{v.desc}</p>
               </div>
             ))}
           </div>
@@ -823,51 +876,51 @@ export default function EmailMarketing() {
 
       {/* Modal de Template - Versão Melhorada */}
       {showTemplateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowTemplateModal(false)}></div>
-          <div className="relative bg-white w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+          <div className="relative bg-white w-full max-w-6xl rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[98vh] sm:max-h-[95vh] flex flex-col">
             {/* Header */}
-            <div className="p-4 border-b border-slate-100 flex-shrink-0 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900">
+            <div className="p-3 sm:p-4 border-b border-slate-100 flex-shrink-0 flex items-center justify-between">
+              <h3 className="text-sm sm:text-lg font-bold text-slate-900">
                 {editingTemplate ? 'Editar Template' : 'Novo Template'}
               </h3>
               <button
                 onClick={() => setShowTemplateModal(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <span className="material-symbols-outlined">close</span>
+                <span className="material-symbols-outlined text-[20px] sm:text-[24px]">close</span>
               </button>
             </div>
             
             {/* Campos básicos */}
-            <div className="p-4 border-b border-slate-100 flex-shrink-0 bg-slate-50">
-              <div className="grid grid-cols-3 gap-4">
+            <div className="p-3 sm:p-4 border-b border-slate-100 flex-shrink-0 bg-slate-50">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Nome do Template *</label>
+                  <label className="block text-[10px] sm:text-xs font-medium text-slate-600 mb-1">Nome do Template *</label>
                   <input
                     type="text"
                     value={templateForm.name}
                     onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
                     placeholder="Ex: Boas-vindas"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                    className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-xs sm:text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Assunto do Email *</label>
+                  <label className="block text-[10px] sm:text-xs font-medium text-slate-600 mb-1">Assunto do Email *</label>
                   <input
                     type="text"
                     value={templateForm.subject}
                     onChange={(e) => setTemplateForm({ ...templateForm, subject: e.target.value })}
                     placeholder="Ex: Bem-vindo à {{clinic_name}}!"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                    className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-xs sm:text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Categoria</label>
+                  <label className="block text-[10px] sm:text-xs font-medium text-slate-600 mb-1">Categoria</label>
                   <select
                     value={templateForm.category}
                     onChange={(e) => setTemplateForm({ ...templateForm, category: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+                    className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-xs sm:text-sm"
                   >
                     {Object.entries(categoryLabels).map(([key, label]) => (
                       <option key={key} value={key}>{label}</option>
@@ -878,33 +931,35 @@ export default function EmailMarketing() {
             </div>
 
             {/* Abas Visual/Código */}
-            <div className="border-b border-slate-200 flex-shrink-0 flex items-center justify-between px-4">
+            <div className="border-b border-slate-200 flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between px-2 sm:px-4">
               <div className="flex">
                 <button
                   onClick={() => setTemplateEditorTab('visual')}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                  className={`px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors flex items-center gap-1 sm:gap-2 ${
                     templateEditorTab === 'visual'
                       ? 'border-purple-600 text-purple-600'
                       : 'border-transparent text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">edit_note</span>
-                  Editor Visual
+                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">edit_note</span>
+                  <span className="hidden sm:inline">Editor Visual</span>
+                  <span className="sm:hidden">Visual</span>
                 </button>
                 <button
                   onClick={() => setTemplateEditorTab('code')}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                  className={`px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors flex items-center gap-1 sm:gap-2 ${
                     templateEditorTab === 'code'
                       ? 'border-purple-600 text-purple-600'
                       : 'border-transparent text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">code</span>
-                  Código HTML
+                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">code</span>
+                  <span className="hidden sm:inline">Código HTML</span>
+                  <span className="sm:hidden">HTML</span>
                 </button>
               </div>
               {/* Variáveis */}
-              <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2">
                 <span className="text-xs text-slate-400">Inserir:</span>
                 {[
                   { var: '{{lead_name}}', label: 'Nome', icon: 'person' },
@@ -1275,24 +1330,24 @@ export default function EmailMarketing() {
             </div>
             
             {/* Footer */}
-            <div className="p-4 border-t border-slate-100 flex-shrink-0 flex items-center justify-between bg-slate-50">
-              <p className="text-xs text-slate-500">
+            <div className="p-3 sm:p-4 border-t border-slate-100 flex-shrink-0 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0 bg-slate-50">
+              <p className="text-[10px] sm:text-xs text-slate-500 hidden sm:block">
                 {templateEditorTab === 'edit' ? 'Dica: Use as variáveis acima para personalizar o email' : 'As variáveis são substituídas por dados de exemplo'}
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
                 <button
                   onClick={() => setShowTemplateModal(false)}
-                  className="px-4 py-2 text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                  className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-medium text-xs sm:text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSaveTemplate}
                   disabled={!templateForm.name || !templateForm.subject}
-                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
+                  className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
                 >
-                  <span className="material-symbols-outlined text-[18px]">save</span>
-                  Salvar Template
+                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">save</span>
+                  Salvar
                 </button>
               </div>
             </div>
@@ -1302,33 +1357,33 @@ export default function EmailMarketing() {
 
       {/* Modal de Campanha */}
       {showCampaignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowCampaignModal(false)}></div>
-          <div className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-900">
+          <div className="relative bg-white w-full max-w-lg rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b border-slate-100">
+              <h3 className="text-sm sm:text-lg font-bold text-slate-900">
                 {editingCampaign ? 'Editar Campanha' : 'Nova Campanha'}
               </h3>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nome da Campanha *</label>
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1">Nome da Campanha *</label>
                 <input
                   type="text"
                   value={campaignForm.name}
                   onChange={(e) => setCampaignForm({ ...campaignForm, name: e.target.value })}
                   placeholder="Ex: Promoção de Janeiro"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Template *</label>
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1">Template *</label>
                 <select
                   value={campaignForm.template_id}
                   onChange={(e) => setCampaignForm({ ...campaignForm, template_id: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                 >
                   <option value="">Selecione um template</option>
                   {templates.map((t) => (
@@ -1338,11 +1393,11 @@ export default function EmailMarketing() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Enviar para</label>
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1">Enviar para</label>
                 <select
                   value={campaignForm.target_type}
                   onChange={(e) => setCampaignForm({ ...campaignForm, target_type: e.target.value as any })}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                 >
                   <option value="all">Todos os leads com email</option>
                   <option value="stage">Leads de uma etapa específica</option>
@@ -1352,11 +1407,11 @@ export default function EmailMarketing() {
               
               {campaignForm.target_type === 'stage' && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Etapa do Kanban</label>
+                  <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1">Etapa do Kanban</label>
                   <select
                     value={campaignForm.target_stage_id}
                     onChange={(e) => setCampaignForm({ ...campaignForm, target_stage_id: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                   >
                     <option value="">Selecione uma etapa</option>
                     {stages.map((s) => (
@@ -1368,11 +1423,11 @@ export default function EmailMarketing() {
               
               {campaignForm.target_type === 'source' && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Origem</label>
+                  <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1">Origem</label>
                   <select
                     value={campaignForm.target_source_id}
                     onChange={(e) => setCampaignForm({ ...campaignForm, target_source_id: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                   >
                     <option value="">Selecione uma origem</option>
                     {sources.map((s) => (
@@ -1383,30 +1438,30 @@ export default function EmailMarketing() {
               )}
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Agendar envio (opcional)</label>
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1">Agendar envio (opcional)</label>
                 <input
                   type="datetime-local"
                   value={campaignForm.scheduled_at}
                   onChange={(e) => setCampaignForm({ ...campaignForm, scheduled_at: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                 />
-                <p className="text-xs text-slate-500 mt-1">Deixe vazio para salvar como rascunho</p>
+                <p className="text-[10px] sm:text-xs text-slate-500 mt-1">Deixe vazio para salvar como rascunho</p>
               </div>
             </div>
             
-            <div className="p-4 border-t border-slate-100 flex justify-end gap-3">
+            <div className="p-3 sm:p-4 border-t border-slate-100 flex justify-end gap-2 sm:gap-3">
               <button
                 onClick={() => setShowCampaignModal(false)}
-                className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+                className="px-3 sm:px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors font-medium text-xs sm:text-sm"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveCampaign}
                 disabled={!campaignForm.name || !campaignForm.template_id}
-                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50"
+                className="px-4 sm:px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 text-xs sm:text-sm"
               >
-                Salvar Campanha
+                Salvar
               </button>
             </div>
           </div>
@@ -1415,28 +1470,28 @@ export default function EmailMarketing() {
 
       {/* Modal de Email Único */}
       {showSingleEmailModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowSingleEmailModal(false)}></div>
-          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-purple-600 to-violet-600">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                  <span className="material-symbols-outlined text-white">send</span>
+          <div className="relative bg-white w-full max-w-md rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b border-slate-100 bg-gradient-to-r from-purple-600 to-violet-600">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-[20px] sm:text-[24px]">send</span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Enviar Email Único</h3>
-                  <p className="text-purple-100 text-sm">Envie um email para um destinatário específico</p>
+                  <h3 className="text-sm sm:text-lg font-bold text-white">Enviar Email Único</h3>
+                  <p className="text-purple-100 text-xs sm:text-sm">Envie para um destinatário específico</p>
                 </div>
               </div>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Template *</label>
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1">Template *</label>
                 <select
                   value={singleEmailForm.template_id}
                   onChange={(e) => setSingleEmailForm({ ...singleEmailForm, template_id: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                 >
                   <option value="">Selecione um template</option>
                   {templates.map((t) => (
@@ -1446,32 +1501,32 @@ export default function EmailMarketing() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nome do destinatário</label>
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1">Nome do destinatário</label>
                 <input
                   type="text"
                   value={singleEmailForm.recipient_name}
                   onChange={(e) => setSingleEmailForm({ ...singleEmailForm, recipient_name: e.target.value })}
                   placeholder="Ex: João Silva"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                 />
-                <p className="text-xs text-slate-500 mt-1">Será usado na variável {'{{lead_name}}'}</p>
+                <p className="text-[10px] sm:text-xs text-slate-500 mt-1">Será usado na variável {'{{lead_name}}'}</p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email do destinatário *</label>
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1">Email do destinatário *</label>
                 <input
                   type="email"
                   value={singleEmailForm.recipient_email}
                   onChange={(e) => setSingleEmailForm({ ...singleEmailForm, recipient_email: e.target.value })}
                   placeholder="email@exemplo.com"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                 />
               </div>
 
               {singleEmailForm.template_id && (
-                <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                  <p className="text-xs text-slate-500 mb-1">Preview do assunto:</p>
-                  <p className="text-sm font-medium text-slate-700">
+                <div className="bg-slate-50 rounded-lg p-2.5 sm:p-3 border border-slate-200">
+                  <p className="text-[10px] sm:text-xs text-slate-500 mb-1">Preview do assunto:</p>
+                  <p className="text-xs sm:text-sm font-medium text-slate-700">
                     {templates.find(t => t.id === singleEmailForm.template_id)?.subject
                       .replace('{{lead_name}}', singleEmailForm.recipient_name || 'Cliente')
                       .replace('{{clinic_name}}', 'Sua Clínica')}
@@ -1480,27 +1535,27 @@ export default function EmailMarketing() {
               )}
             </div>
             
-            <div className="p-4 border-t border-slate-100 flex justify-end gap-3">
+            <div className="p-3 sm:p-4 border-t border-slate-100 flex justify-end gap-2 sm:gap-3">
               <button
                 onClick={() => setShowSingleEmailModal(false)}
-                className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+                className="px-3 sm:px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors font-medium text-xs sm:text-sm"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSendSingleEmail}
                 disabled={!singleEmailForm.template_id || !singleEmailForm.recipient_email || sendingSingleEmail}
-                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
+                className="px-4 sm:px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
               >
                 {sendingSingleEmail ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                     Enviando...
                   </>
                 ) : (
                   <>
-                    <span className="material-symbols-outlined text-[18px]">send</span>
-                    Enviar Email
+                    <span className="material-symbols-outlined text-[16px] sm:text-[18px]">send</span>
+                    Enviar
                   </>
                 )}
               </button>
@@ -1511,31 +1566,31 @@ export default function EmailMarketing() {
 
       {/* Modal de Confirmação de Exclusão */}
       {showDeleteModal && deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}></div>
-          <div className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
+          <div className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 max-w-sm w-full">
             <div className="text-center">
-              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="material-symbols-outlined text-3xl text-red-600">delete</span>
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <span className="material-symbols-outlined text-2xl sm:text-3xl text-red-600">delete</span>
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Confirmar exclusão</h3>
-              <p className="text-slate-500 mb-2">
+              <h3 className="text-sm sm:text-lg font-bold text-slate-900 mb-2">Confirmar exclusão</h3>
+              <p className="text-slate-500 text-xs sm:text-sm mb-2">
                 Tem certeza que deseja excluir {deleteTarget.type === 'template' ? 'o template' : 'a campanha'}:
               </p>
-              <p className="font-medium text-slate-800 mb-6">"{deleteTarget.name}"</p>
-              <div className="flex gap-3">
+              <p className="font-medium text-slate-800 text-sm sm:text-base mb-4 sm:mb-6 truncate">"{deleteTarget.name}"</p>
+              <div className="flex gap-2 sm:gap-3">
                 <button 
                   onClick={() => {
                     setShowDeleteModal(false);
                     setDeleteTarget(null);
                   }} 
-                  className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                  className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-xs sm:text-sm"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={handleConfirmDelete} 
-                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium text-xs sm:text-sm"
                 >
                   Excluir
                 </button>
@@ -1547,28 +1602,28 @@ export default function EmailMarketing() {
 
       {/* Modal de Input (para link, imagem, botão) */}
       {showInputModal && inputModalConfig && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowInputModal(false)}></div>
-          <div className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">{inputModalConfig.title}</h3>
-            <div className="space-y-4">
+          <div className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 max-w-md w-full">
+            <h3 className="text-sm sm:text-lg font-bold text-slate-900 mb-3 sm:mb-4">{inputModalConfig.title}</h3>
+            <div className="space-y-3 sm:space-y-4">
               {inputModalConfig.fields.map((field) => (
                 <div key={field.key}>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">{field.label}</label>
+                  <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1">{field.label}</label>
                   <input
                     type="text"
                     placeholder={field.placeholder}
                     defaultValue={field.value}
                     id={`input-modal-${field.key}`}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
                   />
                 </div>
               ))}
             </div>
-            <div className="flex gap-3 mt-6">
+            <div className="flex gap-2 sm:gap-3 mt-4 sm:mt-6">
               <button 
                 onClick={() => setShowInputModal(false)} 
-                className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium text-xs sm:text-sm"
               >
                 Cancelar
               </button>
@@ -1582,7 +1637,7 @@ export default function EmailMarketing() {
                   inputModalConfig.onConfirm(values);
                   setShowInputModal(false);
                 }} 
-                className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium text-xs sm:text-sm"
               >
                 Confirmar
               </button>
