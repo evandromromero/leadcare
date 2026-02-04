@@ -60,6 +60,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const canAddPayment = hasPermission(user?.role, 'add_payment');
   const canAddQuote = hasPermission(user?.role, 'add_quote');
   
+  // Estado para drawer do painel do lead (tablet)
+  const [showLeadPanelDrawer, setShowLeadPanelDrawer] = useState(false);
+  
   // Estados para modais
   const [showStageDropdown, setShowStageDropdown] = useState(false);
   const [showTagsModal, setShowTagsModal] = useState(false);
@@ -3395,7 +3398,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   return (
     <div className="flex h-full bg-slate-50 overflow-hidden">
       {/* Col 1: Chat List */}
-      <aside className="w-[380px] flex flex-col bg-white border-r border-slate-200 h-full overflow-hidden shrink-0">
+      <aside className="w-[240px] md:w-[280px] lg:w-[320px] xl:w-[380px] flex flex-col bg-white border-r border-slate-200 h-full overflow-hidden shrink-0">
         {/* Channel Selector + Status */}
         <div className="flex items-center justify-between gap-2 p-2 border-b border-slate-100">
           <div className="flex items-center gap-1.5">
@@ -3663,25 +3666,25 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       <section className="flex-1 flex flex-col min-w-0 bg-[#e5ddd5]/30 relative">
         {selectedChat ? (
           <>
-            <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10">
-              <div className="flex items-center gap-3">
+            <header className="h-14 md:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 shrink-0 z-10">
+              <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                 <img 
                   src={selectedChat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`} 
-                  className="size-10 rounded-full"
+                  className="size-9 md:size-10 rounded-full shrink-0"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.onerror = null;
                     target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`;
                   }}
                 />
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 leading-tight">{selectedChat.client_name}</h2>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-slate-900 leading-tight truncate">{selectedChat.client_name}</h2>
                   <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                    <span className="size-1.5 rounded-full bg-green-500"></span> Online agora
+                    <span className="size-1.5 rounded-full bg-green-500"></span> <span className="hidden sm:inline">Online agora</span><span className="sm:hidden">Online</span>
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 {/* Botão de busca de mensagens */}
                 <button 
                   onClick={() => setShowMessageSearch(!showMessageSearch)}
@@ -3710,7 +3713,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 {(selectedChat?.unread_count || 0) > 0 ? (
                   <button 
                     onClick={() => selectedChatId && markAsRead(selectedChatId)}
-                    className="p-2 rounded-full transition-colors text-slate-400 hover:text-green-600 hover:bg-green-50"
+                    className="hidden md:flex p-2 rounded-full transition-colors text-slate-400 hover:text-green-600 hover:bg-green-50"
                     title="Marcar como lida"
                   >
                     <span className="material-symbols-outlined text-[20px]">mark_chat_read</span>
@@ -3723,14 +3726,22 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         setSelectedChatId(null);
                       }
                     }}
-                    className="p-2 rounded-full transition-colors text-green-600 hover:text-amber-600 hover:bg-amber-50"
+                    className="hidden md:flex p-2 rounded-full transition-colors text-green-600 hover:text-amber-600 hover:bg-amber-50"
                     title="Marcar como não lida"
                   >
                     <span className="material-symbols-outlined text-[20px]">mark_chat_unread</span>
                   </button>
                 )}
-                <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
+                <button className="hidden lg:flex p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
                   <span className="material-symbols-outlined text-[20px]">more_vert</span>
+                </button>
+                {/* Botão para abrir painel do lead (visível apenas em tablets) */}
+                <button 
+                  onClick={() => setShowLeadPanelDrawer(true)}
+                  className="xl:hidden p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-full transition-colors"
+                  title="Ver detalhes do lead"
+                >
+                  <span className="material-symbols-outlined text-[20px]">info</span>
                 </button>
               </div>
             </header>
@@ -4170,7 +4181,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                       value={msgInput}
                       onChange={(e) => setMsgInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                      placeholder="Digite sua mensagem..." 
+                      placeholder="Mensagem..." 
                       className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-3 px-0 resize-none max-h-40 min-h-[48px]"
                       rows={1}
                     />
@@ -5757,6 +5768,425 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
           </div>
         )}
       </aside>
+
+      {/* Drawer do Painel do Lead (Tablet) */}
+      {showLeadPanelDrawer && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/40 z-40 xl:hidden"
+            onClick={() => setShowLeadPanelDrawer(false)}
+          />
+          <aside className="fixed right-0 top-0 h-full w-[340px] max-w-[90vw] bg-white border-l border-slate-200 z-50 xl:hidden overflow-y-auto shadow-2xl animate-in slide-in-from-right duration-300">
+            {/* Botão fechar */}
+            <button 
+              onClick={() => setShowLeadPanelDrawer(false)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors z-10"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+            
+            {selectedChat ? (
+              <div className="flex flex-col h-full">
+                <div className="p-6 text-center border-b border-slate-100">
+                  <img 
+                    src={selectedChat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`} 
+                    className="size-20 rounded-full mx-auto mb-3 border-4 border-slate-50 shadow-md"
+                  />
+                  <h2 className="text-lg font-black text-slate-900 mb-1">{selectedChat.client_name}</h2>
+                  <p className="text-sm font-bold text-slate-400">{selectedChat.phone_number}</p>
+                  
+                  <div className="flex justify-center gap-3 mt-4">
+                    {smtpConfigured && leadEmail ? (
+                      <button 
+                        onClick={() => { setSelectedEmailTemplateId(''); setShowEmailModal(true); setShowLeadPanelDrawer(false); }}
+                        className="size-9 rounded-full border border-purple-100 bg-purple-50 text-purple-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
+                        title={`Enviar email para ${leadEmail}`}
+                      >
+                        <span className="material-symbols-outlined text-[18px]">mail</span>
+                      </button>
+                    ) : (
+                      <button 
+                        disabled
+                        className="size-9 rounded-full border border-slate-100 bg-slate-50 text-slate-300 flex items-center justify-center cursor-not-allowed shadow-sm"
+                        title={!smtpConfigured ? "Configure SMTP" : "Sem email"}
+                      >
+                        <span className="material-symbols-outlined text-[18px]">mail</span>
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => window.open(`tel:${selectedChat.phone_number}`, '_self')}
+                      className="size-9 rounded-full border border-blue-100 bg-blue-50 text-blue-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
+                      title="Ligar"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">call</span>
+                    </button>
+                    <button 
+                      onClick={() => { openClientModal(); setShowLeadPanelDrawer(false); }}
+                      className="size-9 rounded-full border border-cyan-100 bg-cyan-50 text-cyan-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
+                      title={chatLeadId ? 'Editar Cliente' : 'Cadastrar Cliente'}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">{chatLeadId ? 'edit' : 'person_add'}</span>
+                    </button>
+                    <button 
+                      onClick={() => { setShowSectionConfigModal(true); setShowLeadPanelDrawer(false); }}
+                      className="size-9 rounded-full border border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
+                      title="Configurar seções"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">settings</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 flex flex-col gap-5 overflow-y-auto flex-1">
+                  {/* Etapa do Pipeline */}
+                  <section>
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Etapa do Pipeline</h3>
+                      {canMoveLead && (
+                        <button 
+                          onClick={() => { setShowStageDropdown(!showStageDropdown); setShowLeadPanelDrawer(false); }}
+                          className="text-xs font-bold text-cyan-600 hover:text-cyan-700"
+                        >
+                          Alterar
+                        </button>
+                      )}
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                      <p className="text-[10px] text-slate-400 uppercase mb-1">Etapa Atual</p>
+                      <p className="text-sm font-bold text-slate-700">{selectedChat.status}</p>
+                      <div className="w-full bg-slate-200 rounded-full h-1.5 mt-2 overflow-hidden">
+                        <div 
+                          className="h-1.5 rounded-full transition-all" 
+                          style={{ 
+                            width: `${((PIPELINE_STAGES.findIndex(s => s.value === selectedChat.status) + 1) / PIPELINE_STAGES.length) * 100}%`,
+                            backgroundColor: PIPELINE_STAGES.find(s => s.value === selectedChat.status)?.color || '#0891b2'
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Responsável */}
+                  <section>
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Responsável</h3>
+                      {canSendMessage && (
+                        <button 
+                          onClick={() => { setShowForwardModal(true); setShowLeadPanelDrawer(false); }}
+                          className="text-xs font-bold text-cyan-600 hover:text-cyan-700"
+                        >
+                          Encaminhar
+                        </button>
+                      )}
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center">
+                      {chatAssignedTo ? (
+                        <div className="flex items-center gap-2">
+                          <div className="size-8 bg-cyan-100 rounded-full flex items-center justify-center">
+                            <span className="text-cyan-700 font-bold text-xs">
+                              {chatAssignedTo.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-700">
+                              {chatAssignedTo.id === user?.id ? 'Você' : chatAssignedTo.name}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-500">Nenhum responsável</p>
+                      )}
+                      {!chatAssignedTo && canSendMessage && (
+                        <button 
+                          onClick={() => { handleAssumeChat(); }}
+                          className="text-xs font-bold text-cyan-600 hover:text-cyan-700 bg-cyan-50 px-2 py-1 rounded-lg"
+                        >
+                          Assumir
+                        </button>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* Origem do Lead */}
+                  <section>
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Origem do Lead</h3>
+                      <button 
+                        onClick={() => { fetchAvailableTags(); setShowAddSourceModal(true); setShowLeadPanelDrawer(false); }}
+                        className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span> Nova
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => { setShowSourceDropdown(!showSourceDropdown); setShowLeadPanelDrawer(false); }}
+                      className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between hover:border-cyan-300 transition-colors"
+                    >
+                      {selectedSourceId ? (() => {
+                        const selectedSource = leadSources.find(s => s.id === selectedSourceId);
+                        const sourceColor = selectedSource ? getSourceColor(selectedSource) : '#6B7280';
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span 
+                              className="size-3 rounded-full" 
+                              style={{ backgroundColor: sourceColor }}
+                            ></span>
+                            <span className="text-sm font-bold text-slate-700">
+                              {selectedSource?.name}
+                            </span>
+                          </div>
+                        );
+                      })() : (
+                        <span className="text-sm text-slate-400">Selecionar origem...</span>
+                      )}
+                      <span className="material-symbols-outlined text-slate-400 text-[18px]">expand_more</span>
+                    </button>
+                  </section>
+
+                  {/* Etiquetas */}
+                  <section>
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Etiquetas</h3>
+                      <button 
+                        onClick={() => { setShowTagsModal(true); setShowLeadPanelDrawer(false); }}
+                        className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
+                      </button>
+                    </div>
+                    {selectedChat.tags && selectedChat.tags.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedChat.tags.map(tag => (
+                          <span 
+                            key={tag.id}
+                            className="px-2 py-1 rounded-full text-[10px] font-bold border"
+                            style={{ backgroundColor: `${tag.color}20`, color: tag.color, borderColor: `${tag.color}40` }}
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400">Nenhuma etiqueta</p>
+                    )}
+                  </section>
+
+                  {/* Orçamentos */}
+                  <section>
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Orçamentos</h3>
+                      <button 
+                        onClick={() => { setShowQuoteModal(true); setShowLeadPanelDrawer(false); }}
+                        className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
+                      </button>
+                    </div>
+                    {quotes.length === 0 ? (
+                      <p className="text-xs text-slate-400">Nenhum orçamento</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {quotes.slice(0, 3).map(quote => (
+                          <div 
+                            key={quote.id}
+                            className={`p-2.5 rounded-xl border ${
+                              quote.status === 'approved' ? 'bg-green-50 border-green-200' :
+                              quote.status === 'rejected' ? 'bg-red-50 border-red-200' :
+                              'bg-amber-50 border-amber-200'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-slate-600 truncate">{quote.service_type}</span>
+                              <span className={`text-sm font-bold ${
+                                quote.status === 'approved' ? 'text-green-700' :
+                                quote.status === 'rejected' ? 'text-red-700' :
+                                'text-amber-700'
+                              }`}>
+                                R$ {quote.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {quotes.length > 3 && (
+                          <p className="text-[10px] text-slate-400 text-center">+{quotes.length - 3} orçamentos</p>
+                        )}
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Negociações Comerciais */}
+                  <section>
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Negociações</h3>
+                      <button 
+                        onClick={() => { setShowPaymentModal(true); setShowLeadPanelDrawer(false); }}
+                        className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
+                      </button>
+                    </div>
+                    {payments.length === 0 ? (
+                      <p className="text-xs text-slate-400">Nenhum pagamento</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {payments.filter(p => p.status !== 'cancelled').slice(0, 3).map(payment => (
+                          <div key={payment.id} className="p-2.5 rounded-xl border bg-emerald-50 border-emerald-200">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-slate-600">{payment.payment_method || 'Pagamento'}</span>
+                              <span className="text-sm font-bold text-emerald-700">
+                                R$ {payment.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {payments.filter(p => p.status !== 'cancelled').length > 3 && (
+                          <p className="text-[10px] text-slate-400 text-center">+{payments.filter(p => p.status !== 'cancelled').length - 3} pagamentos</p>
+                        )}
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Tarefas */}
+                  <section>
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tarefas</h3>
+                      <button 
+                        onClick={() => { setShowTaskModal(true); setShowLeadPanelDrawer(false); }}
+                        className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
+                      </button>
+                    </div>
+                    {tasks.length === 0 ? (
+                      <p className="text-xs text-slate-400">Nenhuma tarefa</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {tasks.filter(t => !t.completed).slice(0, 3).map(task => (
+                          <div key={task.id} className="p-2.5 rounded-xl border bg-purple-50 border-purple-200">
+                            <p className="text-xs text-slate-700">{task.title}</p>
+                            {task.due_date && (
+                              <p className="text-[10px] text-purple-600 mt-1">
+                                {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                        {tasks.filter(t => !t.completed).length > 3 && (
+                          <p className="text-[10px] text-slate-400 text-center">+{tasks.filter(t => !t.completed).length - 3} tarefas</p>
+                        )}
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Lançamentos da Clínica */}
+                  <section>
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamentos da Clínica</h3>
+                      <button 
+                        onClick={() => { setShowClinicReceiptModal(true); setShowLeadPanelDrawer(false); }}
+                        className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
+                      </button>
+                    </div>
+                    {clinicReceipts.length === 0 ? (
+                      <p className="text-xs text-slate-400">Nenhum lançamento direto</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {clinicReceipts.slice(0, 2).map(receipt => (
+                          <div key={receipt.id} className="p-2.5 rounded-xl border bg-teal-50 border-teal-200">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-slate-600">{receipt.payment_method || 'Recebimento'}</span>
+                              <span className="text-sm font-bold text-teal-700">
+                                R$ {receipt.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {clinicReceipts.length > 2 && (
+                          <p className="text-[10px] text-slate-400 text-center">+{clinicReceipts.length - 2} lançamentos</p>
+                        )}
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Follow-up */}
+                  <section>
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Follow-up</h3>
+                      <button 
+                        onClick={() => { setShowScheduleModal(true); setShowLeadPanelDrawer(false); }}
+                        className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span> Agendar
+                      </button>
+                    </div>
+                    {scheduledMessages.filter(m => m.status === 'pending').length === 0 ? (
+                      <p className="text-xs text-slate-400">Nenhum follow-up agendado</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {scheduledMessages.filter(m => m.status === 'pending').slice(0, 2).map(msg => (
+                          <div key={msg.id} className="p-2.5 rounded-xl border bg-blue-50 border-blue-200">
+                            <p className="text-[11px] text-slate-700 line-clamp-1">{msg.message}</p>
+                            <p className="text-[10px] text-blue-600 mt-1">
+                              {new Date(msg.scheduled_for).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Observações */}
+                  <section>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Observações</h3>
+                    {notes.length === 0 ? (
+                      <p className="text-xs text-slate-400 mb-3">Nenhuma observação ainda</p>
+                    ) : (
+                      <div className="space-y-2 mb-3 max-h-32 overflow-y-auto">
+                        {notes.slice(0, 3).map(note => (
+                          <div key={note.id} className="bg-yellow-50 p-2.5 rounded-xl border border-yellow-200">
+                            <p className="text-[11px] text-slate-700 italic line-clamp-2">"{note.content}"</p>
+                            <p className="text-[10px] text-slate-400 mt-1">{note.user_name}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <textarea 
+                      value={noteInput}
+                      onChange={(e) => setNoteInput(e.target.value)}
+                      placeholder="Adicionar nota interna..."
+                      className="w-full rounded-xl bg-slate-50 border-slate-200 text-xs p-2.5 focus:ring-cyan-600 focus:border-cyan-600 h-16 resize-none"
+                    />
+                    <button
+                      onClick={() => { handleSaveNote(); }}
+                      disabled={!noteInput.trim() || savingNote}
+                      className="w-full mt-2 py-2 bg-cyan-600 text-white text-xs font-bold rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {savingNote ? (
+                        <>
+                          <div className="size-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-[14px]">save</span>
+                          Salvar Observação
+                        </>
+                      )}
+                    </button>
+                  </section>
+                </div>
+              </div>
+            ) : (
+              <div className="p-8 text-center flex flex-col items-center justify-center h-full">
+                <span className="material-symbols-outlined text-4xl text-slate-100 mb-4">info</span>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Selecione uma conversa</p>
+              </div>
+            )}
+          </aside>
+        </>
+      )}
 
       {/* Modal de Conexão WhatsApp */}
       {connectionModal.show && (
