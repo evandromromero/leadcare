@@ -341,54 +341,56 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
     fetchQuickReplies();
   };
   return (
-    <div className="p-8 space-y-6 overflow-y-auto">
+    <div className="p-3 sm:p-8 space-y-4 sm:space-y-6 overflow-y-auto">
       <div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Configurações</h1>
-        <p className="text-slate-500">Gerencie as preferências da sua clínica.</p>
+        <h1 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight">Configurações</h1>
+        <p className="text-xs sm:text-base text-slate-500">Gerencie as preferências da sua clínica.</p>
       </div>
 
       {/* Grid de 2 colunas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         
         {/* Card: Etiquetas */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="size-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
-              <span className="material-symbols-outlined">label</span>
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-50 text-purple-600 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-lg sm:text-xl">label</span>
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">Etiquetas</h3>
-              <p className="text-xs text-slate-500">Organize seus contatos</p>
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">Etiquetas</h3>
+              <p className="text-[10px] sm:text-xs text-slate-500">Organize seus contatos</p>
             </div>
           </div>
           
           {/* Adicionar etiqueta */}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
-              placeholder="Nova etiqueta..."
-              className="flex-1 h-10 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
-              onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
-            />
-            <div className="flex gap-1">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex gap-2 flex-1">
+              <input
+                type="text"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                placeholder="Nova etiqueta..."
+                className="flex-1 h-9 sm:h-10 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+              />
+              <button
+                onClick={handleAddTag}
+                disabled={!newTagName.trim()}
+                className="h-9 sm:h-10 px-3 sm:px-4 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 disabled:opacity-50"
+              >
+                +
+              </button>
+            </div>
+            <div className="flex gap-1 justify-center sm:justify-start">
               {tagColors.slice(0, 4).map(color => (
                 <button
                   key={color}
                   onClick={() => setNewTagColor(color)}
-                  className={`size-6 rounded transition-transform ${newTagColor === color ? 'ring-2 ring-offset-1 ring-slate-400' : ''}`}
+                  className={`w-7 h-7 sm:w-6 sm:h-6 rounded transition-transform ${newTagColor === color ? 'ring-2 ring-offset-1 ring-slate-400' : ''}`}
                   style={{ backgroundColor: color }}
                 />
               ))}
             </div>
-            <button
-              onClick={handleAddTag}
-              disabled={!newTagName.trim()}
-              className="h-10 px-4 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 disabled:opacity-50"
-            >
-              +
-            </button>
           </div>
 
           {/* Lista de etiquetas */}
@@ -440,14 +442,14 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
         </div>
 
         {/* Card: Mensagens Rápidas */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="size-10 bg-cyan-50 text-cyan-600 rounded-xl flex items-center justify-center">
-              <span className="material-symbols-outlined">bolt</span>
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-cyan-50 text-cyan-600 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-lg sm:text-xl">bolt</span>
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">Mensagens Rápidas</h3>
-              <p className="text-xs text-slate-500">Respostas prontas</p>
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">Mensagens Rápidas</h3>
+              <p className="text-[10px] sm:text-xs text-slate-500">Respostas prontas</p>
             </div>
           </div>
           
@@ -458,13 +460,13 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
               value={newQuickReply}
               onChange={(e) => setNewQuickReply(e.target.value)}
               placeholder="Nova mensagem rápida..."
-              className="flex-1 h-10 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+              className="flex-1 h-9 sm:h-10 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
               onKeyDown={(e) => e.key === 'Enter' && handleAddQuickReply()}
             />
             <button
               onClick={handleAddQuickReply}
               disabled={!newQuickReply.trim()}
-              className="h-10 px-4 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 disabled:opacity-50"
+              className="h-9 sm:h-10 px-3 sm:px-4 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 disabled:opacity-50"
             >
               +
             </button>
@@ -517,106 +519,107 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
 
         {/* Card: Horário de Funcionamento */}
         {canEditClinicProfile && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="size-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
-              <span className="material-symbols-outlined">schedule</span>
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-amber-50 text-amber-600 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-lg sm:text-xl">schedule</span>
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">Horário de Funcionamento</h3>
-              <p className="text-xs text-slate-500">Define quando sua clínica atende</p>
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">Horário de Funcionamento</h3>
+              <p className="text-[10px] sm:text-xs text-slate-500">Define quando sua clínica atende</p>
             </div>
           </div>
 
           {/* Horário */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Início do Expediente</label>
+              <label className="block text-[10px] sm:text-xs font-medium text-slate-600 mb-1">Início</label>
               <input
                 type="time"
                 value={businessHoursStart}
                 onChange={(e) => setBusinessHoursStart(e.target.value)}
-                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm"
+                className="w-full h-9 sm:h-10 bg-slate-50 border border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Fim do Expediente</label>
+              <label className="block text-[10px] sm:text-xs font-medium text-slate-600 mb-1">Fim</label>
               <input
                 type="time"
                 value={businessHoursEnd}
                 onChange={(e) => setBusinessHoursEnd(e.target.value)}
-                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm"
+                className="w-full h-9 sm:h-10 bg-slate-50 border border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
               />
             </div>
           </div>
 
           {/* Dias da Semana */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-2">Dias de Atendimento</label>
-            <div className="flex gap-2 flex-wrap">
+            <label className="block text-[10px] sm:text-xs font-medium text-slate-600 mb-2">Dias de Atendimento</label>
+            <div className="grid grid-cols-7 gap-1 sm:flex sm:gap-2 sm:flex-wrap">
               {[
-                { day: 0, label: 'Dom' },
-                { day: 1, label: 'Seg' },
-                { day: 2, label: 'Ter' },
-                { day: 3, label: 'Qua' },
-                { day: 4, label: 'Qui' },
-                { day: 5, label: 'Sex' },
-                { day: 6, label: 'Sáb' },
-              ].map(({ day, label }) => (
+                { day: 0, label: 'D', labelFull: 'Dom' },
+                { day: 1, label: 'S', labelFull: 'Seg' },
+                { day: 2, label: 'T', labelFull: 'Ter' },
+                { day: 3, label: 'Q', labelFull: 'Qua' },
+                { day: 4, label: 'Q', labelFull: 'Qui' },
+                { day: 5, label: 'S', labelFull: 'Sex' },
+                { day: 6, label: 'S', labelFull: 'Sáb' },
+              ].map(({ day, label, labelFull }) => (
                 <button
                   key={day}
                   onClick={() => toggleBusinessDay(day)}
-                  className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  className={`px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
                     businessDays.includes(day)
                       ? 'bg-cyan-600 text-white'
                       : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                   }`}
                 >
-                  {label}
+                  <span className="sm:hidden">{label}</span>
+                  <span className="hidden sm:inline">{labelFull}</span>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Intervalo de Almoço */}
-          <div className="border-t border-slate-200 pt-4">
-            <div className="flex items-center justify-between mb-3">
+          <div className="border-t border-slate-200 pt-3 sm:pt-4">
+            <div className="flex items-center justify-between mb-2 sm:mb-3">
               <div>
-                <label className="block text-xs font-medium text-slate-600">Intervalo de Almoço</label>
-                <p className="text-xs text-slate-400">Fecha para almoço?</p>
+                <label className="block text-[10px] sm:text-xs font-medium text-slate-600">Intervalo de Almoço</label>
+                <p className="text-[10px] sm:text-xs text-slate-400">Fecha para almoço?</p>
               </div>
               <button
                 onClick={() => setHasLunchBreak(!hasLunchBreak)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${
+                className={`relative w-10 sm:w-12 h-5 sm:h-6 rounded-full transition-colors ${
                   hasLunchBreak ? 'bg-cyan-600' : 'bg-slate-200'
                 }`}
               >
                 <span 
-                  className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                    hasLunchBreak ? 'left-7' : 'left-1'
+                  className={`absolute top-0.5 sm:top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    hasLunchBreak ? 'left-5 sm:left-7' : 'left-0.5 sm:left-1'
                   }`}
                 />
               </button>
             </div>
             
             {hasLunchBreak && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Início do Almoço</label>
+                  <label className="block text-[10px] sm:text-xs font-medium text-slate-600 mb-1">Início</label>
                   <input
                     type="time"
                     value={lunchBreakStart}
                     onChange={(e) => setLunchBreakStart(e.target.value)}
-                    className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm"
+                    className="w-full h-9 sm:h-10 bg-slate-50 border border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Fim do Almoço</label>
+                  <label className="block text-[10px] sm:text-xs font-medium text-slate-600 mb-1">Fim</label>
                   <input
                     type="time"
                     value={lunchBreakEnd}
                     onChange={(e) => setLunchBreakEnd(e.target.value)}
-                    className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm"
+                    className="w-full h-9 sm:h-10 bg-slate-50 border border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
                   />
                 </div>
               </div>
@@ -624,9 +627,9 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
           </div>
 
           {/* Info */}
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-            <p className="text-xs text-amber-700">
-              <span className="font-medium">Dica:</span> O horário de funcionamento é usado para calcular métricas de tempo de resposta de forma mais precisa, desconsiderando horários fora do expediente.
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 sm:p-3">
+            <p className="text-[10px] sm:text-xs text-amber-700">
+              <span className="font-medium">Dica:</span> <span className="hidden sm:inline">O horário de funcionamento é usado para calcular métricas de tempo de resposta de forma mais precisa.</span><span className="sm:hidden">Usado para calcular métricas de resposta.</span>
             </p>
           </div>
 
@@ -634,17 +637,17 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
           <button
             onClick={saveBusinessHours}
             disabled={savingBusinessHours}
-            className="w-full h-10 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full h-9 sm:h-10 bg-cyan-600 text-white text-xs sm:text-sm font-bold rounded-lg hover:bg-cyan-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {savingBusinessHours ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Salvando...
+                <span className="hidden sm:inline">Salvando...</span>
               </>
             ) : (
               <>
-                <span className="material-symbols-outlined text-[18px]">save</span>
-                Salvar Horário
+                <span className="material-symbols-outlined text-[16px] sm:text-[18px]">save</span>
+                Salvar
               </>
             )}
           </button>
@@ -653,69 +656,69 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
 
         {/* Card: Perfil da Clínica */}
         {canEditClinicProfile && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="size-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center">
-              <span className="material-symbols-outlined">business</span>
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-50 text-green-600 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-lg sm:text-xl">business</span>
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">Perfil da Clínica</h3>
-              <p className="text-xs text-slate-500">Informações da unidade</p>
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">Perfil da Clínica</h3>
+              <p className="text-[10px] sm:text-xs text-slate-500">Informações da unidade</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            <img src={state.selectedClinic?.logoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(state.selectedClinic?.name || 'C')}&background=0891b2&color=fff&size=60`} className="size-14 rounded-xl object-cover border border-slate-100" />
+          <div className="flex items-center gap-3 sm:gap-4">
+            <img src={state.selectedClinic?.logoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(state.selectedClinic?.name || 'C')}&background=0891b2&color=fff&size=60`} className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl object-cover border border-slate-100" />
             <div className="flex-1">
-              <input type="text" defaultValue={state.selectedClinic?.name} className="w-full h-10 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm font-medium" />
+              <input type="text" defaultValue={state.selectedClinic?.name} className="w-full h-9 sm:h-10 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm font-medium" />
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase">CNPJ</label>
-              <input type="text" defaultValue="00.000.000/0001-00" className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm" />
+              <input type="text" defaultValue="00.000.000/0001-00" className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-2 sm:px-3 text-xs sm:text-sm" />
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase">Telefone</label>
-              <input type="text" defaultValue="(11) 99999-9999" className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm" />
+              <input type="text" defaultValue="(11) 99999-9999" className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-2 sm:px-3 text-xs sm:text-sm" />
             </div>
           </div>
           
-          <button className="w-full h-10 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700">
-            Salvar Alterações
+          <button className="w-full h-9 sm:h-10 bg-cyan-600 text-white text-xs sm:text-sm font-bold rounded-lg hover:bg-cyan-700">
+            Salvar
           </button>
         </div>
         )}
 
         {/* Card: Integração WhatsApp */}
         {canEditClinicProfile && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="size-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center">
-              <span className="material-symbols-outlined">api</span>
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-50 text-green-600 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-lg sm:text-xl">api</span>
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">Integração WhatsApp</h3>
-              <p className="text-xs text-slate-500">Status e configurações</p>
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">Integração WhatsApp</h3>
+              <p className="text-[10px] sm:text-xs text-slate-500">Status e configurações</p>
             </div>
           </div>
           
-          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-            <div className="flex items-center gap-3">
-              <span className="size-2 bg-green-500 rounded-full"></span>
-              <span className="text-sm text-slate-700">Webhook Status</span>
+          <div className="flex items-center justify-between p-2 sm:p-3 bg-slate-50 rounded-lg">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+              <span className="text-xs sm:text-sm text-slate-700">Webhook Status</span>
             </div>
-            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase">Online</span>
+            <span className="px-1.5 sm:px-2 py-0.5 bg-green-100 text-green-700 text-[9px] sm:text-[10px] font-bold rounded-full uppercase">Online</span>
           </div>
           
-          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-slate-400 text-[18px]">auto_fix_high</span>
-              <span className="text-sm text-slate-700">Auto-Resposta (IA)</span>
+          <div className="flex items-center justify-between p-2 sm:p-3 bg-slate-50 rounded-lg">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <span className="material-symbols-outlined text-slate-400 text-[16px] sm:text-[18px]">auto_fix_high</span>
+              <span className="text-xs sm:text-sm text-slate-700">Auto-Resposta (IA)</span>
             </div>
-            <div className="w-10 h-5 bg-slate-200 rounded-full relative cursor-pointer">
-              <div className="absolute left-0.5 top-0.5 size-4 bg-white rounded-full shadow-sm"></div>
+            <div className="w-9 sm:w-10 h-5 bg-slate-200 rounded-full relative cursor-pointer">
+              <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div>
             </div>
           </div>
         </div>
@@ -723,18 +726,18 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
 
         {/* Card: Cloud API - só aparece se habilitado pelo SuperAdmin */}
         {canConfigureCloudApi && cloudApiConfig?.cloud_api_enabled && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4 lg:col-span-2">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="size-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-              <span className="material-symbols-outlined">verified</span>
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-3 sm:space-y-4 lg:col-span-2">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-50 text-emerald-600 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-lg sm:text-xl">verified</span>
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">WhatsApp Cloud API</h3>
-              <p className="text-xs text-slate-500">API Oficial do Meta para envio em massa</p>
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">WhatsApp Cloud API</h3>
+              <p className="text-[10px] sm:text-xs text-slate-500">API Oficial do Meta</p>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase">Phone Number ID *</label>
               <input
@@ -742,7 +745,7 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
                 value={cloudApiConfig?.cloud_api_phone_number_id || ''}
                 onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, cloud_api_phone_number_id: e.target.value })}
                 placeholder="ID do número no Meta"
-                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
               />
             </div>
             <div className="space-y-1">
@@ -752,7 +755,7 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
                 value={cloudApiConfig?.cloud_api_waba_id || ''}
                 onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, cloud_api_waba_id: e.target.value })}
                 placeholder="WhatsApp Business Account ID"
-                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
               />
             </div>
             <div className="space-y-1">
@@ -762,24 +765,24 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
                 value={cloudApiConfig?.cloud_api_access_token || ''}
                 onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, cloud_api_access_token: e.target.value })}
                 placeholder="Token do System User"
-                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase">Verify Token (Webhook)</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Verify Token</label>
               <input
                 type="text"
                 value={cloudApiConfig?.cloud_api_verify_token || ''}
                 onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, cloud_api_verify_token: e.target.value })}
                 placeholder="Token para verificação"
-                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
               />
             </div>
           </div>
           
-          <div className="p-3 bg-slate-50 rounded-lg">
+          <div className="p-2 sm:p-3 bg-slate-50 rounded-lg">
             <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Webhook URL</p>
-            <code className="text-xs text-slate-600 break-all">
+            <code className="text-[10px] sm:text-xs text-slate-600 break-all">
               {`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-cloud-webhook`}
             </code>
           </div>
@@ -787,64 +790,65 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
           <button
             onClick={saveCloudApiConfig}
             disabled={savingCloudApi}
-            className="w-full h-10 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+            className="w-full h-9 sm:h-10 bg-emerald-600 text-white text-xs sm:text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
           >
-            {savingCloudApi ? 'Salvando...' : 'Salvar Configurações'}
+            {savingCloudApi ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
         )}
 
         {/* Card: Templates - só aparece se Cloud API configurada */}
         {canConfigureCloudApi && cloudApiConfig?.cloud_api_enabled && cloudApiConfig?.cloud_api_waba_id && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-3 sm:space-y-4">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <div className="size-10 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center">
-                <span className="material-symbols-outlined">description</span>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-violet-50 text-violet-600 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <span className="material-symbols-outlined text-lg sm:text-xl">description</span>
               </div>
               <div>
-                <h3 className="font-bold text-slate-900">Templates</h3>
-                <p className="text-xs text-slate-500">Mensagens aprovadas pelo Meta</p>
+                <h3 className="font-bold text-slate-900 text-sm sm:text-base">Templates</h3>
+                <p className="text-[10px] sm:text-xs text-slate-500">Mensagens aprovadas</p>
               </div>
             </div>
             <button
               onClick={syncTemplates}
               disabled={syncingTemplates}
-              className="h-8 px-3 bg-violet-600 text-white text-xs font-bold rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center gap-1"
+              className="h-7 sm:h-8 px-2 sm:px-3 bg-violet-600 text-white text-[10px] sm:text-xs font-bold rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center gap-1"
             >
-              <span className={`material-symbols-outlined text-[14px] ${syncingTemplates ? 'animate-spin' : ''}`}>
+              <span className={`material-symbols-outlined text-[12px] sm:text-[14px] ${syncingTemplates ? 'animate-spin' : ''}`}>
                 {syncingTemplates ? 'progress_activity' : 'sync'}
               </span>
-              Sincronizar
+              <span className="hidden sm:inline">Sincronizar</span>
+              <span className="sm:hidden">Sync</span>
             </button>
           </div>
           
-          <div className="space-y-2 max-h-48 overflow-y-auto">
+          <div className="space-y-2 max-h-40 sm:max-h-48 overflow-y-auto">
             {templates.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Clique em "Sincronizar" para buscar templates</p>
+              <p className="text-xs sm:text-sm text-slate-400 text-center py-4">Clique em "Sincronizar"</p>
             ) : (
               templates.map(template => (
                 <div key={template.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">{template.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm font-medium text-slate-700 truncate">{template.name}</p>
+                    <div className="flex items-center gap-1 sm:gap-2 mt-0.5">
+                      <span className={`text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded ${
                         template.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
                         template.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
                         'bg-red-100 text-red-700'
                       }`}>
                         {template.status}
                       </span>
-                      <span className="text-[10px] text-slate-400">{template.category}</span>
+                      <span className="text-[9px] sm:text-[10px] text-slate-400 truncate">{template.category}</span>
                     </div>
                   </div>
                   {template.status === 'APPROVED' && (
                     <button
                       onClick={() => { setSelectedTemplate(template); setShowMassMessageModal(true); }}
-                      className="text-violet-600 hover:bg-violet-50 p-1.5 rounded"
+                      className="text-violet-600 hover:bg-violet-50 p-1 sm:p-1.5 rounded ml-2"
                       title="Enviar em massa"
                     >
-                      <span className="material-symbols-outlined text-[18px]">send</span>
+                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]">send</span>
                     </button>
                   )}
                 </div>
@@ -856,29 +860,29 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
 
         {/* Card: Instagram - só aparece se habilitado */}
         {canConfigureCloudApi && cloudApiConfig?.instagram_enabled && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="size-10 bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-[#833AB4] via-[#FD1D1D] to-[#F77737] rounded-lg sm:rounded-xl flex items-center justify-center">
+              <svg className="w-4 h-4 sm:w-6 sm:h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
               </svg>
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">Instagram Direct</h3>
-              <p className="text-xs text-slate-500">Receba mensagens do Instagram</p>
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">Instagram Direct</h3>
+              <p className="text-[10px] sm:text-xs text-slate-500">Receba mensagens</p>
             </div>
           </div>
           
           {cloudApiConfig?.instagram_client_can_configure ? (
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Page ID *</label>
                 <input
                   type="text"
                   value={cloudApiConfig?.instagram_page_id || ''}
                   onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, instagram_page_id: e.target.value })}
-                  placeholder="ID da página do Instagram"
-                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                  placeholder="ID da página"
+                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
                 />
               </div>
               <div className="space-y-1">
@@ -887,22 +891,22 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
                   type="password"
                   value={cloudApiConfig?.instagram_access_token || ''}
                   onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, instagram_access_token: e.target.value })}
-                  placeholder="Token de acesso do Instagram"
-                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                  placeholder="Token de acesso"
+                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
                 />
               </div>
               <button
                 onClick={saveCloudApiConfig}
                 disabled={savingCloudApi}
-                className="w-full h-9 bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#F77737] text-white text-sm font-bold rounded-lg hover:opacity-90 disabled:opacity-50"
+                className="w-full h-9 bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#F77737] text-white text-xs sm:text-sm font-bold rounded-lg hover:opacity-90 disabled:opacity-50"
               >
-                {savingCloudApi ? 'Salvando...' : 'Salvar Instagram'}
+                {savingCloudApi ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
           ) : (
-            <div className="p-3 bg-pink-50 rounded-lg border border-pink-200">
-              <p className="text-xs text-pink-700">
-                <strong>Status:</strong> {cloudApiConfig?.instagram_page_id ? 'Configurado' : 'Aguardando configuração pelo administrador'}
+            <div className="p-2 sm:p-3 bg-pink-50 rounded-lg border border-pink-200">
+              <p className="text-[10px] sm:text-xs text-pink-700">
+                <strong>Status:</strong> {cloudApiConfig?.instagram_page_id ? 'Configurado' : 'Aguardando configuração'}
               </p>
             </div>
           )}
@@ -911,29 +915,29 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
 
         {/* Card: Facebook - só aparece se habilitado */}
         {canConfigureCloudApi && cloudApiConfig?.facebook_enabled && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="size-10 bg-[#1877F2] rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#1877F2] rounded-lg sm:rounded-xl flex items-center justify-center">
+              <svg className="w-4 h-4 sm:w-6 sm:h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 0c-6.627 0-12 4.975-12 11.111 0 3.497 1.745 6.616 4.472 8.652v4.237l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111 0-6.136-5.373-11.111-12-11.111zm1.193 14.963l-3.056-3.259-5.963 3.259 6.559-6.963 3.13 3.259 5.889-3.259-6.559 6.963z"/>
               </svg>
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">Facebook Messenger</h3>
-              <p className="text-xs text-slate-500">Receba mensagens do Facebook</p>
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">Facebook Messenger</h3>
+              <p className="text-[10px] sm:text-xs text-slate-500">Receba mensagens</p>
             </div>
           </div>
           
           {cloudApiConfig?.facebook_client_can_configure ? (
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Page ID *</label>
                 <input
                   type="text"
                   value={cloudApiConfig?.facebook_page_id || ''}
                   onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, facebook_page_id: e.target.value })}
-                  placeholder="ID da página do Facebook"
-                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                  placeholder="ID da página"
+                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
                 />
               </div>
               <div className="space-y-1">
@@ -942,22 +946,22 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
                   type="password"
                   value={cloudApiConfig?.facebook_access_token || ''}
                   onChange={(e) => setCloudApiConfig({ ...cloudApiConfig!, facebook_access_token: e.target.value })}
-                  placeholder="Token de acesso do Facebook"
-                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-3 text-sm"
+                  placeholder="Token de acesso"
+                  className="w-full h-9 bg-slate-50 border-slate-200 rounded-lg px-2 sm:px-3 text-sm"
                 />
               </div>
               <button
                 onClick={saveCloudApiConfig}
                 disabled={savingCloudApi}
-                className="w-full h-9 bg-[#1877F2] text-white text-sm font-bold rounded-lg hover:bg-[#166FE5] disabled:opacity-50"
+                className="w-full h-9 bg-[#1877F2] text-white text-xs sm:text-sm font-bold rounded-lg hover:bg-[#166FE5] disabled:opacity-50"
               >
-                {savingCloudApi ? 'Salvando...' : 'Salvar Facebook'}
+                {savingCloudApi ? 'Salvando...' : 'Salvar'}
               </button>
             </div>
           ) : (
-            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-xs text-blue-700">
-                <strong>Status:</strong> {cloudApiConfig?.facebook_page_id ? 'Configurado' : 'Aguardando configuração pelo administrador'}
+            <div className="p-2 sm:p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-[10px] sm:text-xs text-blue-700">
+                <strong>Status:</strong> {cloudApiConfig?.facebook_page_id ? 'Configurado' : 'Aguardando configuração'}
               </p>
             </div>
           )}
@@ -967,59 +971,59 @@ const Settings: React.FC<SettingsProps> = ({ state, setState }) => {
 
       {/* Modal de Envio em Massa */}
       {showMassMessageModal && selectedTemplate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-800">Envio em Massa</h3>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-slate-800">Envio em Massa</h3>
               <button 
                 onClick={() => { setShowMassMessageModal(false); setSelectedTemplate(null); }}
                 className="p-1 hover:bg-slate-100 rounded"
               >
-                <span className="material-symbols-outlined">close</span>
+                <span className="material-symbols-outlined text-lg sm:text-xl">close</span>
               </button>
             </div>
             
-            <div className="space-y-4">
-              <div className="p-3 bg-violet-50 rounded-lg border border-violet-200">
-                <p className="text-sm font-medium text-violet-800">Template: {selectedTemplate.name}</p>
-                <p className="text-xs text-violet-600 mt-1">{selectedTemplate.category} • {selectedTemplate.language}</p>
+            <div className="space-y-3 sm:space-y-4">
+              <div className="p-2 sm:p-3 bg-violet-50 rounded-lg border border-violet-200">
+                <p className="text-xs sm:text-sm font-medium text-violet-800">Template: {selectedTemplate.name}</p>
+                <p className="text-[10px] sm:text-xs text-violet-600 mt-1">{selectedTemplate.category} • {selectedTemplate.language}</p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-slate-700">Números de telefone</label>
-                <p className="text-xs text-slate-500 mb-2">Um número por linha (com DDD)</p>
+                <label className="text-xs sm:text-sm font-medium text-slate-700">Números de telefone</label>
+                <p className="text-[10px] sm:text-xs text-slate-500 mb-1 sm:mb-2">Um número por linha (com DDD)</p>
                 <textarea
                   value={massMessagePhones}
                   onChange={(e) => setMassMessagePhones(e.target.value)}
                   placeholder="11999999999&#10;21988888888&#10;31977777777"
-                  rows={6}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                  rows={5}
+                  className="w-full px-2 sm:px-3 py-2 border border-slate-200 rounded-lg text-sm"
                 />
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-[10px] sm:text-xs text-slate-500 mt-1">
                   {massMessagePhones.split('\n').filter(p => p.trim()).length} números
                 </p>
               </div>
               
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2 pt-1 sm:pt-2">
                 <button
                   onClick={() => { setShowMassMessageModal(false); setSelectedTemplate(null); }}
-                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50"
+                  className="flex-1 px-3 sm:px-4 py-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 text-xs sm:text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={sendMassMessage}
                   disabled={sendingMassMessage || !massMessagePhones.trim()}
-                  className="flex-1 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 px-3 sm:px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm"
                 >
                   {sendingMassMessage ? (
                     <>
-                      <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
-                      Enviando...
+                      <span className="material-symbols-outlined text-[14px] sm:text-[16px] animate-spin">progress_activity</span>
+                      <span className="hidden sm:inline">Enviando...</span>
                     </>
                   ) : (
                     <>
-                      <span className="material-symbols-outlined text-[16px]">send</span>
+                      <span className="material-symbols-outlined text-[14px] sm:text-[16px]">send</span>
                       Enviar
                     </>
                   )}

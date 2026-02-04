@@ -674,63 +674,65 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
   const goalProgress = monthlyGoal > 0 ? (monthlyRevenue / monthlyGoal) * 100 : 0;
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Métricas</h1>
-          <p className="text-slate-500 text-sm">Acompanhe o desempenho da sua clínica</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Métricas</h1>
+          <p className="text-slate-500 text-xs sm:text-sm">Acompanhe o desempenho</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button 
             onClick={fetchMetrics}
-            className="flex items-center gap-2 px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            className="flex items-center gap-2 p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
           {isAdmin && (
             <button 
               onClick={openGoalsModal}
-              className="flex items-center gap-2 px-4 py-2 bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 transition-colors text-xs sm:text-sm"
             >
               <Settings className="w-4 h-4" />
-              Configurar Metas
+              <span className="hidden sm:inline">Configurar Metas</span>
+              <span className="sm:hidden">Metas</span>
             </button>
           )}
           <button 
             onClick={exportToCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors text-xs sm:text-sm"
           >
             <Download className="w-4 h-4" />
-            Exportar
+            <span className="hidden sm:inline">Exportar</span>
           </button>
         </div>
       </div>
 
       {/* Filtro de Período */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+          <div className="hidden sm:flex items-center gap-2">
             <Calendar className="w-4 h-4 text-slate-500" />
             <span className="text-sm font-medium text-slate-700">Período:</span>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-1.5 sm:gap-2 flex-wrap flex-1 sm:flex-none">
             {[
-              { id: '7d', label: '7 dias' },
-              { id: '30d', label: '30 dias' },
-              { id: 'month', label: 'Este mês' },
-              { id: 'lastMonth', label: 'Mês anterior' },
+              { id: '7d', label: '7d', labelFull: '7 dias' },
+              { id: '30d', label: '30d', labelFull: '30 dias' },
+              { id: 'month', label: 'Mês', labelFull: 'Este mês' },
+              { id: 'lastMonth', label: 'Anterior', labelFull: 'Mês anterior' },
             ].map(p => (
               <button
                 key={p.id}
                 onClick={() => setPeriod(p.id as MetricsPeriod)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors flex-1 sm:flex-none ${
                   period === p.id
                     ? 'bg-cyan-600 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {p.label}
+                <span className="sm:hidden">{p.label}</span>
+                <span className="hidden sm:inline">{p.labelFull}</span>
               </button>
             ))}
           </div>
@@ -739,57 +741,57 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
 
       {/* Cards Principais */}
       {canSeeBilling && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {/* Faturamento */}
-          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white">
-            <p className="text-emerald-100 text-sm mb-1">Faturamento do Período</p>
-            <p className="text-3xl font-bold">{formatCurrency(periodRevenue)}</p>
+          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-3 sm:p-5 text-white">
+            <p className="text-emerald-100 text-[10px] sm:text-sm mb-1">Faturamento</p>
+            <p className="text-xl sm:text-3xl font-bold">{formatCurrency(periodRevenue)}</p>
             {previousPeriodRevenue > 0 && (
-              <div className={`mt-2 flex items-center gap-1 text-sm ${
+              <div className={`mt-1 sm:mt-2 flex items-center gap-1 text-[10px] sm:text-sm ${
                 periodRevenue >= previousPeriodRevenue ? 'text-emerald-200' : 'text-red-200'
               }`}>
                 {periodRevenue >= previousPeriodRevenue ? (
-                  <TrendingUp className="w-4 h-4" />
+                  <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
                 ) : (
-                  <TrendingDown className="w-4 h-4" />
+                  <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />
                 )}
-                {getPercentChange(periodRevenue, previousPeriodRevenue).toFixed(1)}% vs período anterior
+                {getPercentChange(periodRevenue, previousPeriodRevenue).toFixed(1)}%
               </div>
             )}
           </div>
 
           {/* Leads */}
-          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-5 text-white">
-            <p className="text-cyan-100 text-sm mb-1">Leads no Período</p>
-            <p className="text-3xl font-bold">{periodLeads}</p>
+          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl p-3 sm:p-5 text-white">
+            <p className="text-cyan-100 text-[10px] sm:text-sm mb-1">Leads</p>
+            <p className="text-xl sm:text-3xl font-bold">{periodLeads}</p>
             {previousPeriodLeads > 0 && (
-              <div className={`mt-2 flex items-center gap-1 text-sm ${
+              <div className={`mt-1 sm:mt-2 flex items-center gap-1 text-[10px] sm:text-sm ${
                 periodLeads >= previousPeriodLeads ? 'text-cyan-200' : 'text-red-200'
               }`}>
                 {periodLeads >= previousPeriodLeads ? (
-                  <TrendingUp className="w-4 h-4" />
+                  <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
                 ) : (
-                  <TrendingDown className="w-4 h-4" />
+                  <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />
                 )}
-                {getPercentChange(periodLeads, previousPeriodLeads).toFixed(1)}% vs período anterior
+                {getPercentChange(periodLeads, previousPeriodLeads).toFixed(1)}%
               </div>
             )}
           </div>
 
           {/* Conversões */}
-          <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-5 text-white">
-            <p className="text-violet-100 text-sm mb-1">Conversões no Período</p>
-            <p className="text-3xl font-bold">{periodConversions}</p>
+          <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-3 sm:p-5 text-white">
+            <p className="text-violet-100 text-[10px] sm:text-sm mb-1">Conversões</p>
+            <p className="text-xl sm:text-3xl font-bold">{periodConversions}</p>
             {previousPeriodConversions > 0 && (
-              <div className={`mt-2 flex items-center gap-1 text-sm ${
+              <div className={`mt-1 sm:mt-2 flex items-center gap-1 text-[10px] sm:text-sm ${
                 periodConversions >= previousPeriodConversions ? 'text-violet-200' : 'text-red-200'
               }`}>
                 {periodConversions >= previousPeriodConversions ? (
-                  <TrendingUp className="w-4 h-4" />
+                  <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
                 ) : (
-                  <TrendingDown className="w-4 h-4" />
+                  <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />
                 )}
-                {getPercentChange(periodConversions, previousPeriodConversions).toFixed(1)}% vs período anterior
+                {getPercentChange(periodConversions, previousPeriodConversions).toFixed(1)}%
               </div>
             )}
           </div>
@@ -797,53 +799,53 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
       )}
 
       {/* Métricas Adicionais */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
         {canSeeBilling && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-emerald-600" />
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2.5 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-xs text-slate-500">Ticket Médio</p>
-                <p className="text-lg font-bold text-slate-800">{formatCurrency(ticketMedio)}</p>
+                <p className="text-[10px] sm:text-xs text-slate-500">Ticket Médio</p>
+                <p className="text-sm sm:text-lg font-bold text-slate-800">{formatCurrency(ticketMedio)}</p>
               </div>
             </div>
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-              <Percent className="w-5 h-5 text-amber-600" />
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2.5 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+              <Percent className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-xs text-slate-500">Taxa de Conversão</p>
-              <p className="text-lg font-bold text-slate-800">{taxaConversao.toFixed(1)}%</p>
+              <p className="text-[10px] sm:text-xs text-slate-500">Conversão</p>
+              <p className="text-sm sm:text-lg font-bold text-slate-800">{taxaConversao.toFixed(1)}%</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Clock className="w-5 h-5 text-blue-600" />
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2.5 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-xs text-slate-500">Tempo de Resposta</p>
-              <p className="text-lg font-bold text-slate-800">{avgResponseTimeMinutes} min</p>
+              <p className="text-[10px] sm:text-xs text-slate-500">Resposta</p>
+              <p className="text-sm sm:text-lg font-bold text-slate-800">{avgResponseTimeMinutes} min</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${leadsAwaiting > 0 ? 'bg-red-100' : 'bg-emerald-100'}`}>
-              <AlertCircle className={`w-5 h-5 ${leadsAwaiting > 0 ? 'text-red-600' : 'text-emerald-600'}`} />
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2.5 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center ${leadsAwaiting > 0 ? 'bg-red-100' : 'bg-emerald-100'}`}>
+              <AlertCircle className={`w-4 h-4 sm:w-5 sm:h-5 ${leadsAwaiting > 0 ? 'text-red-600' : 'text-emerald-600'}`} />
             </div>
             <div>
-              <p className="text-xs text-slate-500">Aguardando (+2h)</p>
-              <p className={`text-lg font-bold ${leadsAwaiting > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{leadsAwaiting}</p>
+              <p className="text-[10px] sm:text-xs text-slate-500">Aguardando</p>
+              <p className={`text-sm sm:text-lg font-bold ${leadsAwaiting > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{leadsAwaiting}</p>
             </div>
           </div>
         </div>
@@ -851,30 +853,30 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
 
       {/* Meta vs Realizado */}
       {canSeeBilling && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Meta do Mês */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                  <Target className="w-5 h-5 text-violet-600" />
+                <h2 className="text-sm sm:text-lg font-semibold text-slate-800 flex items-center gap-1.5 sm:gap-2">
+                  <Target className="w-4 h-4 sm:w-5 sm:h-5 text-violet-600" />
                   Meta do Mês
                 </h2>
-                <p className="text-sm text-slate-500">Progresso em relação à meta mensal</p>
+                <p className="text-[10px] sm:text-sm text-slate-500 hidden sm:block">Progresso em relação à meta mensal</p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold text-slate-800">{goalProgress.toFixed(0)}%</p>
-                <p className="text-xs text-slate-500">da meta</p>
+                <p className="text-xl sm:text-2xl font-bold text-slate-800">{goalProgress.toFixed(0)}%</p>
+                <p className="text-[10px] sm:text-xs text-slate-500">da meta</p>
               </div>
             </div>
-            <div className="mb-4">
-              <div className="flex justify-between text-sm mb-2">
+            <div className="mb-3 sm:mb-4">
+              <div className="flex justify-between text-xs sm:text-sm mb-2">
                 <span className="text-slate-600">{formatCurrency(monthlyRevenue)}</span>
                 <span className="text-slate-400">Meta: {formatCurrency(monthlyGoal)}</span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden">
+              <div className="w-full bg-slate-100 rounded-full h-3 sm:h-4 overflow-hidden">
                 <div 
-                  className={`h-4 rounded-full transition-all duration-500 ${
+                  className={`h-3 sm:h-4 rounded-full transition-all duration-500 ${
                     goalProgress >= 100 
                       ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' 
                       : goalProgress >= 70
@@ -885,52 +887,54 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
                 ></div>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-2 text-xs sm:text-sm">
               {goalProgress >= 100 ? (
                 <span className="flex items-center gap-1 text-emerald-600">
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4" />
                   Meta atingida!
                 </span>
               ) : (
                 <span className="text-slate-500">
-                  Faltam {formatCurrency(monthlyGoal - monthlyRevenue)} para a meta
+                  Faltam {formatCurrency(monthlyGoal - monthlyRevenue)}
                 </span>
               )}
             </div>
           </div>
 
           {/* Previsão */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-cyan-600" />
+                <h2 className="text-sm sm:text-lg font-semibold text-slate-800 flex items-center gap-1.5 sm:gap-2">
+                  <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-600" />
                   Previsão do Mês
                 </h2>
-                <p className="text-sm text-slate-500">Estimativa baseada no ritmo atual</p>
+                <p className="text-[10px] sm:text-sm text-slate-500 hidden sm:block">Estimativa baseada no ritmo atual</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="bg-slate-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-slate-500 mb-1">Realizado até agora</p>
-                <p className="text-xl font-bold text-slate-800">{formatCurrency(monthlyRevenue)}</p>
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-3 sm:mb-4">
+              <div className="bg-slate-50 rounded-xl p-2.5 sm:p-4 text-center">
+                <p className="text-[10px] sm:text-xs text-slate-500 mb-1">Realizado</p>
+                <p className="text-sm sm:text-xl font-bold text-slate-800">{formatCurrency(monthlyRevenue)}</p>
               </div>
-              <div className="bg-cyan-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-cyan-600 mb-1">Previsão final</p>
-                <p className="text-xl font-bold text-cyan-700">{formatCurrency(projectedRevenue)}</p>
+              <div className="bg-cyan-50 rounded-xl p-2.5 sm:p-4 text-center">
+                <p className="text-[10px] sm:text-xs text-cyan-600 mb-1">Previsão</p>
+                <p className="text-sm sm:text-xl font-bold text-cyan-700">{formatCurrency(projectedRevenue)}</p>
               </div>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">{daysRemaining} dias restantes no mês</span>
+            <div className="flex items-center justify-between text-[10px] sm:text-sm">
+              <span className="text-slate-500">{daysRemaining} dias restantes</span>
               {projectedRevenue >= monthlyGoal ? (
                 <span className="flex items-center gap-1 text-emerald-600">
-                  <CheckCircle2 className="w-4 h-4" />
-                  Deve atingir a meta
+                  <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Deve atingir</span>
+                  <span className="sm:hidden">OK</span>
                 </span>
               ) : (
                 <span className="flex items-center gap-1 text-amber-600">
-                  <AlertCircle className="w-4 h-4" />
-                  Abaixo da meta prevista
+                  <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Abaixo da meta</span>
+                  <span className="sm:hidden">Abaixo</span>
                 </span>
               )}
             </div>
@@ -941,23 +945,25 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
       {/* Gráfico de Evolução */}
       {canSeeBilling && dailyData.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-          <div className="p-6 border-b border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-indigo-600" />
-              Evolução dos Últimos 30 Dias
+          <div className="p-3 sm:p-6 border-b border-slate-200">
+            <h2 className="text-sm sm:text-lg font-semibold text-slate-800 flex items-center gap-1.5 sm:gap-2">
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
+              <span className="hidden sm:inline">Evolução dos Últimos 30 Dias</span>
+              <span className="sm:hidden">Últimos 30 Dias</span>
             </h2>
-            <p className="text-sm text-slate-500 mt-1">Faturamento, leads e conversões por dia</p>
+            <p className="text-[10px] sm:text-sm text-slate-500 mt-1 hidden sm:block">Faturamento, leads e conversões por dia</p>
           </div>
-          <div className="p-6 space-y-6">
+          <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
             {/* Faturamento */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                  <span className="w-3 h-3 bg-emerald-500 rounded"></span>
-                  Faturamento Diário
+                <span className="text-xs sm:text-sm font-medium text-slate-700 flex items-center gap-1.5 sm:gap-2">
+                  <span className="w-2 h-2 sm:w-3 sm:h-3 bg-emerald-500 rounded"></span>
+                  <span className="hidden sm:inline">Faturamento Diário</span>
+                  <span className="sm:hidden">Faturamento</span>
                 </span>
-                <span className="text-sm text-slate-500">
-                  Total: {formatCurrency(dailyData.reduce((sum, d) => sum + d.revenue, 0))}
+                <span className="text-[10px] sm:text-sm text-slate-500">
+                  {formatCurrency(dailyData.reduce((sum, d) => sum + d.revenue, 0))}
                 </span>
               </div>
               <div className="flex items-end gap-[2px] h-16">
@@ -979,15 +985,16 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
             {/* Leads */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                  <span className="w-3 h-3 bg-cyan-500 rounded"></span>
-                  Leads por Dia
+                <span className="text-xs sm:text-sm font-medium text-slate-700 flex items-center gap-1.5 sm:gap-2">
+                  <span className="w-2 h-2 sm:w-3 sm:h-3 bg-cyan-500 rounded"></span>
+                  <span className="hidden sm:inline">Leads por Dia</span>
+                  <span className="sm:hidden">Leads</span>
                 </span>
-                <span className="text-sm text-slate-500">
-                  Total: {dailyData.reduce((sum, d) => sum + d.leads, 0)} leads
+                <span className="text-[10px] sm:text-sm text-slate-500">
+                  {dailyData.reduce((sum, d) => sum + d.leads, 0)} leads
                 </span>
               </div>
-              <div className="flex items-end gap-[2px] h-12">
+              <div className="flex items-end gap-[2px] h-10 sm:h-12">
                 {dailyData.map((day, idx) => {
                   const maxLeads = Math.max(...dailyData.map(d => d.leads), 1);
                   const height = (day.leads / maxLeads) * 100;
@@ -1007,17 +1014,17 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
       )}
 
       {/* Funil e Origens */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Funil de Conversão */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-          <div className="p-6 border-b border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-              <Filter className="w-5 h-5 text-cyan-600" />
+          <div className="p-3 sm:p-6 border-b border-slate-200">
+            <h2 className="text-sm sm:text-lg font-semibold text-slate-800 flex items-center gap-1.5 sm:gap-2">
+              <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-600" />
               Funil de Conversão
             </h2>
-            <p className="text-sm text-slate-500 mt-1">Status atual de todos os leads</p>
+            <p className="text-[10px] sm:text-sm text-slate-500 mt-1 hidden sm:block">Status atual de todos os leads</p>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
             {[
               { label: 'Novo Lead', value: leadsByStatus.novo, color: 'bg-blue-500' },
               { label: 'Em Atendimento', value: leadsByStatus.emAtendimento, color: 'bg-amber-500' },
@@ -1026,12 +1033,12 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
             ].map((item, idx) => (
               <div key={idx}>
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm font-medium text-slate-700">{item.label}</span>
-                  <span className="text-sm font-bold text-slate-800">{item.value}</span>
+                  <span className="text-xs sm:text-sm font-medium text-slate-700">{item.label}</span>
+                  <span className="text-xs sm:text-sm font-bold text-slate-800">{item.value}</span>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-3">
+                <div className="w-full bg-slate-100 rounded-full h-2 sm:h-3">
                   <div 
-                    className={`${item.color} h-3 rounded-full transition-all duration-500`}
+                    className={`${item.color} h-2 sm:h-3 rounded-full transition-all duration-500`}
                     style={{ width: `${totalLeads > 0 ? (item.value / totalLeads) * 100 : 0}%` }}
                   ></div>
                 </div>
@@ -1043,14 +1050,49 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
         {/* Leads por Origem */}
         {canSeeBilling && leadSourceStats.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                <Users className="w-5 h-5 text-violet-600" />
+            <div className="p-3 sm:p-6 border-b border-slate-200">
+              <h2 className="text-sm sm:text-lg font-semibold text-slate-800 flex items-center gap-1.5 sm:gap-2">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-violet-600" />
                 Leads por Origem
               </h2>
-              <p className="text-sm text-slate-500 mt-1">Performance de cada canal</p>
+              <p className="text-[10px] sm:text-sm text-slate-500 mt-1 hidden sm:block">Performance de cada canal</p>
             </div>
-            <div className="overflow-x-auto">
+            {/* Mobile Cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {leadSourceStats.slice(0, 5).map(source => {
+                const rate = source.total_leads > 0 
+                  ? ((source.converted_leads / source.total_leads) * 100).toFixed(1) 
+                  : '0.0';
+                return (
+                  <div key={source.id} className="p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: source.color }}></span>
+                      <span className="font-medium text-slate-800 text-xs">{source.name}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      <div>
+                        <p className="text-[10px] text-slate-500">Leads</p>
+                        <p className="text-xs font-bold text-slate-800">{source.total_leads}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500">Conv.</p>
+                        <p className="text-xs font-bold text-emerald-600">{source.converted_leads}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500">Taxa</p>
+                        <p className={`text-xs font-bold ${Number(rate) >= 30 ? 'text-emerald-600' : Number(rate) >= 15 ? 'text-amber-600' : 'text-slate-500'}`}>{rate}%</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500">Receita</p>
+                        <p className="text-xs font-bold text-emerald-600">{formatCurrency(source.revenue)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
@@ -1096,42 +1138,42 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
 
       {/* Tempo e Produtividade */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-        <div className="p-6 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-blue-600" />
+        <div className="p-3 sm:p-6 border-b border-slate-200">
+          <h2 className="text-sm sm:text-lg font-semibold text-slate-800 flex items-center gap-1.5 sm:gap-2">
+            <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
             Tempo e Produtividade
           </h2>
-          <p className="text-sm text-slate-500 mt-1">Métricas de eficiência do atendimento</p>
+          <p className="text-[10px] sm:text-sm text-slate-500 mt-1 hidden sm:block">Métricas de eficiência do atendimento</p>
         </div>
-        <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-blue-50 rounded-xl">
-            <p className="text-sm text-blue-600 mb-2">Tempo de Resposta</p>
-            <p className="text-2xl font-bold text-blue-700">
+        <div className="p-3 sm:p-6 grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
+          <div className="text-center p-2.5 sm:p-4 bg-blue-50 rounded-xl">
+            <p className="text-[10px] sm:text-sm text-blue-600 mb-1 sm:mb-2">Resposta</p>
+            <p className="text-lg sm:text-2xl font-bold text-blue-700">
               {avgResponseTimeMinutes > 60 
-                ? `${Math.floor(avgResponseTimeMinutes / 60)}h ${avgResponseTimeMinutes % 60}min`
-                : `${avgResponseTimeMinutes} min`}
+                ? `${Math.floor(avgResponseTimeMinutes / 60)}h`
+                : `${avgResponseTimeMinutes}min`}
             </p>
-            <p className="text-xs text-blue-500 mt-1">média de primeira resposta</p>
+            <p className="text-[9px] sm:text-xs text-blue-500 mt-1 hidden sm:block">média primeira resposta</p>
           </div>
           
-          <div className="text-center p-4 bg-emerald-50 rounded-xl">
-            <p className="text-sm text-emerald-600 mb-2">Tempo de Conversão</p>
-            <p className="text-2xl font-bold text-emerald-700">{avgConversionTimeDays} dias</p>
-            <p className="text-xs text-emerald-500 mt-1">média até converter</p>
+          <div className="text-center p-2.5 sm:p-4 bg-emerald-50 rounded-xl">
+            <p className="text-[10px] sm:text-sm text-emerald-600 mb-1 sm:mb-2">Conversão</p>
+            <p className="text-lg sm:text-2xl font-bold text-emerald-700">{avgConversionTimeDays}d</p>
+            <p className="text-[9px] sm:text-xs text-emerald-500 mt-1 hidden sm:block">média até converter</p>
           </div>
           
-          <div className="text-center p-4 bg-red-50 rounded-xl">
-            <p className="text-sm text-red-600 mb-2">Leads Perdidos</p>
-            <p className="text-2xl font-bold text-red-700">{lostLeads}</p>
-            <p className="text-xs text-red-500 mt-1">no período</p>
+          <div className="text-center p-2.5 sm:p-4 bg-red-50 rounded-xl">
+            <p className="text-[10px] sm:text-sm text-red-600 mb-1 sm:mb-2">Perdidos</p>
+            <p className="text-lg sm:text-2xl font-bold text-red-700">{lostLeads}</p>
+            <p className="text-[9px] sm:text-xs text-red-500 mt-1 hidden sm:block">no período</p>
           </div>
           
-          <div className="text-center p-4 bg-slate-50 rounded-xl">
-            <p className="text-sm text-slate-600 mb-2">Taxa de Perda</p>
-            <p className={`text-2xl font-bold ${lossRate > 30 ? 'text-red-600' : lossRate > 15 ? 'text-amber-600' : 'text-emerald-600'}`}>
+          <div className="text-center p-2.5 sm:p-4 bg-slate-50 rounded-xl">
+            <p className="text-[10px] sm:text-sm text-slate-600 mb-1 sm:mb-2">Taxa Perda</p>
+            <p className={`text-lg sm:text-2xl font-bold ${lossRate > 30 ? 'text-red-600' : lossRate > 15 ? 'text-amber-600' : 'text-emerald-600'}`}>
               {lossRate.toFixed(1)}%
             </p>
-            <p className="text-xs text-slate-500 mt-1">do período</p>
+            <p className="text-[9px] sm:text-xs text-slate-500 mt-1 hidden sm:block">do período</p>
           </div>
         </div>
       </div>
@@ -1139,14 +1181,73 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
       {/* Ranking de Atendentes (só para Admin) */}
       {isAdmin && attendantStats.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-          <div className="p-6 border-b border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-amber-500" />
+          <div className="p-3 sm:p-6 border-b border-slate-200">
+            <h2 className="text-sm sm:text-lg font-semibold text-slate-800 flex items-center gap-1.5 sm:gap-2">
+              <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
               Ranking de Atendentes
             </h2>
-            <p className="text-sm text-slate-500 mt-1">Performance individual do mês atual</p>
+            <p className="text-[10px] sm:text-sm text-slate-500 mt-1 hidden sm:block">Performance individual do mês atual</p>
           </div>
-          <div className="overflow-x-auto">
+          {/* Mobile Cards */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {attendantStats.map((att, idx) => {
+              const convRate = att.leads > 0 ? ((att.conversions / att.leads) * 100).toFixed(1) : '0.0';
+              const goalProgressAtt = att.monthlyGoal > 0 ? (att.revenue / att.monthlyGoal) * 100 : null;
+              return (
+                <div key={att.id} className="p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+                      idx === 0 ? 'bg-amber-100 text-amber-700' :
+                      idx === 1 ? 'bg-slate-200 text-slate-700' :
+                      idx === 2 ? 'bg-orange-100 text-orange-700' :
+                      'bg-slate-100 text-slate-500'
+                    }`}>
+                      {idx + 1}
+                    </span>
+                    <div>
+                      <p className="font-medium text-slate-800 text-xs">{att.name}</p>
+                      <p className="text-[10px] text-slate-500">{att.role}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div>
+                      <p className="text-[10px] text-slate-500">Leads</p>
+                      <p className="text-xs font-bold text-slate-800">{att.leads}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500">Conv.</p>
+                      <p className="text-xs font-bold text-emerald-600">{att.conversions}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500">Taxa</p>
+                      <p className={`text-xs font-bold ${Number(convRate) >= 30 ? 'text-emerald-600' : Number(convRate) >= 15 ? 'text-amber-600' : 'text-slate-500'}`}>{convRate}%</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500">Fatur.</p>
+                      <p className="text-xs font-bold text-emerald-600">{formatCurrency(att.revenue)}</p>
+                    </div>
+                  </div>
+                  {goalProgressAtt !== null && (
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                          <div 
+                            className={`h-1.5 rounded-full ${goalProgressAtt >= 100 ? 'bg-emerald-500' : goalProgressAtt >= 70 ? 'bg-amber-500' : 'bg-violet-500'}`}
+                            style={{ width: `${Math.min(goalProgressAtt, 100)}%` }}
+                          ></div>
+                        </div>
+                        <span className={`text-[10px] font-bold ${goalProgressAtt >= 100 ? 'text-emerald-600' : 'text-slate-500'}`}>
+                          {goalProgressAtt.toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">

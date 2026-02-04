@@ -564,23 +564,25 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-3 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Relatorios Financeiros</h1>
-          <p className="text-slate-500 text-sm">Analise de vendas e recebimentos por comercial</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Relatórios Financeiros</h1>
+          <p className="text-slate-500 text-xs sm:text-sm">Análise de vendas e recebimentos</p>
         </div>
-        <button onClick={exportToCSV} className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200">
+        <button onClick={exportToCSV} className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 text-xs sm:text-sm">
           <Download className="w-4 h-4" />
-          Exportar CSV
+          <span className="hidden sm:inline">Exportar CSV</span>
+          <span className="sm:hidden">Exportar</span>
         </button>
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
-        <div className="flex flex-wrap gap-3 items-center">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-slate-400" />
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4 mb-4 sm:mb-6">
+        {/* Mobile: Filtros em grid */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 items-center">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 hidden sm:block" />
             <select 
               value={customDateStart ? 'custom' : dateFilter} 
               onChange={(e) => {
@@ -590,17 +592,50 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
                   setCustomDateEnd('');
                 }
               }} 
-              className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
+              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm w-full sm:w-auto"
             >
-              <option value="all">Todo periodo</option>
+              <option value="all">Todo período</option>
               <option value="7d">7 dias</option>
               <option value="30d">30 dias</option>
-              <option value="month">Este mes</option>
-              <option value="lastMonth">Mes anterior</option>
+              <option value="month">Este mês</option>
+              <option value="lastMonth">Mês anterior</option>
               {customDateStart && <option value="custom">Personalizado</option>}
             </select>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Filter className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 hidden sm:block" />
+            <select 
+              value={sourceFilter} 
+              onChange={(e) => setSourceFilter(e.target.value)} 
+              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm w-full sm:w-auto"
+            >
+              <option value="all">Todas origens</option>
+              {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <User className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 hidden sm:block" />
+            <select 
+              value={attendantFilter} 
+              onChange={(e) => setAttendantFilter(e.target.value)} 
+              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm w-full sm:w-auto"
+            >
+              <option value="all">Todos comerciais</option>
+              {attendants.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Search className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 hidden sm:block" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar..."
+              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm w-full sm:w-36"
+            />
+          </div>
+          {/* Datas personalizadas - só no desktop */}
+          <div className="hidden lg:flex items-center gap-1">
             <input
               type="date"
               value={customDateStart}
@@ -623,110 +658,60 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select 
-              value={sourceFilter} 
-              onChange={(e) => setSourceFilter(e.target.value)} 
-              className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
-            >
-              <option value="all">Todas origens</option>
-              {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <User className="w-4 h-4 text-slate-400" />
-            <select 
-              value={attendantFilter} 
-              onChange={(e) => setAttendantFilter(e.target.value)} 
-              className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
-            >
-              <option value="all">Todos comerciais</option>
-              {attendants.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <div className="flex items-center gap-2 flex-1">
-            <Search className="w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar..."
-              className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm w-36"
-            />
-          </div>
-          <div className="text-sm text-slate-500">
+          <div className="col-span-2 sm:col-span-1 text-center sm:text-left text-xs sm:text-sm text-slate-500 sm:ml-auto">
             {metrics.totalVendas} venda(s)
           </div>
         </div>
       </div>
 
       {/* Cards de Resumo */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-5 rounded-2xl shadow-lg text-white relative group">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
+        <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white relative group">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <p className="text-amber-100 text-xs font-medium uppercase tracking-wider">Valor Comercial</p>
-              <div className="relative">
-                <Info className="w-3 h-3 text-amber-200 hover:text-white cursor-help transition-colors" />
-                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 w-48 p-2 bg-amber-700 text-white text-xs rounded-lg shadow-lg">
-                  Soma de todos os valores de vendas fechadas pelos comerciais no periodo selecionado.
-                </div>
-              </div>
+              <p className="text-amber-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Valor Comercial</p>
             </div>
             {metrics.varComercial !== 0 && (
-              <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${metrics.varComercial > 0 ? 'bg-white/20' : 'bg-amber-700/50'}`}>
+              <span className={`text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded ${metrics.varComercial > 0 ? 'bg-white/20' : 'bg-amber-700/50'}`}>
                 {metrics.varComercial > 0 ? '+' : ''}{metrics.varComercial.toFixed(1)}%
               </span>
             )}
           </div>
-          <p className="text-2xl font-black mt-1">{formatCurrency(metrics.totalComercial)}</p>
-          <p className="text-amber-100 text-xs mt-2">
-            {metrics.prevComercial > 0 ? `Anterior: ${formatCurrency(metrics.prevComercial)}` : 'Total fechado pelos comerciais'}
+          <p className="text-xl sm:text-2xl font-black mt-1">{formatCurrency(metrics.totalComercial)}</p>
+          <p className="text-amber-100 text-[10px] sm:text-xs mt-1 sm:mt-2 hidden sm:block">
+            {metrics.prevComercial > 0 ? `Anterior: ${formatCurrency(metrics.prevComercial)}` : 'Total fechado'}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-2xl shadow-lg text-white relative group">
+        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white relative group">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <p className="text-emerald-100 text-xs font-medium uppercase tracking-wider">Receita Clinica</p>
-              <div className="relative">
-                <Info className="w-3 h-3 text-emerald-200 hover:text-white cursor-help transition-colors" />
-                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 w-48 p-2 bg-emerald-700 text-white text-xs rounded-lg shadow-lg">
-                  Total de recebimentos registrados pela clinica no periodo selecionado.
-                </div>
-              </div>
+              <p className="text-emerald-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Receita Clínica</p>
             </div>
             {metrics.varRecebido !== 0 && (
-              <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${metrics.varRecebido > 0 ? 'bg-white/20' : 'bg-emerald-700/50'}`}>
+              <span className={`text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded ${metrics.varRecebido > 0 ? 'bg-white/20' : 'bg-emerald-700/50'}`}>
                 {metrics.varRecebido > 0 ? '+' : ''}{metrics.varRecebido.toFixed(1)}%
               </span>
             )}
           </div>
-          <p className="text-2xl font-black mt-1">{formatCurrency(metrics.totalRecebido)}</p>
-          <p className="text-emerald-100 text-xs mt-2">
-            {metrics.prevRecebido > 0 ? `Anterior: ${formatCurrency(metrics.prevRecebido)}` : 'Total recebido pela clinica'}
+          <p className="text-xl sm:text-2xl font-black mt-1">{formatCurrency(metrics.totalRecebido)}</p>
+          <p className="text-emerald-100 text-[10px] sm:text-xs mt-1 sm:mt-2 hidden sm:block">
+            {metrics.prevRecebido > 0 ? `Anterior: ${formatCurrency(metrics.prevRecebido)}` : 'Total recebido'}
           </p>
         </div>
-        <div className="bg-gradient-to-br from-violet-500 to-purple-600 p-5 rounded-2xl shadow-lg text-white relative group">
+        <div className="bg-gradient-to-br from-violet-500 to-purple-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white relative group">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               <TrendingUp className="w-3 h-3 text-violet-200" />
-              <p className="text-violet-100 text-xs font-medium uppercase tracking-wider">Total</p>
-              <div className="relative">
-                <Info className="w-3 h-3 text-violet-200 hover:text-white cursor-help transition-colors" />
-                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 w-48 p-2 bg-violet-700 text-white text-xs rounded-lg shadow-lg">
-                  Soma do Valor Comercial + Receita Clinica. Representa o faturamento total no periodo.
-                </div>
-              </div>
+              <p className="text-violet-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider">Total</p>
             </div>
             {metrics.varTotal !== 0 && (
-              <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${metrics.varTotal > 0 ? 'bg-white/20' : 'bg-violet-700/50'}`}>
+              <span className={`text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded ${metrics.varTotal > 0 ? 'bg-white/20' : 'bg-violet-700/50'}`}>
                 {metrics.varTotal > 0 ? '+' : ''}{metrics.varTotal.toFixed(1)}%
               </span>
             )}
           </div>
-          <p className="text-2xl font-black mt-1">{formatCurrency(metrics.total)}</p>
-          <p className="text-violet-100 text-xs mt-2">
+          <p className="text-xl sm:text-2xl font-black mt-1">{formatCurrency(metrics.total)}</p>
+          <p className="text-violet-100 text-[10px] sm:text-xs mt-1 sm:mt-2 hidden sm:block">
             {metrics.prevTotal > 0 ? `Anterior: ${formatCurrency(metrics.prevTotal)}` : 'Comercial + Receita'}
           </p>
         </div>
@@ -734,23 +719,18 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
 
       {/* Gráficos */}
       {dailyData.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
           {/* Gráfico de Evolução Diária */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-indigo-600" />
-                  Evolução por Dia
+                <h3 className="text-xs sm:text-sm font-bold text-slate-700 flex items-center gap-1 sm:gap-2">
+                  <BarChart3 className="w-3 h-3 sm:w-4 sm:h-4 text-indigo-600" />
+                  <span className="hidden sm:inline">Evolução por Dia</span>
+                  <span className="sm:hidden">Por Dia</span>
                 </h3>
-                <div className="relative group">
-                  <Info className="w-3 h-3 text-slate-400 hover:text-indigo-600 cursor-help transition-colors" />
-                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 w-48 p-2 bg-indigo-600 text-white text-xs rounded-lg shadow-lg">
-                    Valores de vendas e recebimentos agrupados por dia no periodo selecionado.
-                  </div>
-                </div>
               </div>
-              <span className="text-xs text-slate-500">{dailyData.length} dias</span>
+              <span className="text-[10px] sm:text-xs text-slate-500">{dailyData.length} dias</span>
             </div>
             
             {/* Barras Comercial */}
@@ -817,21 +797,15 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
           </div>
 
           {/* Gráfico por Origem */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-cyan-600" />
+                <h3 className="text-xs sm:text-sm font-bold text-slate-700 flex items-center gap-1 sm:gap-2">
+                  <Filter className="w-3 h-3 sm:w-4 sm:h-4 text-cyan-600" />
                   Por Origem
                 </h3>
-                <div className="relative group">
-                  <Info className="w-3 h-3 text-slate-400 hover:text-cyan-600 cursor-help transition-colors" />
-                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-10 w-48 p-2 bg-cyan-600 text-white text-xs rounded-lg shadow-lg">
-                    Distribuicao de vendas e recebimentos por origem de lead.
-                  </div>
-                </div>
               </div>
-              <span className="text-xs text-slate-500">{bySource.length} origens</span>
+              <span className="text-[10px] sm:text-xs text-slate-500">{bySource.length} origens</span>
             </div>
             
             <div className="space-y-3">
@@ -874,13 +848,13 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
       )}
 
       {/* Por Comercial */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-6">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm mb-4 sm:mb-6">
         <button 
           onClick={() => setExpandedSection(expandedSection === 'comercial' ? null : 'comercial')}
-          className="w-full p-4 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full p-3 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"
         >
-          <h3 className="text-base sm:text-lg font-bold text-slate-900">Por Comercial</h3>
-          {expandedSection === 'comercial' ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+          <h3 className="text-sm sm:text-lg font-bold text-slate-900">Por Comercial</h3>
+          {expandedSection === 'comercial' ? <ChevronUp className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" /> : <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />}
         </button>
         
         {expandedSection === 'comercial' && (
@@ -965,13 +939,13 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
       </div>
 
       {/* Por Origem */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-6">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm mb-4 sm:mb-6">
         <button 
           onClick={() => setExpandedSection(expandedSection === 'origem' ? null : 'origem')}
-          className="w-full p-4 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full p-3 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"
         >
-          <h3 className="text-base sm:text-lg font-bold text-slate-900">Por Origem</h3>
-          {expandedSection === 'origem' ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+          <h3 className="text-sm sm:text-lg font-bold text-slate-900">Por Origem</h3>
+          {expandedSection === 'origem' ? <ChevronUp className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" /> : <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />}
         </button>
         
         {expandedSection === 'origem' && (
@@ -1062,13 +1036,13 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
       </div>
 
       {/* Detalhamento */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
         <button 
           onClick={() => setExpandedSection(expandedSection === 'details' ? null : 'details')}
-          className="w-full p-4 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"
+          className="w-full p-3 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"
         >
-          <h3 className="text-base sm:text-lg font-bold text-slate-900">Detalhamento</h3>
-          {expandedSection === 'details' ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+          <h3 className="text-sm sm:text-lg font-bold text-slate-900">Detalhamento</h3>
+          {expandedSection === 'details' ? <ChevronUp className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" /> : <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />}
         </button>
         
         {expandedSection === 'details' && (
