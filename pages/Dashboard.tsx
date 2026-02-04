@@ -143,6 +143,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const [selectedSources, setSelectedSources] = useState<string[] | null>(null);
   const [showSourcesDropdown, setShowSourcesDropdown] = useState(false);
   
+  // Estado para card expandido na versão mobile de Leads por Origem
+  const [expandedSourceId, setExpandedSourceId] = useState<string | null>(null);
+  
   // Estados para meta do atendente
   const [userGoalData, setUserGoalData] = useState<{
     monthlyGoal: number;
@@ -1544,100 +1547,106 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   ];
 
   return (
-    <div className="p-8">
-      <div className="space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="space-y-4 sm:space-y-6 lg:space-y-8">
         {/* Header com Abas */}
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Dashboard</h1>
-          <p className="text-slate-500 mb-4">Resumo em tempo real da performance da sua clínica.</p>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Dashboard</h1>
+          <p className="text-sm sm:text-base text-slate-500 mb-3 sm:mb-4">Resumo em tempo real da performance da sua clínica.</p>
           
-          {/* Tabs */}
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'overview' 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">dashboard</span>
-                Visão Geral
-              </span>
-            </button>
-            {/* Abas dinâmicas para cada conta Meta Ads - Admin e SuperAdmin */}
-            {isAdmin && metaAdsAccounts.map((account) => (
+          {/* Tabs - Scroll horizontal no mobile */}
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-2">
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-max sm:w-fit">
               <button
-                key={account.id}
-                onClick={() => {
-                  setActiveTab(`meta_${account.account_id}`);
-                  setSelectedMetaAccountId(account.account_id);
-                }}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  activeTab === `meta_${account.account_id}` 
+                onClick={() => setActiveTab('overview')}
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'overview' 
                     ? 'bg-white text-slate-900 shadow-sm' 
                     : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                <span className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[18px]">ads_click</span>
-                  {account.account_name.length > 15 ? account.account_name.substring(0, 15) + '...' : account.account_name}
+                <span className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">dashboard</span>
+                  <span className="hidden sm:inline">Visão Geral</span>
+                  <span className="sm:hidden">Geral</span>
                 </span>
               </button>
-            ))}
-            <button
-              onClick={() => setActiveTab('tasks')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'tasks' 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">task_alt</span>
-                Tarefas
-              </span>
-            </button>
-            <button
-              onClick={() => setActiveTab('productivity')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'productivity' 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">speed</span>
-                Produtividade
-              </span>
-            </button>
-            <button
-              onClick={() => setActiveTab('leads')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'leads' 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">group</span>
-                Leads
-              </span>
-            </button>
-            <button
-              onClick={() => setActiveTab('charts')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === 'charts' 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">bar_chart</span>
-                Gráficos
-              </span>
-            </button>
+              {/* Abas dinâmicas para cada conta Meta Ads - Admin e SuperAdmin */}
+              {isAdmin && metaAdsAccounts.map((account) => (
+                <button
+                  key={account.id}
+                  onClick={() => {
+                    setActiveTab(`meta_${account.account_id}`);
+                    setSelectedMetaAccountId(account.account_id);
+                  }}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                    activeTab === `meta_${account.account_id}` 
+                      ? 'bg-white text-slate-900 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="material-symbols-outlined text-[16px] sm:text-[18px]">ads_click</span>
+                    <span className="hidden sm:inline">{account.account_name.length > 15 ? account.account_name.substring(0, 15) + '...' : account.account_name}</span>
+                    <span className="sm:hidden">{account.account_name.length > 8 ? account.account_name.substring(0, 8) + '...' : account.account_name}</span>
+                  </span>
+                </button>
+              ))}
+              <button
+                onClick={() => setActiveTab('tasks')}
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'tasks' 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">task_alt</span>
+                  Tarefas
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab('productivity')}
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'productivity' 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">speed</span>
+                  <span className="hidden sm:inline">Produtividade</span>
+                  <span className="sm:hidden">Prod.</span>
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab('leads')}
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'leads' 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">group</span>
+                  Leads
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab('charts')}
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'charts' 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="material-symbols-outlined text-[16px] sm:text-[18px]">bar_chart</span>
+                  <span className="hidden sm:inline">Gráficos</span>
+                  <span className="sm:hidden">Graf.</span>
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1645,124 +1654,124 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         {activeTab === 'overview' && (
           <>
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
           {stats.map(stat => (
             <div 
               key={stat.label} 
-              className={`bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1 transition-all duration-300 cursor-pointer hover:shadow-md ${expandedCard === stat.label ? 'ring-2 ring-blue-500' : ''}`}
+              className={`bg-white p-3 sm:p-4 lg:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-0.5 sm:gap-1 transition-all duration-300 cursor-pointer hover:shadow-md ${expandedCard === stat.label ? 'ring-2 ring-blue-500' : ''}`}
               onClick={() => setExpandedCard(expandedCard === stat.label ? null : stat.label)}
             >
-              <div className="flex justify-between items-center mb-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</span>
-                  <div className="relative group">
+              <div className="flex justify-between items-center mb-1 sm:mb-2">
+                <div className="flex items-center gap-1 sm:gap-1.5">
+                  <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</span>
+                  <div className="relative group hidden sm:block">
                     <span className="material-symbols-outlined text-[14px] text-slate-400 cursor-help hover:text-slate-600">info</span>
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 w-48 text-center z-50 shadow-lg">
                       {stat.tooltip}
                       <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
                     </div>
                   </div>
-                  <span className="material-symbols-outlined text-[14px] text-blue-500 ml-1">
+                  <span className="material-symbols-outlined text-[12px] sm:text-[14px] text-blue-500 ml-0.5 sm:ml-1">
                     {expandedCard === stat.label ? 'expand_less' : 'expand_more'}
                   </span>
                 </div>
-                <span className={`material-symbols-outlined text-${stat.color}-600`}>{stat.icon}</span>
+                <span className={`material-symbols-outlined text-[18px] sm:text-[20px] lg:text-[24px] text-${stat.color}-600`}>{stat.icon}</span>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-slate-900">{stat.value}</span>
+              <div className="flex items-baseline gap-1 sm:gap-2">
+                <span className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900">{stat.value}</span>
                 {(() => {
                   const change = calcChange(parseInt(stat.value), stat.yesterdayValue);
                   if (!change) return null;
                   const isPositive = change.diff >= 0;
                   return (
-                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${isPositive ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+                    <span className={`text-[10px] sm:text-xs font-bold px-1 sm:px-1.5 py-0.5 rounded ${isPositive ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
                       {isPositive ? '+' : ''}{change.percent}%
                     </span>
                   );
                 })()}
               </div>
-              <span className="text-xs text-slate-400">
+              <span className="text-[10px] sm:text-xs text-slate-400">
                 {stat.yesterdayValue !== undefined ? `ontem: ${stat.yesterdayValue}` : 'vs. ontem'}
               </span>
               
               {/* Card expandido - Detalhes de Novos Leads */}
               {stat.label === 'Novos Leads' && expandedCard === 'Novos Leads' && leadsDetails && (
-                <div className="mt-4 pt-4 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
+                <div className="mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-slate-200 space-y-2 sm:space-y-3 animate-in fade-in duration-200">
                   {/* Leads Hoje */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-emerald-500">today</span>
-                      <span className="text-sm text-slate-600">Leads Hoje</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-emerald-500">today</span>
+                      <span className="text-xs sm:text-sm text-slate-600">Leads Hoje</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-slate-800">{leadsDetails.leadsHoje}</span>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <span className="text-sm sm:text-lg font-bold text-slate-800">{leadsDetails.leadsHoje}</span>
                       {leadsDetails.leadsHojeOntem > 0 && (
-                        <span className="text-xs text-slate-400">(ontem: {leadsDetails.leadsHojeOntem})</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400">(ontem: {leadsDetails.leadsHojeOntem})</span>
                       )}
                     </div>
                   </div>
                   
                   {/* Separador - Por Origem */}
-                  <div className="pt-2 pb-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Por Origem</span>
+                  <div className="pt-1 sm:pt-2 pb-0.5 sm:pb-1">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Por Origem</span>
                   </div>
                   
                   {/* Meta Ads */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-pink-500">ads_click</span>
-                      <span className="text-sm text-slate-600">Meta Ads</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-pink-500">ads_click</span>
+                      <span className="text-xs sm:text-sm text-slate-600">Meta Ads</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-pink-600">{leadsDetails.leadsMetaAdsHoje}</span>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <span className="text-sm sm:text-lg font-bold text-pink-600">{leadsDetails.leadsMetaAdsHoje}</span>
                       {leadsDetails.leadsMetaAdsOntem > 0 && (
-                        <span className="text-xs text-slate-400">(ontem: {leadsDetails.leadsMetaAdsOntem})</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400 hidden sm:inline">(ontem: {leadsDetails.leadsMetaAdsOntem})</span>
                       )}
                     </div>
                   </div>
                   
                   {/* Links Rastreáveis */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-indigo-500">link</span>
-                      <span className="text-sm text-slate-600">Links Rastreáveis</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-indigo-500">link</span>
+                      <span className="text-xs sm:text-sm text-slate-600">Links</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-indigo-600">{leadsDetails.leadsLinksHoje}</span>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <span className="text-sm sm:text-lg font-bold text-indigo-600">{leadsDetails.leadsLinksHoje}</span>
                       {leadsDetails.leadsLinksOntem > 0 && (
-                        <span className="text-xs text-slate-400">(ontem: {leadsDetails.leadsLinksOntem})</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400 hidden sm:inline">(ontem: {leadsDetails.leadsLinksOntem})</span>
                       )}
                     </div>
                   </div>
                   
                   {/* Orgânico */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-emerald-500">public</span>
-                      <span className="text-sm text-slate-600">Orgânico</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-emerald-500">public</span>
+                      <span className="text-xs sm:text-sm text-slate-600">Orgânico</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-emerald-600">{leadsDetails.leadsOrganicoHoje}</span>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <span className="text-sm sm:text-lg font-bold text-emerald-600">{leadsDetails.leadsOrganicoHoje}</span>
                       {leadsDetails.leadsOrganicoOntem > 0 && (
-                        <span className="text-xs text-slate-400">(ontem: {leadsDetails.leadsOrganicoOntem})</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400 hidden sm:inline">(ontem: {leadsDetails.leadsOrganicoOntem})</span>
                       )}
                     </div>
                   </div>
                   
                   {/* Top Origens */}
                   {leadsDetails.topOrigens.length > 0 && (
-                    <div className="pt-3 border-t border-slate-100">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Top Origens Hoje</span>
-                      <div className="space-y-1.5">
+                    <div className="pt-2 sm:pt-3 border-t border-slate-100">
+                      <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 sm:mb-2">Top Origens Hoje</span>
+                      <div className="space-y-1 sm:space-y-1.5">
                         {leadsDetails.topOrigens.map((origem, idx) => (
                           <div key={idx} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
+                              <span className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full flex-shrink-0 ${
                                 origem.tipo === 'meta' ? 'bg-pink-500' : 
                                 origem.tipo === 'link' ? 'bg-indigo-500' : 'bg-slate-400'
                               }`}></span>
-                              <span className="text-xs text-slate-600 truncate" title={origem.nome}>
-                                {origem.nome.length > 25 ? origem.nome.substring(0, 25) + '...' : origem.nome}
+                              <span className="text-[10px] sm:text-xs text-slate-600 truncate" title={origem.nome}>
+                                {origem.nome.length > 15 ? origem.nome.substring(0, 15) + '...' : origem.nome}
                               </span>
                               {origem.codigo && origem.codigo !== origem.nome && (
                                 <span className="text-[10px] text-slate-400">({origem.codigo})</span>
@@ -1775,7 +1784,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     </div>
                   )}
                   
-                  <p className="text-[10px] text-slate-400 pt-2">
+                  <p className="text-[8px] sm:text-[10px] text-slate-400 pt-1 sm:pt-2 hidden sm:block">
                     * Meta Ads = Click to WhatsApp | Links = Bio, Site | Orgânico = Sem origem identificada
                   </p>
                 </div>
@@ -1783,80 +1792,80 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               
               {/* Card expandido - Detalhes de Em Atendimento */}
               {stat.label === 'Em Atendimento' && expandedCard === 'Em Atendimento' && atendimentoDetails && (
-                <div className="mt-4 pt-4 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
+                <div className="mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-slate-200 space-y-2 sm:space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-orange-500">groups</span>
-                      <span className="text-sm text-slate-600">Atendentes ativos</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-orange-500">groups</span>
+                      <span className="text-xs sm:text-sm text-slate-600">Atendentes</span>
                     </div>
-                    <span className="text-lg font-bold text-slate-800">{atendimentoDetails.atendentesAtivos}</span>
+                    <span className="text-sm sm:text-lg font-bold text-slate-800">{atendimentoDetails.atendentesAtivos}</span>
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-emerald-500">today</span>
-                      <span className="text-sm text-slate-600">Iniciados hoje</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-emerald-500">today</span>
+                      <span className="text-xs sm:text-sm text-slate-600">Iniciados hoje</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-slate-800">{atendimentoDetails.iniciadosHoje}</span>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <span className="text-sm sm:text-lg font-bold text-slate-800">{atendimentoDetails.iniciadosHoje}</span>
                       {atendimentoDetails.iniciadosOntem > 0 && (
-                        <span className="text-xs text-slate-400">(ontem: {atendimentoDetails.iniciadosOntem})</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400 hidden sm:inline">(ontem: {atendimentoDetails.iniciadosOntem})</span>
                       )}
                     </div>
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-blue-500">schedule</span>
-                      <span className="text-sm text-slate-600">Média em atendimento</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-blue-500">schedule</span>
+                      <span className="text-xs sm:text-sm text-slate-600">Média</span>
                     </div>
-                    <span className="text-lg font-bold text-blue-600">{atendimentoDetails.mediaDias} dias</span>
+                    <span className="text-sm sm:text-lg font-bold text-blue-600">{atendimentoDetails.mediaDias} dias</span>
                   </div>
                 </div>
               )}
               
               {/* Card expandido - Detalhes de Vendas Concluídas */}
               {stat.label === 'Vendas Concluídas' && expandedCard === 'Vendas Concluídas' && vendasDetails && (
-                <div className="mt-4 pt-4 border-t border-slate-200 space-y-3 animate-in fade-in duration-200">
+                <div className="mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-slate-200 space-y-2 sm:space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-emerald-500">payments</span>
-                      <span className="text-sm text-slate-600">Valor total</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-emerald-500">payments</span>
+                      <span className="text-xs sm:text-sm text-slate-600">Valor total</span>
                     </div>
-                    <span className="text-lg font-bold text-emerald-600">
-                      R$ {vendasDetails.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    <span className="text-xs sm:text-lg font-bold text-emerald-600">
+                      R$ {vendasDetails.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </span>
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-purple-500">local_offer</span>
-                      <span className="text-sm text-slate-600">Ticket médio</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-purple-500">local_offer</span>
+                      <span className="text-xs sm:text-sm text-slate-600">Ticket médio</span>
                     </div>
-                    <span className="text-lg font-bold text-purple-600">
-                      R$ {vendasDetails.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    <span className="text-xs sm:text-lg font-bold text-purple-600">
+                      R$ {vendasDetails.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </span>
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[18px] text-blue-500">today</span>
-                      <span className="text-sm text-slate-600">Vendas hoje</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-blue-500">today</span>
+                      <span className="text-xs sm:text-sm text-slate-600">Vendas hoje</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold text-slate-800">{vendasDetails.vendasHoje}</span>
-                      <span className="text-xs text-slate-400">(ontem: {vendasDetails.vendasOntem})</span>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <span className="text-sm sm:text-lg font-bold text-slate-800">{vendasDetails.vendasHoje}</span>
+                      <span className="text-[10px] sm:text-xs text-slate-400 hidden sm:inline">(ontem: {vendasDetails.vendasOntem})</span>
                     </div>
                   </div>
                   
                   {vendasDetails.valorHoje > 0 && (
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[18px] text-green-500">trending_up</span>
-                        <span className="text-sm text-slate-600">Valor hoje</span>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-green-500">trending_up</span>
+                        <span className="text-xs sm:text-sm text-slate-600">Valor hoje</span>
                       </div>
-                      <span className="text-lg font-bold text-green-600">
-                        R$ {vendasDetails.valorHoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      <span className="text-xs sm:text-lg font-bold text-green-600">
+                        R$ {vendasDetails.valorHoje.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </span>
                     </div>
                   )}
@@ -1865,56 +1874,56 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               
               {/* Card expandido - Detalhes de Total Conversas */}
               {stat.label === 'Total Conversas' && expandedCard === 'Total Conversas' && conversasDetails && (
-                <div className="mt-4 pt-4 border-t border-slate-200 space-y-2 animate-in fade-in duration-200">
+                <div className="mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-slate-200 space-y-1.5 sm:space-y-2 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
-                      <span className="text-sm text-slate-600">Novos Leads</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-yellow-500"></span>
+                      <span className="text-xs sm:text-sm text-slate-600">Novos</span>
                     </div>
-                    <span className="text-sm font-bold text-slate-800">{conversasDetails.novosLeads}</span>
+                    <span className="text-xs sm:text-sm font-bold text-slate-800">{conversasDetails.novosLeads}</span>
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                      <span className="text-sm text-slate-600">Em Atendimento</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-orange-500"></span>
+                      <span className="text-xs sm:text-sm text-slate-600">Atendimento</span>
                     </div>
-                    <span className="text-sm font-bold text-slate-800">{conversasDetails.emAtendimento}</span>
+                    <span className="text-xs sm:text-sm font-bold text-slate-800">{conversasDetails.emAtendimento}</span>
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                      <span className="text-sm text-slate-600">Convertidos</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-green-500"></span>
+                      <span className="text-xs sm:text-sm text-slate-600">Convertidos</span>
                     </div>
-                    <span className="text-sm font-bold text-green-600">{conversasDetails.convertidos}</span>
+                    <span className="text-xs sm:text-sm font-bold text-green-600">{conversasDetails.convertidos}</span>
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                      <span className="text-sm text-slate-600">Perdidos</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500"></span>
+                      <span className="text-xs sm:text-sm text-slate-600">Perdidos</span>
                     </div>
-                    <span className="text-sm font-bold text-red-600">{conversasDetails.perdidos}</span>
+                    <span className="text-xs sm:text-sm font-bold text-red-600">{conversasDetails.perdidos}</span>
                   </div>
                   
                   {conversasDetails.outros > 0 && (
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-                        <span className="text-sm text-slate-600">Outros</span>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-slate-400"></span>
+                        <span className="text-xs sm:text-sm text-slate-600">Outros</span>
                       </div>
-                      <span className="text-sm font-bold text-slate-600">{conversasDetails.outros}</span>
+                      <span className="text-xs sm:text-sm font-bold text-slate-600">{conversasDetails.outros}</span>
                     </div>
                   )}
                   
-                  <div className="pt-2 mt-2 border-t border-slate-100">
+                  <div className="pt-1.5 sm:pt-2 mt-1.5 sm:mt-2 border-t border-slate-100">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[18px] text-purple-500">analytics</span>
-                        <span className="text-sm font-medium text-slate-700">Taxa de conversão</span>
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="material-symbols-outlined text-[14px] sm:text-[18px] text-purple-500">analytics</span>
+                        <span className="text-xs sm:text-sm font-medium text-slate-700">Conversão</span>
                       </div>
-                      <span className="text-lg font-bold text-purple-600">{conversasDetails.taxaConversao}%</span>
+                      <span className="text-sm sm:text-lg font-bold text-purple-600">{conversasDetails.taxaConversao}%</span>
                     </div>
                   </div>
                 </div>
@@ -1925,80 +1934,82 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
         {/* Faturamento Cards - 4 cards: Comercial, Clínica, Total Mês, Total Geral */}
         {canSeeBilling && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {/* Receita Comercial do Mês */}
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-5 rounded-2xl shadow-lg text-white">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="text-orange-100 text-xs font-medium uppercase tracking-wider">Receita Comercial</p>
-                <p className="text-2xl font-black mt-1">
-                  R$ {monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-2 sm:mb-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-orange-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider truncate">Receita Comercial</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-black mt-0.5 sm:mt-1 truncate">
+                  R$ {monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </p>
               </div>
-              <div className="bg-white/20 p-2 rounded-xl">
-                <span className="material-symbols-outlined text-xl">storefront</span>
+              <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl flex-shrink-0 ml-2">
+                <span className="material-symbols-outlined text-base sm:text-lg lg:text-xl">storefront</span>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-orange-100 text-xs">
-              <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+            <div className="flex items-center gap-1 text-orange-100 text-[10px] sm:text-xs">
+              <span className="material-symbols-outlined text-[12px] sm:text-[14px]">calendar_month</span>
               {new Date().toLocaleDateString('pt-BR', { month: 'short' })}
             </div>
           </div>
 
           {/* Receita Clínica do Mês */}
-          <div className="bg-gradient-to-br from-teal-500 to-teal-600 p-5 rounded-2xl shadow-lg text-white">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="text-teal-100 text-xs font-medium uppercase tracking-wider">Receita Clínica</p>
-                <p className="text-2xl font-black mt-1">
-                  R$ {(totalClinicRevenue?.monthly || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          <div className="bg-gradient-to-br from-teal-500 to-teal-600 p-3 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-2 sm:mb-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-teal-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider truncate">Receita Clínica</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-black mt-0.5 sm:mt-1 truncate">
+                  R$ {(totalClinicRevenue?.monthly || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </p>
               </div>
-              <div className="bg-white/20 p-2 rounded-xl">
-                <span className="material-symbols-outlined text-xl">medical_services</span>
+              <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl flex-shrink-0 ml-2">
+                <span className="material-symbols-outlined text-base sm:text-lg lg:text-xl">medical_services</span>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-teal-100 text-xs">
-              <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+            <div className="flex items-center gap-1 text-teal-100 text-[10px] sm:text-xs">
+              <span className="material-symbols-outlined text-[12px] sm:text-[14px]">calendar_month</span>
               {new Date().toLocaleDateString('pt-BR', { month: 'short' })}
             </div>
           </div>
 
           {/* Faturamento do Mês (Total) */}
-          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 rounded-2xl shadow-lg text-white">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="text-emerald-100 text-xs font-medium uppercase tracking-wider">Faturamento do Mês</p>
-                <p className="text-2xl font-black mt-1">
-                  R$ {(monthlyRevenue + (totalClinicRevenue?.monthly || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-3 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-2 sm:mb-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-emerald-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider truncate">Fat. do Mês</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-black mt-0.5 sm:mt-1 truncate">
+                  R$ {(monthlyRevenue + (totalClinicRevenue?.monthly || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </p>
               </div>
-              <div className="bg-white/20 p-2 rounded-xl">
-                <span className="material-symbols-outlined text-xl">trending_up</span>
+              <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl flex-shrink-0 ml-2">
+                <span className="material-symbols-outlined text-base sm:text-lg lg:text-xl">trending_up</span>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-emerald-100 text-xs">
-              <span className="material-symbols-outlined text-[14px]">add</span>
-              Comercial + Clínica
+            <div className="flex items-center gap-1 text-emerald-100 text-[10px] sm:text-xs">
+              <span className="material-symbols-outlined text-[12px] sm:text-[14px]">add</span>
+              <span className="hidden sm:inline">Comercial + Clínica</span>
+              <span className="sm:hidden">Total</span>
             </div>
           </div>
 
           {/* Faturamento Total */}
-          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 p-5 rounded-2xl shadow-lg text-white">
-            <div className="flex justify-between items-start mb-3">
-              <div>
-                <p className="text-cyan-100 text-xs font-medium uppercase tracking-wider">Faturamento Total</p>
-                <p className="text-2xl font-black mt-1">
-                  R$ {(totalRevenue + (totalClinicRevenue?.total || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 p-3 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white">
+            <div className="flex justify-between items-start mb-2 sm:mb-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-cyan-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider truncate">Fat. Total</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-black mt-0.5 sm:mt-1 truncate">
+                  R$ {(totalRevenue + (totalClinicRevenue?.total || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </p>
               </div>
-              <div className="bg-white/20 p-2 rounded-xl">
-                <span className="material-symbols-outlined text-xl">payments</span>
+              <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl flex-shrink-0 ml-2">
+                <span className="material-symbols-outlined text-base sm:text-lg lg:text-xl">payments</span>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-cyan-100 text-xs">
-              <span className="material-symbols-outlined text-[14px]">account_balance</span>
-              Acumulado geral
+            <div className="flex items-center gap-1 text-cyan-100 text-[10px] sm:text-xs">
+              <span className="material-symbols-outlined text-[12px] sm:text-[14px]">account_balance</span>
+              <span className="hidden sm:inline">Acumulado geral</span>
+              <span className="sm:hidden">Geral</span>
             </div>
           </div>
         </div>
@@ -2204,16 +2215,16 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
         {/* Leads por Origem */}
         {canSeeBilling && (
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+          <div className="bg-white p-3 sm:p-4 lg:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Leads por Origem</h3>
-                <p className="text-sm text-slate-500">Performance de cada canal de aquisição</p>
+                <h3 className="text-sm sm:text-base lg:text-lg font-bold text-slate-900">Leads por Origem</h3>
+                <p className="text-xs sm:text-sm text-slate-500">Performance de cada canal</p>
               </div>
-              <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center w-full sm:w-auto">
                 <button
                   onClick={() => { setSourcesPeriodFilter('today'); setSourcesPage(1); }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
                     sourcesPeriodFilter === 'today' 
                       ? 'bg-cyan-100 text-cyan-700' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -2223,7 +2234,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                 </button>
                 <button
                   onClick={() => { setSourcesPeriodFilter('yesterday'); setSourcesPage(1); }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors hidden sm:block ${
                     sourcesPeriodFilter === 'yesterday' 
                       ? 'bg-cyan-100 text-cyan-700' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -2233,37 +2244,37 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                 </button>
                 <button
                   onClick={() => { setSourcesPeriodFilter('7d'); setSourcesPage(1); }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
                     sourcesPeriodFilter === '7d' 
                       ? 'bg-cyan-100 text-cyan-700' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  7 dias
+                  7d
                 </button>
                 <button
                   onClick={() => { setSourcesPeriodFilter('30d'); setSourcesPage(1); }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
                     sourcesPeriodFilter === '30d' 
                       ? 'bg-cyan-100 text-cyan-700' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  30 dias
+                  30d
                 </button>
                 <button
                   onClick={() => { setSourcesPeriodFilter('month'); setSourcesPage(1); }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors hidden sm:block ${
                     sourcesPeriodFilter === 'month' 
                       ? 'bg-cyan-100 text-cyan-700' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  Este mês
+                  Mês
                 </button>
                 <button
                   onClick={() => { setSourcesPeriodFilter('all'); setSourcesPage(1); }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
                     sourcesPeriodFilter === 'all' 
                       ? 'bg-cyan-100 text-cyan-700' 
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -2371,16 +2382,154 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               </div>
             </div>
             
-            <div className="overflow-x-auto">
+            {/* Versão Mobile - Cards Expansíveis */}
+            <div className="sm:hidden space-y-2">
+              {filteredLeadSourceStats.length === 0 ? (
+                <div className="py-6 text-center text-slate-400">
+                  <span className="material-symbols-outlined text-2xl mb-2 block">inbox</span>
+                  <span className="text-xs">Nenhum lead encontrado</span>
+                </div>
+              ) : (
+                <>
+                  {filteredLeadSourceStats
+                    .slice((sourcesPage - 1) * sourcesPerPage, sourcesPage * sourcesPerPage)
+                    .map(source => {
+                    const conversionRate = source.total_leads > 0 
+                      ? ((source.converted_leads / source.total_leads) * 100).toFixed(1) 
+                      : '0.0';
+                    const isExpanded = expandedSourceId === source.id;
+                    return (
+                      <div 
+                        key={source.id} 
+                        className={`bg-slate-50 rounded-xl border transition-all ${isExpanded ? 'border-cyan-300 bg-white shadow-sm' : 'border-slate-200'}`}
+                      >
+                        {/* Header do Card - Sempre visível */}
+                        <div 
+                          className="flex items-center justify-between p-3 cursor-pointer"
+                          onClick={() => setExpandedSourceId(isExpanded ? null : source.id)}
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <span className="size-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: source.tag_color || source.color }}></span>
+                            <span className="font-medium text-slate-800 text-xs truncate">{source.code || source.name}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-bold text-slate-800 text-xs">{source.total_leads}</span>
+                            <span className="font-bold text-cyan-600 text-xs">
+                              R$ {(source.revenue + source.clinic_revenue).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </span>
+                            <span className="material-symbols-outlined text-slate-400 text-[16px]">
+                              {isExpanded ? 'expand_less' : 'expand_more'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Conteúdo Expandido */}
+                        {isExpanded && (
+                          <div className="px-3 pb-3 pt-1 border-t border-slate-100 animate-in fade-in duration-200">
+                            <div className="grid grid-cols-3 gap-2 mb-3">
+                              <div className="text-center">
+                                <p className="text-[9px] text-slate-400 uppercase font-medium">Leads</p>
+                                <p className="text-sm font-bold text-slate-800">{source.total_leads}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[9px] text-slate-400 uppercase font-medium">Conv.</p>
+                                <p className="text-sm font-bold text-green-600">{source.converted_leads}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[9px] text-slate-400 uppercase font-medium">Taxa</p>
+                                <p className={`text-sm font-bold ${Number(conversionRate) >= 30 ? 'text-green-600' : Number(conversionRate) >= 15 ? 'text-amber-600' : 'text-slate-500'}`}>
+                                  {conversionRate}%
+                                </p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="text-center">
+                                <p className="text-[9px] text-slate-400 uppercase font-medium">Comercial</p>
+                                <p className="text-sm font-bold text-amber-600">
+                                  R$ {source.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[9px] text-slate-400 uppercase font-medium">Clínica</p>
+                                <p className="text-sm font-bold text-emerald-600">
+                                  R$ {source.clinic_revenue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[9px] text-slate-400 uppercase font-medium">Total</p>
+                                <p className="text-sm font-bold text-cyan-600">
+                                  R$ {(source.revenue + source.clinic_revenue).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                </p>
+                              </div>
+                            </div>
+                            {canDeleteSources && (
+                              <div className="flex justify-end mt-3 pt-2 border-t border-slate-100">
+                                <button
+                                  onClick={(e) => { 
+                                    e.stopPropagation();
+                                    setDeleteSourceModal({ 
+                                      id: source.id, 
+                                      name: source.code || source.name, 
+                                      leadsCount: source.total_leads 
+                                    });
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors text-xs"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">delete</span>
+                                  Deletar
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Totais Mobile */}
+                  <div className="bg-slate-100 rounded-xl p-3 mt-3">
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      <div>
+                        <p className="text-[9px] text-slate-500 uppercase font-medium">Leads</p>
+                        <p className="text-sm font-bold text-slate-800">
+                          {filteredLeadSourceStats.reduce((sum, s) => sum + s.total_leads, 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-slate-500 uppercase font-medium">Comercial</p>
+                        <p className="text-sm font-bold text-amber-600">
+                          R$ {filteredLeadSourceStats.reduce((sum, s) => sum + s.revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-slate-500 uppercase font-medium">Clínica</p>
+                        <p className="text-sm font-bold text-emerald-600">
+                          R$ {filteredLeadSourceStats.reduce((sum, s) => sum + s.clinic_revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-slate-500 uppercase font-medium">Total</p>
+                        <p className="text-sm font-bold text-cyan-600">
+                          R$ {filteredLeadSourceStats.reduce((sum, s) => sum + s.revenue + s.clinic_revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Versão Desktop/Tablet - Tabela */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200">
                     <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Origem</th>
                     <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Leads</th>
-                    <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Convertidos</th>
+                    <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Conv.</th>
                     <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Taxa</th>
                     <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Comercial</th>
-                    <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Receita Clínica</th>
+                    <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Clínica</th>
                     <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Total</th>
                     {canDeleteSources && (
                       <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-16">Ações</th>
@@ -2390,9 +2539,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                 <tbody className="divide-y divide-slate-100">
                   {filteredLeadSourceStats.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                      <td colSpan={8} className="py-8 text-center text-slate-400">
                         <span className="material-symbols-outlined text-4xl mb-2 block">inbox</span>
-                        Nenhum lead encontrado para o período selecionado
+                        <span className="text-sm">Nenhum lead encontrado</span>
                       </td>
                     </tr>
                   ) : filteredLeadSourceStats
@@ -2405,8 +2554,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                       <tr key={source.id} className="hover:bg-slate-50 transition-colors">
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
-                            <span className="size-3 rounded-full" style={{ backgroundColor: source.tag_color || source.color }}></span>
-                            <span className="font-medium text-slate-800">{source.code || source.name}</span>
+                            <span className="size-3 rounded-full flex-shrink-0" style={{ backgroundColor: source.tag_color || source.color }}></span>
+                            <span className="font-medium text-slate-800 text-sm">{source.code || source.name}</span>
                             {source.tag_name && (
                               <span 
                                 className="text-[10px] text-white px-1.5 py-0.5 rounded font-medium"
@@ -2495,35 +2644,35 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             
             {/* Paginação */}
             {filteredLeadSourceStats.length > sourcesPerPage && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-                <p className="text-sm text-slate-500">
-                  Mostrando {Math.min((sourcesPage - 1) * sourcesPerPage + 1, filteredLeadSourceStats.length)} - {Math.min(sourcesPage * sourcesPerPage, filteredLeadSourceStats.length)} de {filteredLeadSourceStats.length} origens
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-100">
+                <p className="text-[10px] sm:text-sm text-slate-500">
+                  {Math.min((sourcesPage - 1) * sourcesPerPage + 1, filteredLeadSourceStats.length)}-{Math.min(sourcesPage * sourcesPerPage, filteredLeadSourceStats.length)} de {filteredLeadSourceStats.length}
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <button
                     onClick={() => setSourcesPage(p => Math.max(1, p - 1))}
                     disabled={sourcesPage === 1}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
                       sourcesPage === 1
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    Anterior
+                    Ant.
                   </button>
-                  <span className="text-sm text-slate-600">
-                    Página {sourcesPage} de {Math.ceil(filteredLeadSourceStats.length / sourcesPerPage)}
+                  <span className="text-[10px] sm:text-sm text-slate-600">
+                    {sourcesPage}/{Math.ceil(filteredLeadSourceStats.length / sourcesPerPage)}
                   </span>
                   <button
                     onClick={() => setSourcesPage(p => Math.min(Math.ceil(filteredLeadSourceStats.length / sourcesPerPage), p + 1))}
                     disabled={sourcesPage >= Math.ceil(filteredLeadSourceStats.length / sourcesPerPage)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                    className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-lg transition-colors ${
                       sourcesPage >= Math.ceil(filteredLeadSourceStats.length / sourcesPerPage)
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    Próxima
+                    Próx.
                   </button>
                 </div>
               </div>
@@ -2532,19 +2681,19 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         )}
 
         {/* Seção de Tarefas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
           {/* Tarefas Atrasadas */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100 bg-red-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-red-600">warning</span>
-                <h3 className="font-bold text-red-800 text-sm">Atrasadas</h3>
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-red-50 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="material-symbols-outlined text-base sm:text-xl text-red-600">warning</span>
+                <h3 className="font-bold text-red-800 text-xs sm:text-sm">Atrasadas</h3>
               </div>
-              <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              <span className="bg-red-600 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full">
                 {overdueTasks.length}
               </span>
             </div>
-            <div className="p-4 max-h-64 overflow-y-auto">
+            <div className="p-3 sm:p-4 max-h-48 sm:max-h-64 overflow-y-auto">
               {overdueTasks.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-4">Nenhuma tarefa atrasada</p>
               ) : (
@@ -2574,17 +2723,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           </div>
 
           {/* Tarefas de Hoje */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100 bg-amber-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-600">today</span>
-                <h3 className="font-bold text-amber-800 text-sm">Hoje</h3>
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-amber-50 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="material-symbols-outlined text-base sm:text-xl text-amber-600">today</span>
+                <h3 className="font-bold text-amber-800 text-xs sm:text-sm">Hoje</h3>
               </div>
-              <span className="bg-amber-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              <span className="bg-amber-600 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full">
                 {todayTasks.length}
               </span>
             </div>
-            <div className="p-4 max-h-64 overflow-y-auto">
+            <div className="p-3 sm:p-4 max-h-48 sm:max-h-64 overflow-y-auto">
               {todayTasks.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-4">Nenhuma tarefa para hoje</p>
               ) : (
@@ -2611,17 +2760,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           </div>
 
           {/* Tarefas da Semana */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100 bg-cyan-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-cyan-600">date_range</span>
-                <h3 className="font-bold text-cyan-800 text-sm">Esta Semana</h3>
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-cyan-50 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="material-symbols-outlined text-base sm:text-xl text-cyan-600">date_range</span>
+                <h3 className="font-bold text-cyan-800 text-xs sm:text-sm">Esta Semana</h3>
               </div>
-              <span className="bg-cyan-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              <span className="bg-cyan-600 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full">
                 {weekTasks.length}
               </span>
             </div>
-            <div className="p-4 max-h-64 overflow-y-auto">
+            <div className="p-3 sm:p-4 max-h-48 sm:max-h-64 overflow-y-auto">
               {weekTasks.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-4">Nenhuma tarefa esta semana</p>
               ) : (
@@ -2652,21 +2801,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         </div>
 
         {/* Seção de Follow-ups Agendados */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 bg-blue-50 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-blue-600">schedule_send</span>
-              <h3 className="font-bold text-blue-800 text-sm">Follow-ups Agendados</h3>
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-3 sm:p-4 border-b border-slate-100 bg-blue-50 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="material-symbols-outlined text-base sm:text-xl text-blue-600">schedule_send</span>
+              <h3 className="font-bold text-blue-800 text-xs sm:text-sm">Follow-ups Agendados</h3>
             </div>
-            <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+            <span className="bg-blue-600 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full">
               {scheduledFollowups.length}
             </span>
           </div>
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             {scheduledFollowups.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Nenhum follow-up agendado</p>
+              <p className="text-xs sm:text-sm text-slate-400 text-center py-3 sm:py-4">Nenhum follow-up agendado</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
                 {scheduledFollowups.map(followup => (
                   <div 
                     key={followup.id}
@@ -2691,59 +2840,57 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         </div>
 
         {/* Chart Section Simulation */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm h-96 flex flex-col">
-            <div className="flex justify-between items-center mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+          <div className="lg:col-span-2 bg-white p-4 sm:p-6 lg:p-8 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm h-64 sm:h-80 lg:h-96 flex flex-col">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 mb-4 sm:mb-6 lg:mb-8">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Fluxo de Mensagens</h3>
-                <p className="text-sm text-slate-500">Volume de entrada e saída nas últimas 24h</p>
+                <h3 className="text-sm sm:text-base lg:text-lg font-bold text-slate-900">Fluxo de Mensagens</h3>
+                <p className="text-xs sm:text-sm text-slate-500">Volume nas últimas 24h</p>
               </div>
-              <select className="bg-slate-50 border-slate-200 rounded-lg text-sm font-medium">
+              <select className="bg-slate-50 border-slate-200 rounded-lg text-xs sm:text-sm font-medium px-2 py-1">
                 <option>Hoje</option>
-                <option>Últimos 7 dias</option>
+                <option>7 dias</option>
               </select>
             </div>
             
-            <div className="flex-1 flex items-end justify-between gap-2 px-2">
-              {/* Simulated Chart Bars */}
-              {Array.from({ length: 24 }).map((_, i) => (
+            <div className="flex-1 flex items-end justify-between gap-0.5 sm:gap-1 lg:gap-2 px-1 sm:px-2">
+              {/* Simulated Chart Bars - menos barras no mobile */}
+              {Array.from({ length: 12 }).map((_, i) => (
                 <div 
                   key={i} 
                   className="w-full bg-cyan-100 rounded-t-sm hover:bg-cyan-600 transition-colors cursor-pointer"
                   style={{ height: `${20 + Math.random() * 80}%` }}
-                  title={`${i}h: ${Math.floor(Math.random() * 100)} msg`}
+                  title={`${i*2}h: ${Math.floor(Math.random() * 100)} msg`}
                 />
               ))}
             </div>
-            <div className="flex justify-between mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">
+            <div className="flex justify-between mt-2 sm:mt-4 text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1 sm:px-2">
               <span>00h</span>
-              <span>06h</span>
               <span>12h</span>
-              <span>18h</span>
               <span>23h</span>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="font-bold text-slate-900">Leads Recentes</h3>
-              <a href="#" className="text-xs font-bold text-cyan-600">Ver todos</a>
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-3 sm:p-4 lg:p-6 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">Leads Recentes</h3>
+              <a href="#" className="text-[10px] sm:text-xs font-bold text-cyan-600">Ver todos</a>
             </div>
-            <div className="flex-1 overflow-auto divide-y divide-slate-50">
+            <div className="flex-1 overflow-auto divide-y divide-slate-50 max-h-48 sm:max-h-64 lg:max-h-none">
               {loading ? (
-                <div className="p-8 text-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600 mx-auto"></div>
+                <div className="p-4 sm:p-8 text-center">
+                  <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-cyan-600 mx-auto"></div>
                 </div>
               ) : chats.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-sm">Nenhuma conversa ainda</div>
+                <div className="p-4 sm:p-8 text-center text-slate-400 text-xs sm:text-sm">Nenhuma conversa ainda</div>
               ) : chats.slice(0, 6).map(chat => (
-                <div key={chat.id} className="p-4 flex items-center gap-3 hover:bg-slate-50 transition-colors cursor-pointer">
-                  <img src={chat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.client_name)}&background=0891b2&color=fff`} className="size-10 rounded-full border border-slate-100" />
+                <div key={chat.id} className="p-2.5 sm:p-3 lg:p-4 flex items-center gap-2 sm:gap-3 hover:bg-slate-50 transition-colors cursor-pointer">
+                  <img src={chat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.client_name)}&background=0891b2&color=fff`} className="size-8 sm:size-10 rounded-full border border-slate-100" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate">{chat.client_name}</p>
-                    <p className="text-xs text-slate-500 truncate">{chat.last_message || 'Sem mensagens'}</p>
+                    <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">{chat.client_name}</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 truncate">{chat.last_message || 'Sem mensagens'}</p>
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400">{chat.last_message_time ? new Date(chat.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-400">{chat.last_message_time ? new Date(chat.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                 </div>
               ))}
             </div>
@@ -2754,30 +2901,30 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
         {/* Conteúdo da Aba de Conta Meta Ads */}
         {activeTab.startsWith('meta_') && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Header com filtro de período */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">
+                <h2 className="text-base sm:text-lg lg:text-xl font-bold text-slate-900 truncate max-w-[200px] sm:max-w-none">
                   {metaAdsAccounts.find(a => a.account_id === selectedMetaAccountId)?.account_name || 'Campanhas'}
                 </h2>
-                <p className="text-sm text-slate-500">Performance de campanhas e anúncios Meta Ads</p>
+                <p className="text-xs sm:text-sm text-slate-500">Performance Meta Ads</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
                 {(['today', '7d', '30d', '90d'] as const).map(period => (
                   <button
                     key={period}
                     onClick={() => setCampaignPeriod(period)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-sm font-medium transition-all ${
                       campaignPeriod === period
                         ? 'bg-cyan-600 text-white'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    {period === 'today' ? 'Hoje' : period === '7d' ? '7 dias' : period === '30d' ? '30 dias' : '90 dias'}
+                    {period === 'today' ? 'Hoje' : period === '7d' ? '7d' : period === '30d' ? '30d' : '90d'}
                   </button>
                 ))}
-                <div className="flex items-center gap-1 ml-2">
+                <div className="hidden sm:flex items-center gap-1 ml-2">
                   <input
                     type="date"
                     value={customDateRange?.start || ''}
@@ -2804,128 +2951,128 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             </div>
 
             {loadingCampaigns ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+              <div className="flex items-center justify-center py-12 sm:py-20">
+                <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-cyan-600"></div>
               </div>
             ) : campaignStats ? (
               <>
                 {/* Cards de resumo */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-gradient-to-br from-pink-500 to-rose-600 p-5 rounded-2xl text-white relative group">
-                    <div className="flex justify-between items-start mb-2">
+                <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                  <div className="bg-gradient-to-br from-pink-500 to-rose-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white relative group">
+                    <div className="flex justify-between items-start mb-1 sm:mb-2">
                       <div>
-                        <p className="text-pink-100 text-xs font-medium uppercase tracking-wider">Meta Ads</p>
-                        <p className="text-3xl font-black mt-1">
+                        <p className="text-pink-100 text-[9px] sm:text-xs font-medium uppercase tracking-wider">Meta Ads</p>
+                        <p className="text-xl sm:text-3xl font-black mt-0.5 sm:mt-1">
                           {campaignStats.leadsByPlatform.find(p => p.name === 'Meta Ads')?.value || 0}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="relative">
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <div className="relative hidden sm:block">
                           <span className="material-symbols-outlined text-white/60 text-base cursor-help hover:text-white transition-colors">info</span>
                           <div className="absolute right-0 top-6 w-64 bg-slate-900 text-white text-xs p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                             <p className="font-semibold mb-1">Meta Ads (Click to WhatsApp)</p>
-                            <p className="text-slate-300">Leads capturados através de anúncios Click to WhatsApp do Meta Ads. Esses leads clicaram em um anúncio e iniciaram conversa diretamente.</p>
+                            <p className="text-slate-300">Leads capturados através de anúncios Click to WhatsApp do Meta Ads.</p>
                           </div>
                         </div>
-                        <div className="bg-white/20 p-2 rounded-xl">
-                          <span className="material-symbols-outlined text-xl">ads_click</span>
+                        <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl">
+                          <span className="material-symbols-outlined text-base sm:text-xl">ads_click</span>
                         </div>
                       </div>
                     </div>
-                    <p className="text-pink-100 text-xs">Leads de Click to WhatsApp</p>
+                    <p className="text-pink-100 text-[9px] sm:text-xs hidden sm:block">Leads de Click to WhatsApp</p>
                   </div>
 
-                  <div className="bg-gradient-to-br from-indigo-500 to-violet-600 p-5 rounded-2xl text-white relative group">
-                    <div className="flex justify-between items-start mb-2">
+                  <div className="bg-gradient-to-br from-indigo-500 to-violet-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white relative group">
+                    <div className="flex justify-between items-start mb-1 sm:mb-2">
                       <div>
-                        <p className="text-indigo-100 text-xs font-medium uppercase tracking-wider">Campanhas (código)</p>
-                        <p className="text-3xl font-black mt-1">
+                        <p className="text-indigo-100 text-[9px] sm:text-xs font-medium uppercase tracking-wider truncate">Código</p>
+                        <p className="text-xl sm:text-3xl font-black mt-0.5 sm:mt-1">
                           {campaignStats.leadsByPlatform.find(p => p.name === 'Campanhas (código)')?.value || 0}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="relative">
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <div className="relative hidden sm:block">
                           <span className="material-symbols-outlined text-white/60 text-base cursor-help hover:text-white transition-colors">info</span>
                           <div className="absolute right-0 top-6 w-64 bg-slate-900 text-white text-xs p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                             <p className="font-semibold mb-1">Campanhas com Código</p>
-                            <p className="text-slate-300">Leads que enviaram um código de campanha na primeira mensagem (ex: AV2, KR5). Usado para rastrear campanhas offline ou links personalizados.</p>
+                            <p className="text-slate-300">Leads que enviaram um código de campanha na primeira mensagem.</p>
                           </div>
                         </div>
-                        <div className="bg-white/20 p-2 rounded-xl">
-                          <span className="material-symbols-outlined text-xl">tag</span>
+                        <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl">
+                          <span className="material-symbols-outlined text-base sm:text-xl">tag</span>
                         </div>
                       </div>
                     </div>
-                    <p className="text-indigo-100 text-xs">Leads com código na mensagem</p>
+                    <p className="text-indigo-100 text-[9px] sm:text-xs hidden sm:block">Leads com código</p>
                   </div>
 
-                  <div className="bg-gradient-to-br from-slate-500 to-slate-600 p-5 rounded-2xl text-white relative group">
-                    <div className="flex justify-between items-start mb-2">
+                  <div className="bg-gradient-to-br from-slate-500 to-slate-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white relative group">
+                    <div className="flex justify-between items-start mb-1 sm:mb-2">
                       <div>
-                        <p className="text-slate-300 text-xs font-medium uppercase tracking-wider">Orgânico</p>
-                        <p className="text-3xl font-black mt-1">
+                        <p className="text-slate-300 text-[9px] sm:text-xs font-medium uppercase tracking-wider">Orgânico</p>
+                        <p className="text-xl sm:text-3xl font-black mt-0.5 sm:mt-1">
                           {campaignStats.leadsByPlatform.find(p => p.name === 'Orgânico')?.value || 0}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="relative">
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <div className="relative hidden sm:block">
                           <span className="material-symbols-outlined text-white/60 text-base cursor-help hover:text-white transition-colors">info</span>
                           <div className="absolute right-0 top-6 w-64 bg-slate-900 text-white text-xs p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                             <p className="font-semibold mb-1">Leads Orgânicos</p>
                             <p className="text-slate-300">Leads que chegaram sem identificação de origem. Podem ser indicações, busca orgânica, ou leads que não foram rastreados.</p>
                           </div>
                         </div>
-                        <div className="bg-white/20 p-2 rounded-xl">
-                          <span className="material-symbols-outlined text-xl">nature</span>
+                        <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl">
+                          <span className="material-symbols-outlined text-base sm:text-xl">nature</span>
                         </div>
                       </div>
                     </div>
-                    <p className="text-slate-300 text-xs">Leads sem origem identificada</p>
+                    <p className="text-slate-300 text-[9px] sm:text-xs hidden sm:block">Sem origem identificada</p>
                   </div>
                 </div>
 
                 {/* Gráficos */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
                   {/* Gráfico de Linha - Leads por Dia */}
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <h3 className="font-bold text-slate-900 mb-4">Leads por Dia</h3>
+                  <div className="bg-white p-3 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-slate-900 mb-3 sm:mb-4 text-sm sm:text-base">Leads por Dia</h3>
                     {campaignStats.leadsByDay.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={250}>
+                      <ResponsiveContainer width="100%" height={180} className="sm:!h-[250px]">
                         <AreaChart data={campaignStats.leadsByDay}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                          <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                          <XAxis dataKey="date" tick={{ fontSize: 9 }} stroke="#94a3b8" />
+                          <YAxis tick={{ fontSize: 9 }} stroke="#94a3b8" width={30} />
                           <Tooltip 
-                            contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                            contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '12px' }}
                             labelStyle={{ fontWeight: 'bold' }}
                           />
-                          <Legend />
+                          <Legend wrapperStyle={{ fontSize: '10px' }} />
                           <Area type="monotone" dataKey="leads" name="Total" stroke="#0891b2" fill="#0891b2" fillOpacity={0.2} />
                           <Area type="monotone" dataKey="campanhas" name="Campanhas" stroke="#E1306C" fill="#E1306C" fillOpacity={0.2} />
                         </AreaChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-[250px] flex items-center justify-center text-slate-400">
+                      <div className="h-[150px] sm:h-[250px] flex items-center justify-center text-slate-400 text-xs sm:text-sm">
                         Sem dados no período
                       </div>
                     )}
                   </div>
 
                   {/* Gráfico de Pizza - Distribuição por Plataforma */}
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <h3 className="font-bold text-slate-900 mb-4">Distribuição por Origem</h3>
+                  <div className="bg-white p-3 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 className="font-bold text-slate-900 mb-3 sm:mb-4 text-sm sm:text-base">Distribuição por Origem</h3>
                     {campaignStats.leadsByPlatform.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={250}>
+                      <ResponsiveContainer width="100%" height={180} className="sm:!h-[250px]">
                         <PieChart>
                           <Pie
                             data={campaignStats.leadsByPlatform}
                             cx="50%"
                             cy="50%"
-                            innerRadius={60}
-                            outerRadius={90}
+                            innerRadius={40}
+                            outerRadius={65}
                             paddingAngle={5}
                             dataKey="value"
-                            label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
                             labelLine={false}
                           >
                             {campaignStats.leadsByPlatform.map((entry, index) => (
@@ -2933,10 +3080,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                             ))}
                           </Pie>
                           <Tooltip />
+                          <Legend wrapperStyle={{ fontSize: '10px' }} />
                         </PieChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="h-[250px] flex items-center justify-center text-slate-400">
+                      <div className="h-[150px] sm:h-[250px] flex items-center justify-center text-slate-400 text-xs sm:text-sm">
                         Sem dados no período
                       </div>
                     )}
@@ -2945,13 +3093,36 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
                 {/* Tabela de Anúncios Meta - Leads por Anúncio */}
                 {campaignStats.metaAds.length > 0 && (
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4">
-                      <span className="material-symbols-outlined text-pink-600">ads_click</span>
-                      <h3 className="font-bold text-slate-900">Top Anúncios Meta (Click to WhatsApp)</h3>
-                      <span className="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full ml-auto">{campaignStats.metaAds.reduce((sum, ad) => sum + ad.count, 0)} leads</span>
+                  <div className="bg-white p-3 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                      <span className="material-symbols-outlined text-pink-600 text-base sm:text-xl">ads_click</span>
+                      <h3 className="font-bold text-slate-900 text-sm sm:text-base">Top Anúncios Meta</h3>
+                      <span className="text-[10px] sm:text-xs bg-pink-100 text-pink-700 px-1.5 sm:px-2 py-0.5 rounded-full ml-auto">{campaignStats.metaAds.reduce((sum, ad) => sum + ad.count, 0)} leads</span>
                     </div>
-                    <div className="overflow-x-auto">
+                    
+                    {/* Versão Mobile - Cards */}
+                    <div className="sm:hidden space-y-2">
+                      {campaignStats.metaAds.slice(0, 5).map((ad, idx) => (
+                        <div key={idx} className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <a 
+                              href={`/lead/${ad.chat_id}`}
+                              className="font-medium text-indigo-600 text-xs truncate max-w-[120px]"
+                            >
+                              {ad.client_name || 'Cliente'}
+                            </a>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                              {ad.source_code || '-'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-600 truncate">{ad.ad_name || ad.ad_title}</p>
+                          <p className="text-[10px] text-slate-400">{ad.created_at ? new Date(ad.created_at).toLocaleDateString('pt-BR') : '-'}</p>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Versão Desktop - Tabela */}
+                    <div className="hidden sm:block overflow-x-auto">
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-slate-200">
@@ -3009,11 +3180,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
                 {/* Dados da Meta Ads API */}
                 {metaAdsConfigured && (
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
+                  <div className="bg-white p-3 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between mb-3 sm:mb-4">
                       <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-pink-600">analytics</span>
-                        <h3 className="font-bold text-slate-900">Dados do Meta Ads Manager</h3>
+                        <span className="material-symbols-outlined text-pink-600 text-base sm:text-xl">analytics</span>
+                        <h3 className="font-bold text-slate-900 text-sm sm:text-base">Meta Ads Manager</h3>
                       </div>
                       {loadingMetaAdsApi && (
                         <div className="w-4 h-4 border-2 border-pink-300 border-t-pink-600 rounded-full animate-spin"></div>
@@ -3021,10 +3192,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     </div>
                     
                     {metaAdsApiData ? (
-                      <div className="space-y-6">
+                      <div className="space-y-4 sm:space-y-6">
                         {/* Cards de Métricas Totais */}
                         {metaAdsApiData.insights.length > 0 && (metaAdsVisibility.impressions || metaAdsVisibility.clicks || metaAdsVisibility.ctr || metaAdsVisibility.cpc || metaAdsVisibility.spent) && (
-                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
                             {(() => {
                               const totals = metaAdsApiData.insights.reduce((acc, i) => ({
                                 impressions: acc.impressions + parseInt(i.impressions || '0'),
@@ -3036,63 +3207,63 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                               return (
                                 <>
                                   {metaAdsVisibility.impressions && (
-                                  <div className="p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl text-white text-center relative group">
-                                    <div className="absolute top-2 right-2">
+                                  <div className="p-2 sm:p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg sm:rounded-xl text-white text-center relative group">
+                                    <div className="absolute top-1 right-1 sm:top-2 sm:right-2 hidden sm:block">
                                       <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
                                       <div className="absolute right-0 top-5 w-48 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                                         Número de vezes que seus anúncios foram exibidos
                                       </div>
                                     </div>
-                                    <p className="text-2xl font-black">{totals.impressions.toLocaleString()}</p>
-                                    <p className="text-xs text-blue-100 mt-1">Impressões</p>
+                                    <p className="text-base sm:text-2xl font-black">{totals.impressions.toLocaleString()}</p>
+                                    <p className="text-[9px] sm:text-xs text-blue-100 mt-0.5 sm:mt-1">Impressões</p>
                                   </div>
                                   )}
                                   {metaAdsVisibility.clicks && (
-                                  <div className="p-4 bg-gradient-to-br from-green-500 to-green-600 rounded-xl text-white text-center relative group">
-                                    <div className="absolute top-2 right-2">
+                                  <div className="p-2 sm:p-4 bg-gradient-to-br from-green-500 to-green-600 rounded-lg sm:rounded-xl text-white text-center relative group">
+                                    <div className="absolute top-1 right-1 sm:top-2 sm:right-2 hidden sm:block">
                                       <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
                                       <div className="absolute right-0 top-5 w-48 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                                         Número de cliques nos seus anúncios
                                       </div>
                                     </div>
-                                    <p className="text-2xl font-black">{totals.clicks.toLocaleString()}</p>
-                                    <p className="text-xs text-green-100 mt-1">Cliques</p>
+                                    <p className="text-base sm:text-2xl font-black">{totals.clicks.toLocaleString()}</p>
+                                    <p className="text-[9px] sm:text-xs text-green-100 mt-0.5 sm:mt-1">Cliques</p>
                                   </div>
                                   )}
                                   {metaAdsVisibility.ctr && (
-                                  <div className="p-4 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl text-white text-center relative group">
-                                    <div className="absolute top-2 right-2">
+                                  <div className="p-2 sm:p-4 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg sm:rounded-xl text-white text-center relative group">
+                                    <div className="absolute top-1 right-1 sm:top-2 sm:right-2 hidden sm:block">
                                       <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
                                       <div className="absolute right-0 top-5 w-48 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                                         Taxa de cliques: Cliques ÷ Impressões × 100
                                       </div>
                                     </div>
-                                    <p className="text-2xl font-black">{ctr.toFixed(2)}%</p>
-                                    <p className="text-xs text-amber-100 mt-1">CTR</p>
+                                    <p className="text-base sm:text-2xl font-black">{ctr.toFixed(2)}%</p>
+                                    <p className="text-[9px] sm:text-xs text-amber-100 mt-0.5 sm:mt-1">CTR</p>
                                   </div>
                                   )}
                                   {metaAdsVisibility.cpc && (
-                                  <div className="p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl text-white text-center relative group">
-                                    <div className="absolute top-2 right-2">
+                                  <div className="p-2 sm:p-4 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg sm:rounded-xl text-white text-center relative group hidden sm:block">
+                                    <div className="absolute top-1 right-1 sm:top-2 sm:right-2">
                                       <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
                                       <div className="absolute right-0 top-5 w-48 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                                         Custo por clique médio: Gasto ÷ Cliques
                                       </div>
                                     </div>
-                                    <p className="text-2xl font-black">R$ {cpc.toFixed(2)}</p>
-                                    <p className="text-xs text-purple-100 mt-1">CPC Médio</p>
+                                    <p className="text-base sm:text-2xl font-black">R$ {cpc.toFixed(2)}</p>
+                                    <p className="text-[9px] sm:text-xs text-purple-100 mt-0.5 sm:mt-1">CPC</p>
                                   </div>
                                   )}
                                   {metaAdsVisibility.spent && (
-                                  <div className="p-4 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl text-white text-center relative group">
-                                    <div className="absolute top-2 right-2">
+                                  <div className="p-2 sm:p-4 bg-gradient-to-br from-pink-500 to-pink-600 rounded-lg sm:rounded-xl text-white text-center relative group hidden sm:block">
+                                    <div className="absolute top-1 right-1 sm:top-2 sm:right-2">
                                       <span className="material-symbols-outlined text-white/50 text-sm cursor-help hover:text-white">info</span>
                                       <div className="absolute right-0 top-5 w-48 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                                        Valor total investido em anúncios no período selecionado
+                                        Valor total investido em anúncios
                                       </div>
                                     </div>
-                                    <p className="text-2xl font-black">R$ {totals.spend.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                    <p className="text-xs text-pink-100 mt-1">Investido</p>
+                                    <p className="text-base sm:text-2xl font-black">R$ {totals.spend.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+                                    <p className="text-[9px] sm:text-xs text-pink-100 mt-0.5 sm:mt-1">Investido</p>
                                   </div>
                                   )}
                                 </>
@@ -3106,18 +3277,87 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                           <div className="rounded-xl border border-purple-200 overflow-hidden">
                             <button 
                               onClick={() => setExpandedCampaignSections(prev => ({ ...prev, performance: !prev.performance }))}
-                              className="bg-purple-50 text-purple-700 px-4 py-3 flex items-center justify-between w-full hover:opacity-90 transition-opacity"
+                              className="bg-purple-50 text-purple-700 px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between w-full hover:opacity-90 transition-opacity"
                             >
                               <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-base">campaign</span>
-                                <h4 className="text-sm font-bold">Performance por Campanha ({metaAdsApiData.campaignInsights.length})</h4>
+                                <span className="material-symbols-outlined text-sm sm:text-base">campaign</span>
+                                <h4 className="text-xs sm:text-sm font-bold">Performance ({metaAdsApiData.campaignInsights.length})</h4>
                               </div>
-                              <span className="material-symbols-outlined text-base transition-transform" style={{ transform: expandedCampaignSections.performance ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                              <span className="material-symbols-outlined text-sm sm:text-base transition-transform" style={{ transform: expandedCampaignSections.performance ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                                 expand_more
                               </span>
                             </button>
                             {expandedCampaignSections.performance && (
-                              <div className="overflow-x-auto">
+                              <>
+                              {/* Versão Mobile - Cards Expansíveis */}
+                              <div className="sm:hidden bg-white p-2 space-y-2">
+                                {metaAdsApiData.campaignInsights
+                                  .sort((a, b) => parseFloat(b.spend || '0') - parseFloat(a.spend || '0'))
+                                  .map((insight, idx) => {
+                                    const impressions = parseInt(insight.impressions || '0');
+                                    const clicks = parseInt(insight.clicks || '0');
+                                    const spend = parseFloat(insight.spend || '0');
+                                    const ctr = impressions > 0 ? ((clicks / impressions) * 100) : 0;
+                                    const cpc = clicks > 0 ? (spend / clicks) : 0;
+                                    const campaignId = insight.campaign_id || `campaign-${idx}`;
+                                    const isExpanded = expandedCampaigns.has(campaignId);
+                                    
+                                    return (
+                                      <div 
+                                        key={campaignId}
+                                        className={`rounded-lg border transition-all ${isExpanded ? 'border-purple-300 bg-purple-50/50' : 'border-slate-200 bg-slate-50'}`}
+                                      >
+                                        <div 
+                                          className="flex items-center justify-between p-2.5 cursor-pointer"
+                                          onClick={() => {
+                                            setExpandedCampaigns(prev => {
+                                              const newSet = new Set(prev);
+                                              if (newSet.has(campaignId)) {
+                                                newSet.delete(campaignId);
+                                              } else {
+                                                newSet.add(campaignId);
+                                              }
+                                              return newSet;
+                                            });
+                                          }}
+                                        >
+                                          <span className="font-medium text-slate-800 text-xs truncate flex-1 mr-2">{insight.campaign_name}</span>
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-bold text-pink-600 text-xs">R$ {spend.toFixed(0)}</span>
+                                            <span className="material-symbols-outlined text-slate-400 text-[14px]">
+                                              {isExpanded ? 'expand_less' : 'expand_more'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        {isExpanded && (
+                                          <div className="px-2.5 pb-2.5 pt-1 border-t border-slate-100">
+                                            <div className="grid grid-cols-4 gap-1.5 text-center">
+                                              <div>
+                                                <p className="text-[8px] text-slate-400 uppercase">Impr.</p>
+                                                <p className="text-[10px] font-bold text-slate-700">{impressions.toLocaleString()}</p>
+                                              </div>
+                                              <div>
+                                                <p className="text-[8px] text-slate-400 uppercase">Cliques</p>
+                                                <p className="text-[10px] font-bold text-green-600">{clicks.toLocaleString()}</p>
+                                              </div>
+                                              <div>
+                                                <p className="text-[8px] text-slate-400 uppercase">CTR</p>
+                                                <p className={`text-[10px] font-bold ${ctr >= 2 ? 'text-green-600' : ctr >= 1 ? 'text-amber-600' : 'text-red-500'}`}>{ctr.toFixed(2)}%</p>
+                                              </div>
+                                              <div>
+                                                <p className="text-[8px] text-slate-400 uppercase">CPC</p>
+                                                <p className="text-[10px] font-bold text-purple-600">R$ {cpc.toFixed(2)}</p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                              
+                              {/* Versão Desktop - Tabela */}
+                              <div className="hidden sm:block overflow-x-auto">
                                 <table className="w-full">
                                   <thead>
                                     <tr className="border-b border-slate-200 bg-white">
@@ -3274,6 +3514,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                   </tbody>
                                 </table>
                               </div>
+                              </>
                             )}
                           </div>
                         )}
@@ -3309,18 +3550,41 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                               <div className={`rounded-xl border ${borderColor} overflow-hidden`}>
                                 <button 
                                   onClick={() => setExpandedCampaignSections(prev => ({ ...prev, [sectionKey]: !prev[sectionKey] }))}
-                                  className={`${bgColor} px-4 py-3 flex items-center justify-between w-full hover:opacity-90 transition-opacity`}
+                                  className={`${bgColor} px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between w-full hover:opacity-90 transition-opacity`}
                                 >
                                   <div className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-base">{icon}</span>
-                                    <h4 className="text-sm font-bold">{title} ({campaigns.length})</h4>
+                                    <span className="material-symbols-outlined text-sm sm:text-base">{icon}</span>
+                                    <h4 className="text-xs sm:text-sm font-bold">{title} ({campaigns.length})</h4>
                                   </div>
-                                  <span className="material-symbols-outlined text-base transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                                  <span className="material-symbols-outlined text-sm sm:text-base transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                                     expand_more
                                   </span>
                                 </button>
                                 {isExpanded && (
-                                  <div className="overflow-x-auto">
+                                  <>
+                                  {/* Versão Mobile - Cards */}
+                                  <div className="sm:hidden bg-white p-2 space-y-2">
+                                    {campaigns.sort(sortBySpend).map(campaign => {
+                                      const metrics = getCampaignMetrics(campaign.id);
+                                      return (
+                                        <div key={campaign.id} className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                                          <div className="flex items-center justify-between mb-1.5">
+                                            <span className="font-medium text-slate-800 text-xs truncate flex-1 mr-2">{campaign.name}</span>
+                                            <span className="font-bold text-pink-600 text-xs">R$ {metrics?.spend?.toFixed(0) || '0'}</span>
+                                          </div>
+                                          <div className="flex items-center gap-3 text-[10px]">
+                                            <span className="text-green-600 font-medium">{metrics?.clicks?.toLocaleString() || '0'} cliques</span>
+                                            <span className={`font-medium ${(metrics?.ctr || 0) >= 2 ? 'text-green-600' : (metrics?.ctr || 0) >= 1 ? 'text-amber-600' : 'text-slate-500'}`}>
+                                              CTR {metrics?.ctr?.toFixed(1) || '0'}%
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  
+                                  {/* Versão Desktop - Tabela */}
+                                  <div className="hidden sm:block overflow-x-auto">
                                     <table className="w-full">
                                       <thead>
                                         <tr className="border-b border-slate-200 bg-white">
@@ -3377,6 +3641,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                       </tbody>
                                     </table>
                                   </div>
+                                  </>
                                 )}
                               </div>
                             );
@@ -3406,23 +3671,35 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                 )}
 
                 {/* Card de Comparação: Meta Ads vs Origens do Sistema */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="material-symbols-outlined text-cyan-600">compare</span>
-                    <h3 className="font-bold text-slate-900">Comparativo de Performance</h3>
+                <div className="bg-white p-3 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                    <span className="material-symbols-outlined text-cyan-600 text-base sm:text-xl">compare</span>
+                    <h3 className="font-bold text-slate-900 text-sm sm:text-base">Comparativo</h3>
                   </div>
                   
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
                     {/* Tabela Meta Ads - Campanhas */}
                     <div className="rounded-xl border border-purple-200 overflow-hidden">
-                      <div className="bg-purple-50 text-purple-700 px-4 py-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-base">campaign</span>
-                        <h4 className="text-sm font-bold">Campanhas Meta Ads</h4>
-                        <span className="text-xs bg-purple-200 px-2 py-0.5 rounded-full ml-auto">
+                      <div className="bg-purple-50 text-purple-700 px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm sm:text-base">campaign</span>
+                        <h4 className="text-xs sm:text-sm font-bold">Meta Ads</h4>
+                        <span className="text-[10px] sm:text-xs bg-purple-200 px-1.5 sm:px-2 py-0.5 rounded-full ml-auto">
                           {metaAdsApiData?.campaignInsights?.length || 0}
                         </span>
                       </div>
-                      <div className="overflow-x-auto max-h-80">
+                      {/* Versão Mobile - Cards */}
+                      <div className="sm:hidden bg-white p-2 space-y-1.5 max-h-48 overflow-y-auto">
+                        {metaAdsApiData?.campaignInsights?.sort((a, b) => parseFloat(b.spend || '0') - parseFloat(a.spend || '0')).slice(0, 5).map((insight, idx) => (
+                          <div key={insight.campaign_id || idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                            <span className="text-[10px] text-slate-800 truncate flex-1 mr-2">{insight.campaign_name}</span>
+                            <span className="text-[10px] font-bold text-pink-600">R$ {parseFloat(insight.spend || '0').toFixed(0)}</span>
+                          </div>
+                        )) || (
+                          <p className="text-[10px] text-slate-400 text-center py-2">Sem dados</p>
+                        )}
+                      </div>
+                      {/* Versão Desktop - Tabela */}
+                      <div className="hidden sm:block overflow-x-auto max-h-80">
                         <table className="w-full">
                           <thead className="sticky top-0 bg-white">
                             <tr className="border-b border-slate-200">
@@ -3458,14 +3735,35 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
                     {/* Tabela Origens do Sistema */}
                     <div className="rounded-xl border border-cyan-200 overflow-hidden">
-                      <div className="bg-cyan-50 text-cyan-700 px-4 py-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-base">group</span>
-                        <h4 className="text-sm font-bold">Origens do Sistema</h4>
-                        <span className="text-xs bg-cyan-200 px-2 py-0.5 rounded-full ml-auto">
+                      <div className="bg-cyan-50 text-cyan-700 px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm sm:text-base">group</span>
+                        <h4 className="text-xs sm:text-sm font-bold">Origens</h4>
+                        <span className="text-[10px] sm:text-xs bg-cyan-200 px-1.5 sm:px-2 py-0.5 rounded-full ml-auto">
                           {campaignStats.sourceStats?.length || 0}
                         </span>
                       </div>
-                      <div className="overflow-x-auto max-h-80">
+                      {/* Versão Mobile - Cards */}
+                      <div className="sm:hidden bg-white p-2 space-y-1.5 max-h-48 overflow-y-auto">
+                        {campaignStats.sourceStats?.slice(0, 5).map(source => {
+                          const rate = source.total_leads > 0 ? ((source.converted_leads / source.total_leads) * 100).toFixed(0) : '0';
+                          return (
+                            <div key={source.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0 mr-2">
+                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: source.color }}></span>
+                                <span className="text-[10px] text-slate-800 truncate">{source.name}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-slate-700">{source.total_leads}</span>
+                                <span className={`text-[10px] font-bold ${Number(rate) >= 30 ? 'text-green-600' : Number(rate) >= 15 ? 'text-amber-600' : 'text-slate-400'}`}>{rate}%</span>
+                              </div>
+                            </div>
+                          );
+                        }) || (
+                          <p className="text-[10px] text-slate-400 text-center py-2">Sem dados</p>
+                        )}
+                      </div>
+                      {/* Versão Desktop - Tabela */}
+                      <div className="hidden sm:block overflow-x-auto max-h-80">
                         <table className="w-full">
                           <thead className="sticky top-0 bg-white">
                             <tr className="border-b border-slate-200">
@@ -3523,30 +3821,30 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
         {/* Conteúdo da Aba Tarefas */}
         {activeTab === 'tasks' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Header com filtros */}
-            <div className="flex flex-wrap justify-between items-center gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Tarefas</h2>
-                <p className="text-sm text-slate-500">Gerencie suas tarefas e lembretes</p>
+                <h2 className="text-base sm:text-xl font-bold text-slate-900">Tarefas</h2>
+                <p className="text-xs sm:text-sm text-slate-500">Gerencie suas tarefas</p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <div className="flex gap-0.5 sm:gap-1 bg-slate-100 p-0.5 sm:p-1 rounded-lg w-full sm:w-auto">
                   <button
                     onClick={() => setTasksFilter('pending')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${tasksFilter === 'pending' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
+                    className={`flex-1 sm:flex-none px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-md transition-all ${tasksFilter === 'pending' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
                   >
                     Pendentes
                   </button>
                   <button
                     onClick={() => setTasksFilter('completed')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${tasksFilter === 'completed' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
+                    className={`flex-1 sm:flex-none px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-md transition-all ${tasksFilter === 'completed' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
                   >
                     Concluídas
                   </button>
                   <button
                     onClick={() => setTasksFilter('all')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${tasksFilter === 'all' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
+                    className={`flex-1 sm:flex-none px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-md transition-all ${tasksFilter === 'all' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
                   >
                     Todas
                   </button>
@@ -3555,14 +3853,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             </div>
 
             {loadingTasks ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+              <div className="flex items-center justify-center py-12 sm:py-20">
+                <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-cyan-600"></div>
               </div>
             ) : (
               <>
                 {/* Layout de 3 colunas */}
                 {tasksFilter === 'pending' && (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6">
                     {/* Coluna Atrasadas */}
                     {(() => {
                       const today = new Date();
@@ -3578,7 +3876,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                       });
 
                       const renderTaskItem = (task: typeof tasks[0], showDate = true) => (
-                        <div key={task.id} className="p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                        <div key={task.id} className="p-2 sm:p-3 flex items-start gap-2 sm:gap-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
                           <button
                             onClick={async () => {
                               await supabase
@@ -3590,11 +3888,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                             className="mt-0.5 w-4 h-4 rounded border-2 border-slate-300 hover:border-green-500 flex-shrink-0 transition-colors"
                           />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-slate-800">{task.title}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{task.client_name}</p>
+                            <p className="text-xs sm:text-sm font-medium text-slate-800 truncate">{task.title}</p>
+                            <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 truncate">{task.client_name}</p>
                           </div>
                           {showDate && task.due_date && (
-                            <span className="text-xs text-slate-400 flex-shrink-0">
+                            <span className="text-[10px] sm:text-xs text-slate-400 flex-shrink-0">
                               {new Date(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                             </span>
                           )}
@@ -3604,17 +3902,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                       return (
                         <>
                           {/* Atrasadas */}
-                          <div className="bg-white rounded-2xl border border-red-200 shadow-sm overflow-hidden">
-                            <div className="px-4 py-3 bg-red-50 flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-red-500 text-lg">warning</span>
-                                <span className="font-semibold text-red-700">Atrasadas</span>
+                          <div className="bg-white rounded-xl sm:rounded-2xl border border-red-200 shadow-sm overflow-hidden">
+                            <div className="px-3 sm:px-4 py-2 sm:py-3 bg-red-50 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 sm:gap-2">
+                                <span className="material-symbols-outlined text-red-500 text-base sm:text-lg">warning</span>
+                                <span className="font-semibold text-red-700 text-xs sm:text-sm">Atrasadas</span>
                               </div>
-                              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{overdueTasks.length}</span>
+                              <span className="bg-red-500 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full">{overdueTasks.length}</span>
                             </div>
-                            <div className="max-h-80 overflow-y-auto">
+                            <div className="max-h-60 sm:max-h-80 overflow-y-auto">
                               {overdueTasks.length === 0 ? (
-                                <p className="text-center py-6 text-sm text-slate-400">Nenhuma tarefa atrasada</p>
+                                <p className="text-center py-4 sm:py-6 text-xs sm:text-sm text-slate-400">Nenhuma atrasada</p>
                               ) : (
                                 overdueTasks.map(task => renderTaskItem(task, true))
                               )}
@@ -3622,17 +3920,17 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                           </div>
 
                           {/* Hoje */}
-                          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
-                            <div className="px-4 py-3 bg-amber-50 flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-amber-500 text-lg">today</span>
-                                <span className="font-semibold text-amber-700">Hoje</span>
+                          <div className="bg-white rounded-xl sm:rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
+                            <div className="px-3 sm:px-4 py-2 sm:py-3 bg-amber-50 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 sm:gap-2">
+                                <span className="material-symbols-outlined text-amber-500 text-base sm:text-lg">today</span>
+                                <span className="font-semibold text-amber-700 text-xs sm:text-sm">Hoje</span>
                               </div>
-                              <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{todayTasks.length}</span>
+                              <span className="bg-amber-500 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full">{todayTasks.length}</span>
                             </div>
-                            <div className="max-h-80 overflow-y-auto">
+                            <div className="max-h-60 sm:max-h-80 overflow-y-auto">
                               {todayTasks.length === 0 ? (
-                                <p className="text-center py-6 text-sm text-slate-400">Nenhuma tarefa para hoje</p>
+                                <p className="text-center py-4 sm:py-6 text-xs sm:text-sm text-slate-400">Nenhuma para hoje</p>
                               ) : (
                                 todayTasks.map(task => renderTaskItem(task, false))
                               )}
@@ -3640,24 +3938,24 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                           </div>
 
                           {/* Esta Semana */}
-                          <div className="bg-white rounded-2xl border border-blue-200 shadow-sm overflow-hidden">
-                            <div className="px-4 py-3 bg-blue-50 flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-blue-500 text-lg">date_range</span>
-                                <span className="font-semibold text-blue-700">Esta Semana</span>
+                          <div className="bg-white rounded-xl sm:rounded-2xl border border-blue-200 shadow-sm overflow-hidden">
+                            <div className="px-3 sm:px-4 py-2 sm:py-3 bg-blue-50 flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 sm:gap-2">
+                                <span className="material-symbols-outlined text-blue-500 text-base sm:text-lg">date_range</span>
+                                <span className="font-semibold text-blue-700 text-xs sm:text-sm">Esta Semana</span>
                               </div>
-                              <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{weekTasks.length}</span>
+                              <span className="bg-blue-500 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full">{weekTasks.length}</span>
                             </div>
-                            <div className="max-h-80 overflow-y-auto">
+                            <div className="max-h-60 sm:max-h-80 overflow-y-auto">
                               {weekTasks.length === 0 ? (
-                                <p className="text-center py-6 text-sm text-slate-400">Nenhuma tarefa esta semana</p>
+                                <p className="text-center py-4 sm:py-6 text-xs sm:text-sm text-slate-400">Nenhuma esta semana</p>
                               ) : (
                                 weekTasks.map(task => {
                                   const dueDate = new Date(task.due_date!);
                                   const dayName = dueDate.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
                                   const dayNum = dueDate.toLocaleDateString('pt-BR', { day: '2-digit' });
                                   return (
-                                    <div key={task.id} className="p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                                    <div key={task.id} className="p-2 sm:p-3 flex items-start gap-2 sm:gap-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
                                       <button
                                         onClick={async () => {
                                           await supabase
@@ -3669,10 +3967,10 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                         className="mt-0.5 w-4 h-4 rounded border-2 border-slate-300 hover:border-green-500 flex-shrink-0 transition-colors"
                                       />
                                       <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-slate-800">{task.title}</p>
-                                        <p className="text-xs text-slate-400 mt-0.5">{task.client_name}</p>
+                                        <p className="text-xs sm:text-sm font-medium text-slate-800 truncate">{task.title}</p>
+                                        <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 truncate">{task.client_name}</p>
                                       </div>
-                                      <span className="text-xs text-slate-400 flex-shrink-0">{dayName}, {dayNum}</span>
+                                      <span className="text-[10px] sm:text-xs text-slate-400 flex-shrink-0">{dayName}, {dayNum}</span>
                                     </div>
                                   );
                                 })
@@ -3687,20 +3985,20 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
                 {/* Lista de tarefas concluídas */}
                 {tasksFilter === 'completed' && (
-                  <div className="bg-white rounded-2xl border border-green-200 shadow-sm overflow-hidden">
-                    <div className="px-4 py-3 bg-green-50 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-green-500 text-lg">check_circle</span>
-                        <span className="font-semibold text-green-700">Concluídas</span>
+                  <div className="bg-white rounded-xl sm:rounded-2xl border border-green-200 shadow-sm overflow-hidden">
+                    <div className="px-3 sm:px-4 py-2 sm:py-3 bg-green-50 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="material-symbols-outlined text-green-500 text-base sm:text-lg">check_circle</span>
+                        <span className="font-semibold text-green-700 text-xs sm:text-sm">Concluídas</span>
                       </div>
-                      <span className="bg-green-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{tasks.filter(t => t.completed).length}</span>
+                      <span className="bg-green-500 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full">{tasks.filter(t => t.completed).length}</span>
                     </div>
-                    <div className="divide-y divide-slate-100">
+                    <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
                       {tasks.filter(t => t.completed).length === 0 ? (
-                        <p className="text-center py-6 text-sm text-slate-400">Nenhuma tarefa concluída</p>
+                        <p className="text-center py-4 sm:py-6 text-xs sm:text-sm text-slate-400">Nenhuma concluída</p>
                       ) : (
                         tasks.filter(t => t.completed).map(task => (
-                          <div key={task.id} className="p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors opacity-60">
+                          <div key={task.id} className="p-2 sm:p-3 flex items-start gap-2 sm:gap-3 hover:bg-slate-50 transition-colors opacity-60">
                             <button
                               onClick={async () => {
                                 await supabase
@@ -3714,11 +4012,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                               <span className="material-symbols-outlined text-white text-xs">check</span>
                             </button>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-800 line-through">{task.title}</p>
-                              <p className="text-xs text-slate-400 mt-0.5">{task.client_name}</p>
+                              <p className="text-xs sm:text-sm font-medium text-slate-800 line-through truncate">{task.title}</p>
+                              <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 truncate">{task.client_name}</p>
                             </div>
                             {task.completed_at && (
-                              <span className="text-xs text-slate-400 flex-shrink-0">
+                              <span className="text-[10px] sm:text-xs text-slate-400 flex-shrink-0">
                                 {new Date(task.completed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                               </span>
                             )}
@@ -3731,23 +4029,23 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
                 {/* Lista de todas as tarefas */}
                 {tasksFilter === 'all' && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="px-4 py-3 bg-slate-50 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-slate-500 text-lg">list</span>
-                        <span className="font-semibold text-slate-700">Todas as Tarefas</span>
+                  <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-3 sm:px-4 py-2 sm:py-3 bg-slate-50 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="material-symbols-outlined text-slate-500 text-base sm:text-lg">list</span>
+                        <span className="font-semibold text-slate-700 text-xs sm:text-sm">Todas</span>
                       </div>
-                      <span className="bg-slate-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{tasks.length}</span>
+                      <span className="bg-slate-500 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full">{tasks.length}</span>
                     </div>
-                    <div className="divide-y divide-slate-100">
+                    <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
                       {tasks.length === 0 ? (
-                        <p className="text-center py-6 text-sm text-slate-400">Nenhuma tarefa</p>
+                        <p className="text-center py-4 sm:py-6 text-xs sm:text-sm text-slate-400">Nenhuma tarefa</p>
                       ) : (
                         tasks.map(task => {
                           const isOverdue = task.due_date && new Date(task.due_date) < new Date() && !task.completed;
                           const isToday = task.due_date && new Date(task.due_date).toDateString() === new Date().toDateString();
                           return (
-                            <div key={task.id} className={`p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors ${task.completed ? 'opacity-60' : ''}`}>
+                            <div key={task.id} className={`p-2 sm:p-3 flex items-start gap-2 sm:gap-3 hover:bg-slate-50 transition-colors ${task.completed ? 'opacity-60' : ''}`}>
                               <button
                                 onClick={async () => {
                                   const newCompleted = !task.completed;
@@ -3764,21 +4062,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                 {task.completed && <span className="material-symbols-outlined text-white text-xs">check</span>}
                               </button>
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-medium text-slate-800 ${task.completed ? 'line-through' : ''}`}>{task.title}</p>
-                                <p className="text-xs text-slate-400 mt-0.5">{task.client_name}</p>
+                                <p className={`text-xs sm:text-sm font-medium text-slate-800 truncate ${task.completed ? 'line-through' : ''}`}>{task.title}</p>
+                                <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 truncate">{task.client_name}</p>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                                 {task.completed && (
-                                  <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">Concluída</span>
+                                  <span className="text-[9px] sm:text-xs bg-green-100 text-green-600 px-1.5 sm:px-2 py-0.5 rounded-full hidden sm:inline">Concluída</span>
                                 )}
                                 {isOverdue && !task.completed && (
-                                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Atrasada</span>
+                                  <span className="text-[9px] sm:text-xs bg-red-100 text-red-600 px-1.5 sm:px-2 py-0.5 rounded-full">Atrasada</span>
                                 )}
                                 {isToday && !task.completed && (
-                                  <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">Hoje</span>
+                                  <span className="text-[9px] sm:text-xs bg-amber-100 text-amber-600 px-1.5 sm:px-2 py-0.5 rounded-full">Hoje</span>
                                 )}
                                 {task.due_date && (
-                                  <span className="text-xs text-slate-400">
+                                  <span className="text-[10px] sm:text-xs text-slate-400">
                                     {new Date(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                                   </span>
                                 )}
@@ -3797,57 +4095,57 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
         {/* Conteúdo da Aba Produtividade */}
         {activeTab === 'productivity' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Header */}
             <div>
-              <h2 className="text-xl font-bold text-slate-900">Produtividade</h2>
-              <p className="text-sm text-slate-500">Métricas de desempenho da equipe</p>
+              <h2 className="text-base sm:text-xl font-bold text-slate-900">Produtividade</h2>
+              <p className="text-xs sm:text-sm text-slate-500">Métricas da equipe</p>
             </div>
 
             {loadingProductivity ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
+              <div className="flex items-center justify-center py-12 sm:py-20">
+                <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-cyan-600"></div>
               </div>
             ) : (
               <>
                 {/* Cards de resumo */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-5 rounded-2xl text-white">
-                    <p className="text-blue-100 text-xs font-medium uppercase">Total de Leads</p>
-                    <p className="text-3xl font-black mt-1">{productivityData.reduce((acc, p) => acc + p.leads_count, 0)}</p>
-                    <p className="text-blue-100 text-xs mt-1">{productivityPeriod === 1 ? 'Hoje' : `Últimos ${productivityPeriod} dias`}</p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white">
+                    <p className="text-blue-100 text-[9px] sm:text-xs font-medium uppercase">Leads</p>
+                    <p className="text-xl sm:text-3xl font-black mt-0.5 sm:mt-1">{productivityData.reduce((acc, p) => acc + p.leads_count, 0)}</p>
+                    <p className="text-blue-100 text-[9px] sm:text-xs mt-0.5 sm:mt-1 hidden sm:block">{productivityPeriod === 1 ? 'Hoje' : `Últimos ${productivityPeriod} dias`}</p>
                   </div>
-                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-5 rounded-2xl text-white">
-                    <p className="text-green-100 text-xs font-medium uppercase">Conversões</p>
-                    <p className="text-3xl font-black mt-1">{productivityData.reduce((acc, p) => acc + p.conversions, 0)}</p>
-                    <p className="text-green-100 text-xs mt-1">{productivityPeriod === 1 ? 'Hoje' : `Últimos ${productivityPeriod} dias`}</p>
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white">
+                    <p className="text-green-100 text-[9px] sm:text-xs font-medium uppercase">Conversões</p>
+                    <p className="text-xl sm:text-3xl font-black mt-0.5 sm:mt-1">{productivityData.reduce((acc, p) => acc + p.conversions, 0)}</p>
+                    <p className="text-green-100 text-[9px] sm:text-xs mt-0.5 sm:mt-1 hidden sm:block">{productivityPeriod === 1 ? 'Hoje' : `Últimos ${productivityPeriod} dias`}</p>
                   </div>
-                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-5 rounded-2xl text-white">
-                    <p className="text-purple-100 text-xs font-medium uppercase">Mensagens Enviadas</p>
-                    <p className="text-3xl font-black mt-1">{productivityData.reduce((acc, p) => acc + p.messages_sent, 0).toLocaleString()}</p>
-                    <p className="text-purple-100 text-xs mt-1">{productivityPeriod === 1 ? 'Hoje' : `Últimos ${productivityPeriod} dias`}</p>
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white">
+                    <p className="text-purple-100 text-[9px] sm:text-xs font-medium uppercase">Mensagens</p>
+                    <p className="text-xl sm:text-3xl font-black mt-0.5 sm:mt-1">{productivityData.reduce((acc, p) => acc + p.messages_sent, 0).toLocaleString()}</p>
+                    <p className="text-purple-100 text-[9px] sm:text-xs mt-0.5 sm:mt-1 hidden sm:block">{productivityPeriod === 1 ? 'Hoje' : `Últimos ${productivityPeriod} dias`}</p>
                   </div>
-                  <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-5 rounded-2xl text-white">
-                    <p className="text-amber-100 text-xs font-medium uppercase">Chats Ativos</p>
-                    <p className="text-3xl font-black mt-1">{productivityData.reduce((acc, p) => acc + p.chats_active, 0)}</p>
-                    <p className="text-amber-100 text-xs mt-1">Em atendimento</p>
+                  <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white">
+                    <p className="text-amber-100 text-[9px] sm:text-xs font-medium uppercase">Chats</p>
+                    <p className="text-xl sm:text-3xl font-black mt-0.5 sm:mt-1">{productivityData.reduce((acc, p) => acc + p.chats_active, 0)}</p>
+                    <p className="text-amber-100 text-[9px] sm:text-xs mt-0.5 sm:mt-1 hidden sm:block">Em atendimento</p>
                   </div>
                 </div>
 
                 {/* Tabela de produtividade por usuário */}
                 {isAdmin && productivityData.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+                  <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-3 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
                       <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-cyan-600">group</span>
-                        <h3 className="font-bold text-slate-900">Produtividade por Comercial</h3>
+                        <span className="material-symbols-outlined text-cyan-600 text-base sm:text-xl">group</span>
+                        <h3 className="font-bold text-slate-900 text-sm sm:text-base">Por Comercial</h3>
                       </div>
-                      <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                      <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 rounded-lg p-0.5 sm:p-1">
                         {([1, 7, 15, 30] as const).map((days) => (
                           <button
                             key={days}
                             onClick={() => setProductivityPeriod(days)}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                            className={`px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-md transition-colors ${
                               productivityPeriod === days
                                 ? 'bg-white text-cyan-600 shadow-sm'
                                 : 'text-slate-500 hover:text-slate-700'
@@ -3858,7 +4156,53 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                         ))}
                       </div>
                     </div>
-                    <div className="overflow-x-auto">
+                    
+                    {/* Versão Mobile - Cards */}
+                    <div className="sm:hidden p-2 space-y-2">
+                      {productivityData
+                        .sort((a, b) => b.conversions - a.conversions)
+                        .map((p, idx) => {
+                          const conversionRate = p.leads_count > 0 ? ((p.conversions / p.leads_count) * 100).toFixed(0) : '0';
+                          return (
+                            <div key={p.user_id} className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-1.5">
+                                  {idx === 0 && <span className="material-symbols-outlined text-amber-500 text-sm">emoji_events</span>}
+                                  <span className="font-medium text-slate-800 text-xs truncate max-w-[100px]">{p.user_name}</span>
+                                </div>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                                  p.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
+                                  p.role === 'Comercial' ? 'bg-cyan-100 text-cyan-700' :
+                                  'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {p.role}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-4 gap-1 text-center">
+                                <div>
+                                  <p className="text-[8px] text-slate-400 uppercase">Leads</p>
+                                  <p className="text-[10px] font-bold text-slate-700">{p.leads_count}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] text-slate-400 uppercase">Conv.</p>
+                                  <p className="text-[10px] font-bold text-green-600">{p.conversions}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] text-slate-400 uppercase">Taxa</p>
+                                  <p className={`text-[10px] font-bold ${Number(conversionRate) >= 30 ? 'text-green-600' : Number(conversionRate) >= 15 ? 'text-amber-600' : 'text-slate-500'}`}>{conversionRate}%</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] text-slate-400 uppercase">Msgs</p>
+                                  <p className="text-[10px] font-bold text-slate-600">{p.messages_sent}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                    
+                    {/* Versão Desktop - Tabela */}
+                    <div className="hidden sm:block overflow-x-auto">
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-slate-200 bg-slate-50">
@@ -3927,27 +4271,27 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
                 {/* Para usuário comum, mostrar apenas seus dados */}
                 {(user?.role === 'Comercial' || user?.role === 'Recepcionista' || user?.role === 'Atendente') && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                    <h3 className="font-bold text-slate-900 mb-4">Sua Performance</h3>
+                  <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-6">
+                    <h3 className="font-bold text-slate-900 mb-3 sm:mb-4 text-sm sm:text-base">Sua Performance</h3>
                     {productivityData.filter(p => p.user_id === user.id).map(p => {
                       const conversionRate = p.leads_count > 0 ? ((p.conversions / p.leads_count) * 100).toFixed(1) : '0.0';
                       return (
-                        <div key={p.user_id} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                          <div className="text-center p-4 bg-slate-50 rounded-xl">
-                            <p className="text-2xl font-black text-slate-800">{p.leads_count}</p>
-                            <p className="text-xs text-slate-500 mt-1">Leads</p>
+                        <div key={p.user_id} className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
+                          <div className="text-center p-3 sm:p-4 bg-slate-50 rounded-lg sm:rounded-xl">
+                            <p className="text-lg sm:text-2xl font-black text-slate-800">{p.leads_count}</p>
+                            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Leads</p>
                           </div>
-                          <div className="text-center p-4 bg-green-50 rounded-xl">
-                            <p className="text-2xl font-black text-green-600">{p.conversions}</p>
-                            <p className="text-xs text-slate-500 mt-1">Conversões</p>
+                          <div className="text-center p-3 sm:p-4 bg-green-50 rounded-lg sm:rounded-xl">
+                            <p className="text-lg sm:text-2xl font-black text-green-600">{p.conversions}</p>
+                            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Conversões</p>
                           </div>
-                          <div className="text-center p-4 bg-purple-50 rounded-xl">
-                            <p className="text-2xl font-black text-purple-600">{conversionRate}%</p>
-                            <p className="text-xs text-slate-500 mt-1">Taxa</p>
+                          <div className="text-center p-3 sm:p-4 bg-purple-50 rounded-lg sm:rounded-xl">
+                            <p className="text-lg sm:text-2xl font-black text-purple-600">{conversionRate}%</p>
+                            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Taxa</p>
                           </div>
-                          <div className="text-center p-4 bg-amber-50 rounded-xl">
-                            <p className="text-2xl font-black text-amber-600">{p.messages_sent}</p>
-                            <p className="text-xs text-slate-500 mt-1">Mensagens</p>
+                          <div className="text-center p-3 sm:p-4 bg-amber-50 rounded-lg sm:rounded-xl">
+                            <p className="text-lg sm:text-2xl font-black text-amber-600">{p.messages_sent}</p>
+                            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Mensagens</p>
                           </div>
                         </div>
                       );

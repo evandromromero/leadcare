@@ -27,6 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
   const { todayTasks, upcomingTasks, overdueTasks, toggleTask } = useTasks(clinicId, user?.id);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showTasksDropdown, setShowTasksDropdown] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string>('');
   const [logoLoaded, setLogoLoaded] = useState(false);
   const tasksDropdownRef = useRef<HTMLDivElement>(null);
@@ -178,7 +179,76 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
       )}
       
       <div className="flex flex-1 overflow-hidden">
-      {/* Sidebar */}
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 z-40 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 md:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          {logoLoaded && logoUrl && <img src={logoUrl} alt="Belitx" className="h-8 w-auto" />}
+          <button 
+            onClick={() => setMobileMenuOpen(false)}
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {navItems.map(item => (
+            <Link
+              key={item.path}
+              to={item.path}
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                location.pathname === item.path
+                  ? 'bg-cyan-50 text-cyan-700'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <span className={`material-symbols-outlined ${location.pathname === item.path ? 'fill-1' : ''}`}>
+                {item.icon}
+              </span>
+              {item.label}
+              {item.badge ? (
+                <span className="ml-auto bg-cyan-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {item.badge}
+                </span>
+              ) : null}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-slate-100">
+          <div className="flex items-center gap-3 p-2 rounded-lg">
+            <img 
+              src={state.currentUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(state.currentUser?.name || 'U')}&background=0891b2&color=fff`} 
+              className="size-9 rounded-full border border-slate-200" 
+              alt="User" 
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-900 truncate">{state.currentUser?.name}</p>
+              <p className="text-xs text-slate-500 truncate">{state.currentUser?.role}</p>
+            </div>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                handleLogout();
+              }} 
+              className="text-slate-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+            >
+              <span className="material-symbols-outlined text-[20px]">logout</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Desktop Sidebar */}
       <aside className={`hidden md:flex flex-col ${sidebarCollapsed ? 'w-16' : 'w-64'} bg-white border-r border-slate-200 transition-all duration-300`}>
         <div className={`${sidebarCollapsed ? 'p-3' : 'p-6'} border-b border-slate-100`}>
           <div className="flex items-center justify-between">
@@ -255,12 +325,20 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-10 shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-              <span className="material-symbols-outlined text-cyan-600 text-[20px]">dentistry</span>
-              <span className="text-sm font-bold text-slate-800">{state.selectedClinic?.name}</span>
-              <span className="text-[10px] font-medium text-slate-400">ID: {state.selectedClinic?.idCode}</span>
+        <header className="h-14 md:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 z-10 shrink-0">
+          <div className="flex items-center gap-2 md:gap-4">
+            {/* Botão Menu Mobile */}
+            <button 
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 md:hidden"
+            >
+              <span className="material-symbols-outlined text-[24px]">menu</span>
+            </button>
+            
+            <div className="flex items-center gap-1.5 md:gap-2 bg-slate-50 px-2 md:px-3 py-1 md:py-1.5 rounded-lg border border-slate-200">
+              <span className="material-symbols-outlined text-cyan-600 text-[18px] md:text-[20px]">dentistry</span>
+              <span className="text-xs md:text-sm font-bold text-slate-800 truncate max-w-[100px] md:max-w-none">{state.selectedClinic?.name}</span>
+              <span className="text-[9px] md:text-[10px] font-medium text-slate-400 hidden sm:inline">ID: {state.selectedClinic?.idCode}</span>
             </div>
           </div>
 

@@ -951,45 +951,45 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+      <div className="flex items-center justify-center h-64 sm:h-96">
+        <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-emerald-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Filtro de Período */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-900">Análise Comercial</h2>
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h2 className="text-base sm:text-lg font-bold text-slate-900">Análise Comercial</h2>
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={openExportModal}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors"
             title="Exportar para PDF"
           >
-            <span className="material-symbols-outlined text-xl">picture_as_pdf</span>
-            <span className="text-sm font-medium hidden sm:inline">Exportar PDF</span>
+            <span className="material-symbols-outlined text-lg sm:text-xl">picture_as_pdf</span>
+            <span className="text-xs sm:text-sm font-medium hidden sm:inline">PDF</span>
           </button>
           <button
             onClick={openConfigModal}
-            className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+            className="p-1.5 sm:p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
             title="Configurar gráficos"
           >
-            <span className="material-symbols-outlined text-xl">tune</span>
+            <span className="material-symbols-outlined text-lg sm:text-xl">tune</span>
           </button>
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+          <div className="flex gap-0.5 sm:gap-1 bg-slate-100 p-0.5 sm:p-1 rounded-lg">
             {(['today', '7d', '15d', '30d'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-sm font-medium transition-all ${
                   period === p
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                {p === 'today' ? 'Hoje' : p === '7d' ? '7 dias' : p === '15d' ? '15 dias' : '30 dias'}
+                {p === 'today' ? 'Hoje' : p === '7d' ? '7d' : p === '15d' ? '15d' : '30d'}
               </button>
             ))}
           </div>
@@ -1195,50 +1195,50 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
 
       {/* Cards Comparativos */}
       {isChartVisible('cards') && comparison && (
-        <div data-chart-id="cards" className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl p-4 border border-slate-200">
-            <p className="text-xs text-slate-500 mb-1">Leads Hoje</p>
-            <p className="text-2xl font-bold text-slate-900">{comparison.leadsHoje}</p>
-            <p className={`text-xs ${getPercentChange(comparison.leadsHoje, comparison.leadsOntem) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-              {getPercentChange(comparison.leadsHoje, comparison.leadsOntem) >= 0 ? '↑' : '↓'} {Math.abs(getPercentChange(comparison.leadsHoje, comparison.leadsOntem))}% vs ontem
+        <div data-chart-id="cards" className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-200">
+            <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">Leads Hoje</p>
+            <p className="text-lg sm:text-2xl font-bold text-slate-900">{comparison.leadsHoje}</p>
+            <p className={`text-[9px] sm:text-xs ${getPercentChange(comparison.leadsHoje, comparison.leadsOntem) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              {getPercentChange(comparison.leadsHoje, comparison.leadsOntem) >= 0 ? '↑' : '↓'} {Math.abs(getPercentChange(comparison.leadsHoje, comparison.leadsOntem))}%
             </p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-200">
-            <p className="text-xs text-slate-500 mb-1">Vendas Hoje</p>
-            <p className="text-2xl font-bold text-emerald-600">{comparison.vendasHoje}</p>
-            <p className={`text-xs ${getPercentChange(comparison.vendasHoje, comparison.vendasOntem) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-              {getPercentChange(comparison.vendasHoje, comparison.vendasOntem) >= 0 ? '↑' : '↓'} {Math.abs(getPercentChange(comparison.vendasHoje, comparison.vendasOntem))}% vs ontem
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-200">
+            <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">Vendas Hoje</p>
+            <p className="text-lg sm:text-2xl font-bold text-emerald-600">{comparison.vendasHoje}</p>
+            <p className={`text-[9px] sm:text-xs ${getPercentChange(comparison.vendasHoje, comparison.vendasOntem) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              {getPercentChange(comparison.vendasHoje, comparison.vendasOntem) >= 0 ? '↑' : '↓'} {Math.abs(getPercentChange(comparison.vendasHoje, comparison.vendasOntem))}%
             </p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-200">
-            <p className="text-xs text-slate-500 mb-1">Taxa Resposta ≤5min</p>
-            <p className="text-2xl font-bold text-blue-600">
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-200">
+            <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">Resp. ≤5min</p>
+            <p className="text-lg sm:text-2xl font-bold text-blue-600">
               {responseRate ? Math.round((responseRate.ate_5min / responseRate.total) * 100) : 0}%
             </p>
-            <p className="text-xs text-slate-400">{responseRate?.ate_5min || 0} de {responseRate?.total || 0}</p>
+            <p className="text-[9px] sm:text-xs text-slate-400">{responseRate?.ate_5min || 0}/{responseRate?.total || 0}</p>
           </div>
-          <div className="bg-white rounded-xl p-4 border border-slate-200">
-            <p className="text-xs text-slate-500 mb-1">Sem Resposta</p>
-            <p className="text-2xl font-bold text-red-600">{responseRate?.sem_resposta || 0}</p>
-            <p className="text-xs text-slate-400">
-              {responseRate ? Math.round((responseRate.sem_resposta / responseRate.total) * 100) : 0}% do total
+          <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-200">
+            <p className="text-[10px] sm:text-xs text-slate-500 mb-0.5 sm:mb-1">Sem Resposta</p>
+            <p className="text-lg sm:text-2xl font-bold text-red-600">{responseRate?.sem_resposta || 0}</p>
+            <p className="text-[9px] sm:text-xs text-slate-400">
+              {responseRate ? Math.round((responseRate.sem_resposta / responseRate.total) * 100) : 0}%
             </p>
           </div>
         </div>
       )}
 
       {/* Linha 1: Funil + Origem */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
         {/* Funil de Conversão */}
-        <div data-chart-id="funnel" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Funil de Conversão<HelpTooltip text="Mostra a jornada dos leads desde a entrada até a conversão. Identifique gargalos no processo de vendas." /></h3>
+        <div data-chart-id="funnel" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Funil de Conversão<span className="hidden sm:inline"><HelpTooltip text="Mostra a jornada dos leads desde a entrada até a conversão. Identifique gargalos no processo de vendas." /></span></h3>
           {funnelData.length > 0 ? (
-            <div className="h-80" style={{ minWidth: 0, minHeight: 320 }}>
-              <ResponsiveContainer width="100%" height={320}>
+            <div className="h-56 sm:h-80" style={{ minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={funnelData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                  <XAxis type="number" />
-                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
+                  <XAxis type="number" tick={{ fontSize: 10 }} />
+                  <YAxis type="category" dataKey="name" width={70} tick={{ fontSize: 10 }} />
                   <Tooltip 
                     formatter={(value: number) => [value, 'Leads']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
@@ -1252,15 +1252,15 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-80 flex items-center justify-center text-slate-400">
-              <p>Carregando dados...</p>
+            <div className="h-56 sm:h-80 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Carregando...</p>
             </div>
           )}
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+          <div className="mt-3 sm:mt-4 grid grid-cols-3 gap-1 sm:gap-2 text-center">
             {funnelData.slice(0, 3).map((item) => (
-              <div key={item.name} className="text-xs">
-                <div className="w-3 h-3 rounded-full mx-auto mb-1" style={{ backgroundColor: item.fill }}></div>
-                <p className="text-slate-500">{item.name}</p>
+              <div key={item.name} className="text-[10px] sm:text-xs">
+                <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full mx-auto mb-0.5 sm:mb-1" style={{ backgroundColor: item.fill }}></div>
+                <p className="text-slate-500 truncate">{item.name}</p>
                 <p className="font-bold text-slate-900">{item.value}</p>
               </div>
             ))}
@@ -1268,18 +1268,18 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         </div>
 
         {/* Leads por Origem */}
-        <div data-chart-id="origin" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Leads por Origem<HelpTooltip text="Distribuição dos leads por canal de aquisição: Meta Ads, Links Rastreáveis ou Orgânico (sem origem identificada)." /></h3>
+        <div data-chart-id="origin" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Leads por Origem<span className="hidden sm:inline"><HelpTooltip text="Distribuição dos leads por canal de aquisição: Meta Ads, Links Rastreáveis ou Orgânico (sem origem identificada)." /></span></h3>
           {leadsByOrigin.length > 0 && leadsByOrigin.some(l => l.value > 0) ? (
-          <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
-            <ResponsiveContainer width="100%" height={256}>
+          <div className="h-48 sm:h-64" style={{ minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={leadsByOrigin}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
+                  innerRadius={40}
+                  outerRadius={65}
                   paddingAngle={2}
                   dataKey="value"
                 >
@@ -1295,15 +1295,15 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
             </ResponsiveContainer>
           </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-400">
-              <p>Sem dados de origem</p>
+            <div className="h-48 sm:h-64 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Sem dados</p>
             </div>
           )}
-          <div className="flex justify-center gap-6 mt-2">
+          <div className="flex flex-wrap justify-center gap-3 sm:gap-6 mt-2">
             {leadsByOrigin.map((item) => (
-              <div key={item.name} className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
-                <span className="text-xs text-slate-600">{item.name}: <strong>{item.value}</strong></span>
+              <div key={item.name} className="flex items-center gap-1 sm:gap-2">
+                <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
+                <span className="text-[10px] sm:text-xs text-slate-600">{item.name}: <strong>{item.value}</strong></span>
               </div>
             ))}
           </div>
@@ -1311,47 +1311,47 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       </div>
 
       {/* Linha 2: Leads por Dia */}
-      <div data-chart-id="leadsByDay" className="bg-white rounded-xl p-6 border border-slate-200 mb-6">
-        <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Leads por Dia<HelpTooltip text="Evolução diária de novos leads separados por origem. Acompanhe tendências e identifique dias de maior movimento." /></h3>
+      <div data-chart-id="leadsByDay" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200 mb-4 sm:mb-6">
+        <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Leads por Dia<span className="hidden sm:inline"><HelpTooltip text="Evolução diária de novos leads separados por origem. Acompanhe tendências e identifique dias de maior movimento." /></span></h3>
         {leadsByDay.length > 0 ? (
-        <div className="h-72" style={{ minWidth: 0, minHeight: 288 }}>
-          <ResponsiveContainer width="100%" height={288}>
+        <div className="h-48 sm:h-72" style={{ minWidth: 0 }}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={leadsByDay}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 9 }} width={25} />
               <Tooltip 
-                contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
               />
-              <Legend />
-              <Bar dataKey="meta_ads" name="Meta Ads" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} />
+              <Legend wrapperStyle={{ fontSize: '10px' }} />
+              <Bar dataKey="meta_ads" name="Meta" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} />
               <Bar dataKey="links" name="Links" stackId="a" fill="#3B82F6" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="organico" name="Orgânico" stackId="a" fill="#64748B" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="organico" name="Org." stackId="a" fill="#64748B" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
         ) : (
-          <div className="h-72 flex items-center justify-center text-slate-400">
-            <p>Sem dados de leads por dia</p>
+          <div className="h-48 sm:h-72 flex items-center justify-center text-slate-400">
+            <p className="text-xs sm:text-sm">Sem dados</p>
           </div>
         )}
       </div>
 
       {/* Linha 3: Tempo de Resposta + Vendas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Tempo Médio de Resposta */}
-        <div data-chart-id="responseTime" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Tempo Médio de Resposta (min)<HelpTooltip text="Tempo médio entre a primeira mensagem do cliente e a primeira resposta da equipe. Meta ideal: até 5 minutos." /></h3>
+        <div data-chart-id="responseTime" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Tempo Resposta (min)<span className="hidden sm:inline"><HelpTooltip text="Tempo médio entre a primeira mensagem do cliente e a primeira resposta da equipe. Meta ideal: até 5 minutos." /></span></h3>
           {responseTimeData.length > 0 ? (
-          <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
-            <ResponsiveContainer width="100%" height={256}>
+          <div className="h-44 sm:h-64" style={{ minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={responseTimeData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <XAxis dataKey="date" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 9 }} width={25} />
                 <Tooltip 
-                  formatter={(value: number) => [`${value} min`, 'Tempo médio']}
-                  contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                  formatter={(value: number) => [`${value} min`, 'Tempo']}
+                  contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
                 />
                 <defs>
                   <linearGradient id="colorTempo" x1="0" y1="0" x2="0" y2="1">
@@ -1366,114 +1366,113 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
                   strokeWidth={2}
                   fill="url(#colorTempo)" 
                 />
-                {/* Linha de referência em 5 min */}
                 <Line type="monotone" dataKey={() => 5} stroke="#10B981" strokeDasharray="5 5" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-400">
-              <p>Sem dados de tempo de resposta</p>
+            <div className="h-44 sm:h-64 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Sem dados</p>
             </div>
           )}
-          <p className="text-xs text-slate-400 mt-2 text-center">
-            <span className="inline-block w-3 h-0.5 bg-emerald-500 mr-1"></span>
-            Meta ideal: 5 minutos
+          <p className="text-[10px] sm:text-xs text-slate-400 mt-2 text-center">
+            <span className="inline-block w-2 sm:w-3 h-0.5 bg-emerald-500 mr-1"></span>
+            Meta: 5 min
           </p>
         </div>
 
         {/* Vendas por Dia */}
-        <div data-chart-id="salesByDay" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Vendas por Dia<HelpTooltip text="Quantidade de vendas e valor total faturado por dia. Acompanhe o desempenho comercial diário." /></h3>
+        <div data-chart-id="salesByDay" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Vendas por Dia<span className="hidden sm:inline"><HelpTooltip text="Quantidade de vendas e valor total faturado por dia. Acompanhe o desempenho comercial diário." /></span></h3>
           {salesData.length > 0 ? (
-          <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
-            <ResponsiveContainer width="100%" height={256}>
+          <div className="h-44 sm:h-64" style={{ minWidth: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salesData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${v}`} />
+                <XAxis dataKey="date" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
+                <YAxis yAxisId="left" tick={{ fontSize: 9 }} width={25} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} width={35} tickFormatter={(v) => `${v}`} />
                 <Tooltip 
                   formatter={(value: number, name: string) => [
                     name === 'valor' ? formatCurrency(value) : value,
                     name === 'valor' ? 'Valor' : 'Vendas'
                   ]}
-                  contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                  contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
                 />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: '10px' }} />
                 <Bar yAxisId="left" dataKey="vendas" name="Vendas" fill="#10B981" radius={[4, 4, 0, 0]} />
-                <Line yAxisId="right" type="monotone" dataKey="valor" name="Valor" stroke="#8B5CF6" strokeWidth={2} dot={{ fill: '#8B5CF6' }} />
+                <Line yAxisId="right" type="monotone" dataKey="valor" name="Valor" stroke="#8B5CF6" strokeWidth={2} dot={{ fill: '#8B5CF6', r: 2 }} />
               </BarChart>
             </ResponsiveContainer>
           </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-400">
-              <p>Sem dados de vendas</p>
+            <div className="h-44 sm:h-64 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Sem dados</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Linha 4: Taxa de Resposta + Performance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Taxa de Resposta */}
-        <div data-chart-id="responseDistribution" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Distribuição do Tempo de Resposta<HelpTooltip text="Percentual de leads respondidos em cada faixa de tempo. Quanto mais rápido, maior a chance de conversão." /></h3>
+        <div data-chart-id="responseDistribution" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Distribuição Tempo Resp.<span className="hidden sm:inline"><HelpTooltip text="Percentual de leads respondidos em cada faixa de tempo. Quanto mais rápido, maior a chance de conversão." /></span></h3>
           {responseRate && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-24 text-xs text-slate-600">≤ 5 min</div>
-                <div className="flex-1 bg-slate-100 rounded-full h-6 overflow-hidden">
+            <div className="space-y-2 sm:space-y-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-16 sm:w-24 text-[10px] sm:text-xs text-slate-600">≤ 5 min</div>
+                <div className="flex-1 bg-slate-100 rounded-full h-4 sm:h-6 overflow-hidden">
                   <div 
-                    className="h-full bg-emerald-500 rounded-full flex items-center justify-end pr-2"
+                    className="h-full bg-emerald-500 rounded-full flex items-center justify-end pr-1 sm:pr-2"
                     style={{ width: `${(responseRate.ate_5min / responseRate.total) * 100}%` }}
                   >
-                    <span className="text-xs text-white font-medium">{responseRate.ate_5min}</span>
+                    <span className="text-[9px] sm:text-xs text-white font-medium">{responseRate.ate_5min}</span>
                   </div>
                 </div>
-                <div className="w-12 text-xs text-right text-slate-500">
+                <div className="w-8 sm:w-12 text-[10px] sm:text-xs text-right text-slate-500">
                   {Math.round((responseRate.ate_5min / responseRate.total) * 100)}%
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-24 text-xs text-slate-600">5-30 min</div>
-                <div className="flex-1 bg-slate-100 rounded-full h-6 overflow-hidden">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-16 sm:w-24 text-[10px] sm:text-xs text-slate-600">5-30 min</div>
+                <div className="flex-1 bg-slate-100 rounded-full h-4 sm:h-6 overflow-hidden">
                   <div 
-                    className="h-full bg-amber-500 rounded-full flex items-center justify-end pr-2"
+                    className="h-full bg-amber-500 rounded-full flex items-center justify-end pr-1 sm:pr-2"
                     style={{ width: `${(responseRate.ate_30min / responseRate.total) * 100}%` }}
                   >
-                    <span className="text-xs text-white font-medium">{responseRate.ate_30min}</span>
+                    <span className="text-[9px] sm:text-xs text-white font-medium">{responseRate.ate_30min}</span>
                   </div>
                 </div>
-                <div className="w-12 text-xs text-right text-slate-500">
+                <div className="w-8 sm:w-12 text-[10px] sm:text-xs text-right text-slate-500">
                   {Math.round((responseRate.ate_30min / responseRate.total) * 100)}%
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-24 text-xs text-slate-600">&gt; 30 min</div>
-                <div className="flex-1 bg-slate-100 rounded-full h-6 overflow-hidden">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-16 sm:w-24 text-[10px] sm:text-xs text-slate-600">&gt; 30 min</div>
+                <div className="flex-1 bg-slate-100 rounded-full h-4 sm:h-6 overflow-hidden">
                   <div 
-                    className="h-full bg-orange-500 rounded-full flex items-center justify-end pr-2"
+                    className="h-full bg-orange-500 rounded-full flex items-center justify-end pr-1 sm:pr-2"
                     style={{ width: `${(responseRate.mais_30min / responseRate.total) * 100}%` }}
                   >
-                    <span className="text-xs text-white font-medium">{responseRate.mais_30min}</span>
+                    <span className="text-[9px] sm:text-xs text-white font-medium">{responseRate.mais_30min}</span>
                   </div>
                 </div>
-                <div className="w-12 text-xs text-right text-slate-500">
+                <div className="w-8 sm:w-12 text-[10px] sm:text-xs text-right text-slate-500">
                   {Math.round((responseRate.mais_30min / responseRate.total) * 100)}%
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-24 text-xs text-slate-600">Sem resposta</div>
-                <div className="flex-1 bg-slate-100 rounded-full h-6 overflow-hidden">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-16 sm:w-24 text-[10px] sm:text-xs text-slate-600">Sem resp.</div>
+                <div className="flex-1 bg-slate-100 rounded-full h-4 sm:h-6 overflow-hidden">
                   <div 
-                    className="h-full bg-red-500 rounded-full flex items-center justify-end pr-2"
+                    className="h-full bg-red-500 rounded-full flex items-center justify-end pr-1 sm:pr-2"
                     style={{ width: `${(responseRate.sem_resposta / responseRate.total) * 100}%` }}
                   >
-                    <span className="text-xs text-white font-medium">{responseRate.sem_resposta}</span>
+                    <span className="text-[9px] sm:text-xs text-white font-medium">{responseRate.sem_resposta}</span>
                   </div>
                 </div>
-                <div className="w-12 text-xs text-right text-slate-500">
+                <div className="w-8 sm:w-12 text-[10px] sm:text-xs text-right text-slate-500">
                   {Math.round((responseRate.sem_resposta / responseRate.total) * 100)}%
                 </div>
               </div>
@@ -1482,118 +1481,117 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         </div>
 
         {/* Performance por Atendente */}
-        <div data-chart-id="attendantPerformance" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Performance por Atendente<HelpTooltip text="Comparativo de leads atribuídos e conversões realizadas por cada atendente da equipe." /></h3>
+        <div data-chart-id="attendantPerformance" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Performance Atendente<span className="hidden sm:inline"><HelpTooltip text="Comparativo de leads atribuídos e conversões realizadas por cada atendente da equipe." /></span></h3>
           {attendantPerformance.length > 0 ? (
-            <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
-              <ResponsiveContainer width="100%" height={256}>
+            <div className="h-44 sm:h-64" style={{ minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={attendantPerformance} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 11 }} />
+                  <XAxis type="number" tick={{ fontSize: 9 }} />
+                  <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 9 }} />
                   <Tooltip 
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
                   />
-                  <Legend />
+                  <Legend wrapperStyle={{ fontSize: '10px' }} />
                   <Bar dataKey="leads" name="Leads" fill="#3B82F6" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="conversoes" name="Conversões" fill="#10B981" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="conversoes" name="Conv." fill="#10B981" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-400">
-              <p>Nenhum dado de performance disponível</p>
+            <div className="h-44 sm:h-64 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Sem dados</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Linha 5: Horário de Pico + Dia da Semana */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Horário de Pico de Leads */}
-        <div data-chart-id="hourlyPeak" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Horário de Pico de Leads<HelpTooltip text="Distribuição de leads por hora do dia. Use para escalar atendentes nos horários de maior demanda." /></h3>
+        <div data-chart-id="hourlyPeak" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Horário de Pico<span className="hidden sm:inline"><HelpTooltip text="Distribuição de leads por hora do dia. Use para escalar atendentes nos horários de maior demanda." /></span></h3>
           {hourlyData.length > 0 ? (
-            <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
-              <ResponsiveContainer width="100%" height={256}>
+            <div className="h-40 sm:h-64" style={{ minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="hora" tick={{ fontSize: 9 }} interval={1} />
-                  <YAxis tick={{ fontSize: 11 }} />
+                  <XAxis dataKey="hora" tick={{ fontSize: 7 }} interval={2} />
+                  <YAxis tick={{ fontSize: 9 }} width={20} />
                   <Tooltip 
                     formatter={(value: number) => [value, 'Leads']}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
                   />
                   <Bar dataKey="total" fill="#10B981" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-400">
-              <p>Sem dados de horário</p>
+            <div className="h-40 sm:h-64 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Sem dados</p>
             </div>
           )}
         </div>
 
         {/* Leads por Dia da Semana */}
-        <div data-chart-id="weekday" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Leads por Dia da Semana<HelpTooltip text="Quais dias da semana têm mais leads. Útil para planejar escalas e campanhas de marketing." /></h3>
+        <div data-chart-id="weekday" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Leads por Dia Semana<span className="hidden sm:inline"><HelpTooltip text="Quais dias da semana têm mais leads. Útil para planejar escalas e campanhas de marketing." /></span></h3>
           {weekdayData.length > 0 ? (
-            <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
-              <ResponsiveContainer width="100%" height={256}>
+            <div className="h-40 sm:h-64" style={{ minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={weekdayData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
+                  <XAxis dataKey="dia" tick={{ fontSize: 9 }} />
+                  <YAxis tick={{ fontSize: 9 }} width={20} />
                   <Tooltip 
                     formatter={(value: number) => [value, 'Leads']}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
                   />
                   <Bar dataKey="total" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-400">
-              <p>Sem dados de dia da semana</p>
+            <div className="h-40 sm:h-64 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Sem dados</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Linha 6: Taxa de Conversão + Ticket Médio */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Taxa de Conversão por Origem */}
-        <div data-chart-id="conversionRate" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Taxa de Conversão por Origem<HelpTooltip text="Percentual de leads que se tornaram clientes por canal. Identifique qual origem traz leads mais qualificados." /></h3>
+        <div data-chart-id="conversionRate" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Taxa Conversão<span className="hidden sm:inline"><HelpTooltip text="Percentual de leads que se tornaram clientes por canal. Identifique qual origem traz leads mais qualificados." /></span></h3>
           {conversionRateData.length > 0 ? (
-            <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
-              <ResponsiveContainer width="100%" height={256}>
+            <div className="h-40 sm:h-64" style={{ minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={conversionRateData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 11 }} unit="%" />
-                  <YAxis type="category" dataKey="origem" width={80} tick={{ fontSize: 11 }} />
+                  <XAxis type="number" tick={{ fontSize: 9 }} unit="%" />
+                  <YAxis type="category" dataKey="origem" width={50} tick={{ fontSize: 9 }} />
                   <Tooltip 
                     formatter={(value: number, name: string) => [
                       name === 'taxa' ? `${value}%` : value,
-                      name === 'taxa' ? 'Taxa' : name === 'total' ? 'Total Leads' : 'Convertidos'
+                      name === 'taxa' ? 'Taxa' : 'Conv.'
                     ]}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
                   />
-                  <Legend />
                   <Bar dataKey="taxa" name="Taxa %" fill="#10B981" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-400">
-              <p>Sem dados de conversão</p>
+            <div className="h-40 sm:h-64 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Sem dados</p>
             </div>
           )}
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="mt-2 sm:mt-4 grid grid-cols-3 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs">
             {conversionRateData.map((item) => (
               <div key={item.origem}>
-                <p className="text-slate-500">{item.origem}</p>
+                <p className="text-slate-500 truncate">{item.origem}</p>
                 <p className="font-bold text-slate-900">{item.convertidos}/{item.total}</p>
                 <p className="text-emerald-600">{item.taxa}%</p>
               </div>
@@ -1602,37 +1600,36 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
         </div>
 
         {/* Ticket Médio por Origem */}
-        <div data-chart-id="avgTicket" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Ticket Médio por Origem<HelpTooltip text="Valor médio de venda por canal de aquisição. Descubra qual origem gera mais receita por cliente." /></h3>
+        <div data-chart-id="avgTicket" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Ticket Médio<span className="hidden sm:inline"><HelpTooltip text="Valor médio de venda por canal de aquisição. Descubra qual origem gera mais receita por cliente." /></span></h3>
           {ticketData.length > 0 ? (
-            <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
-              <ResponsiveContainer width="100%" height={256}>
+            <div className="h-40 sm:h-64" style={{ minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={ticketData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${v}`} />
-                  <YAxis type="category" dataKey="origem" width={80} tick={{ fontSize: 11 }} />
+                  <XAxis type="number" tick={{ fontSize: 9 }} tickFormatter={(v) => `${v}`} />
+                  <YAxis type="category" dataKey="origem" width={50} tick={{ fontSize: 9 }} />
                   <Tooltip 
                     formatter={(value: number, name: string) => [
                       name === 'ticket' ? formatCurrency(value) : value,
-                      name === 'ticket' ? 'Ticket Médio' : 'Vendas'
+                      name === 'ticket' ? 'Ticket' : 'Vendas'
                     ]}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
                   />
-                  <Bar dataKey="ticket" name="Ticket Médio" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="ticket" name="Ticket" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-400">
-              <p>Sem dados de ticket médio</p>
+            <div className="h-40 sm:h-64 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Sem dados</p>
             </div>
           )}
-          <div className="mt-4 flex justify-center gap-6 text-xs">
+          <div className="mt-2 sm:mt-4 flex flex-wrap justify-center gap-3 sm:gap-6 text-[10px] sm:text-xs">
             {ticketData.map((item) => (
               <div key={item.origem} className="text-center">
                 <p className="text-slate-500">{item.origem}</p>
                 <p className="font-bold text-violet-600">{formatCurrency(item.ticket)}</p>
-                <p className="text-slate-400">{item.vendas} vendas</p>
               </div>
             ))}
           </div>
@@ -1640,20 +1637,20 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
       </div>
 
       {/* Linha 7: Mapa de Calor */}
-      <div data-chart-id="heatmap" className="bg-white rounded-xl p-6 border border-slate-200 mb-6">
-        <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Mapa de Calor - Leads por Horário e Dia<HelpTooltip text="Visualização de quando chegam mais leads combinando dia da semana e hora. Cores mais intensas = mais leads." /></h3>
+      <div data-chart-id="heatmap" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200 mb-4 sm:mb-6">
+        <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Mapa de Calor<span className="hidden sm:inline"><HelpTooltip text="Visualização de quando chegam mais leads combinando dia da semana e hora. Cores mais intensas = mais leads." /></span></h3>
         {heatmapData.length > 0 ? (
           <div className="overflow-x-auto">
-            <div className="min-w-[600px]">
+            <div className="min-w-[400px] sm:min-w-[600px]">
               <div className="flex">
-                <div className="w-12"></div>
+                <div className="w-8 sm:w-12"></div>
                 {Array.from({ length: 24 }, (_, i) => (
-                  <div key={i} className="flex-1 text-center text-[10px] text-slate-500">{i}h</div>
+                  <div key={i} className="flex-1 text-center text-[7px] sm:text-[10px] text-slate-500">{i}</div>
                 ))}
               </div>
               {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((dia, diaIdx) => (
                 <div key={dia} className="flex items-center">
-                  <div className="w-12 text-xs text-slate-600 font-medium">{dia}</div>
+                  <div className="w-8 sm:w-12 text-[9px] sm:text-xs text-slate-600 font-medium">{dia}</div>
                   {Array.from({ length: 24 }, (_, hora) => {
                     const item = heatmapData.find(h => h.dia === dia && h.hora === hora);
                     const valor = item?.valor || 0;
@@ -1662,7 +1659,7 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
                     return (
                       <div
                         key={hora}
-                        className="flex-1 h-8 border border-white flex items-center justify-center text-[9px] font-medium"
+                        className="flex-1 h-5 sm:h-8 border border-white flex items-center justify-center text-[7px] sm:text-[9px] font-medium"
                         style={{
                           backgroundColor: valor > 0 
                             ? `rgba(16, 185, 129, ${0.1 + intensity * 0.9})` 
@@ -1678,73 +1675,73 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-500">
-              <span>Menos</span>
-              <div className="flex gap-1">
+            <div className="flex items-center justify-center gap-1 sm:gap-2 mt-2 sm:mt-4 text-[10px] sm:text-xs text-slate-500">
+              <span>-</span>
+              <div className="flex gap-0.5 sm:gap-1">
                 {[0.1, 0.3, 0.5, 0.7, 0.9].map((i) => (
                   <div 
                     key={i} 
-                    className="w-4 h-4 rounded"
+                    className="w-3 h-3 sm:w-4 sm:h-4 rounded"
                     style={{ backgroundColor: `rgba(16, 185, 129, ${i})` }}
                   ></div>
                 ))}
               </div>
-              <span>Mais</span>
+              <span>+</span>
             </div>
           </div>
         ) : (
-          <div className="h-64 flex items-center justify-center text-slate-400">
-            <p>Sem dados para o mapa de calor</p>
+          <div className="h-40 sm:h-64 flex items-center justify-center text-slate-400">
+            <p className="text-xs sm:text-sm">Sem dados</p>
           </div>
         )}
       </div>
 
       {/* Linha 8: Evolução Semanal + Top Campanhas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Evolução Semanal */}
-        <div data-chart-id="weeklyEvolution" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Evolução Semanal<HelpTooltip text="Comparativo de leads e conversões por semana. Acompanhe tendências e crescimento ao longo do tempo." /></h3>
+        <div data-chart-id="weeklyEvolution" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Evolução Semanal<span className="hidden sm:inline"><HelpTooltip text="Comparativo de leads e conversões por semana. Acompanhe tendências e crescimento ao longo do tempo." /></span></h3>
           {weeklyEvolution.length > 0 ? (
-            <div className="h-64" style={{ minWidth: 0, minHeight: 256 }}>
-              <ResponsiveContainer width="100%" height={256}>
+            <div className="h-40 sm:h-64" style={{ minWidth: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={weeklyEvolution}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="semana" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
+                  <XAxis dataKey="semana" tick={{ fontSize: 8 }} />
+                  <YAxis tick={{ fontSize: 9 }} width={25} />
                   <Tooltip 
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
                   />
-                  <Legend />
-                  <Line type="monotone" dataKey="leads" name="Leads" stroke="#3B82F6" strokeWidth={2} dot={{ fill: '#3B82F6' }} />
-                  <Line type="monotone" dataKey="conversoes" name="Conversões" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981' }} />
+                  <Legend wrapperStyle={{ fontSize: '10px' }} />
+                  <Line type="monotone" dataKey="leads" name="Leads" stroke="#3B82F6" strokeWidth={2} dot={{ fill: '#3B82F6', r: 2 }} />
+                  <Line type="monotone" dataKey="conversoes" name="Conv." stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981', r: 2 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-400">
-              <p>Sem dados de evolução semanal</p>
+            <div className="h-40 sm:h-64 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Sem dados</p>
             </div>
           )}
         </div>
 
         {/* Top Campanhas Meta Ads */}
-        <div data-chart-id="topCampaigns" className="bg-white rounded-xl p-6 border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Top Campanhas Meta Ads<HelpTooltip text="Ranking das campanhas de anúncios Meta (Facebook/Instagram) que mais geraram leads. Identifique os anúncios mais eficientes." /></h3>
+        <div data-chart-id="topCampaigns" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Top Campanhas<span className="hidden sm:inline"><HelpTooltip text="Ranking das campanhas de anúncios Meta (Facebook/Instagram) que mais geraram leads. Identifique os anúncios mais eficientes." /></span></h3>
           {topCampaigns.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               {topCampaigns.map((campaign, idx) => (
-                <div key={campaign.ad_source_id} className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                <div key={campaign.ad_source_id} className="flex items-center gap-2 sm:gap-3">
+                  <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white font-bold text-[10px] sm:text-sm ${
                     idx === 0 ? 'bg-amber-500' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-amber-700' : 'bg-slate-300'
                   }`}>
                     {idx + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">{campaign.nome}</p>
-                    <p className="text-xs text-slate-500">{campaign.leads} leads</p>
+                    <p className="text-[10px] sm:text-sm font-medium text-slate-900 truncate">{campaign.nome}</p>
+                    <p className="text-[9px] sm:text-xs text-slate-500">{campaign.leads} leads</p>
                   </div>
-                  <div className="flex-shrink-0">
-                    <div className="w-20 bg-slate-100 rounded-full h-2 overflow-hidden">
+                  <div className="flex-shrink-0 hidden sm:block">
+                    <div className="w-16 sm:w-20 bg-slate-100 rounded-full h-1.5 sm:h-2 overflow-hidden">
                       <div 
                         className="h-full bg-emerald-500 rounded-full"
                         style={{ width: `${(campaign.leads / topCampaigns[0].leads) * 100}%` }}
@@ -1755,70 +1752,96 @@ const DashboardChartsTab: React.FC<DashboardChartsTabProps> = ({ clinicId }) => 
               ))}
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-slate-400">
-              <p>Nenhuma campanha Meta Ads encontrada</p>
+            <div className="h-40 sm:h-64 flex items-center justify-center text-slate-400">
+              <p className="text-xs sm:text-sm">Sem campanhas</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Linha 9: Top Links Rastreáveis */}
-      <div data-chart-id="topLinks" className="bg-white rounded-xl p-6 border border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center">Top Links Rastreáveis<HelpTooltip text="Ranking dos links rastreáveis que mais geraram leads. Mostra também a taxa de conversão de cada link." /></h3>
+      <div data-chart-id="topLinks" className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-6 border border-slate-200">
+        <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 sm:mb-4 flex items-center">Top Links<span className="hidden sm:inline"><HelpTooltip text="Ranking dos links rastreáveis que mais geraram leads. Mostra também a taxa de conversão de cada link." /></span></h3>
         {topLinks.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-xs text-slate-500 border-b border-slate-100">
-                  <th className="text-left py-2 font-medium">#</th>
-                  <th className="text-left py-2 font-medium">Link</th>
-                  <th className="text-center py-2 font-medium">Leads</th>
-                  <th className="text-center py-2 font-medium">Convertidos</th>
-                  <th className="text-center py-2 font-medium">Taxa</th>
-                  <th className="text-right py-2 font-medium">Performance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topLinks.map((link, idx) => (
-                  <tr key={link.code} className="border-b border-slate-50 hover:bg-slate-50">
-                    <td className="py-3">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs ${
-                        idx === 0 ? 'bg-blue-500' : idx === 1 ? 'bg-blue-400' : idx === 2 ? 'bg-blue-300' : 'bg-slate-300'
-                      }`}>
-                        {idx + 1}
-                      </div>
-                    </td>
-                    <td className="py-3">
-                      <p className="text-sm font-medium text-slate-900">{link.nome}</p>
-                      <p className="text-xs text-slate-400">Código: {link.code}</p>
-                    </td>
-                    <td className="py-3 text-center">
-                      <span className="text-sm font-semibold text-slate-900">{link.leads}</span>
-                    </td>
-                    <td className="py-3 text-center">
-                      <span className="text-sm font-semibold text-emerald-600">{link.convertidos}</span>
-                    </td>
-                    <td className="py-3 text-center">
-                      <span className={`text-sm font-semibold ${link.taxa >= 10 ? 'text-emerald-600' : link.taxa >= 5 ? 'text-amber-600' : 'text-slate-600'}`}>
+          <>
+            {/* Versão Mobile - Cards */}
+            <div className="sm:hidden space-y-2">
+              {topLinks.map((link, idx) => (
+                <div key={link.code} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-white font-bold text-[9px] flex-shrink-0 ${
+                    idx === 0 ? 'bg-blue-500' : idx === 1 ? 'bg-blue-400' : idx === 2 ? 'bg-blue-300' : 'bg-slate-300'
+                  }`}>
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-medium text-slate-900 truncate">{link.nome}</p>
+                    <div className="flex items-center gap-2 text-[9px]">
+                      <span className="text-slate-500">{link.leads} leads</span>
+                      <span className="text-emerald-600">{link.convertidos} conv.</span>
+                      <span className={`font-bold ${link.taxa >= 10 ? 'text-emerald-600' : link.taxa >= 5 ? 'text-amber-600' : 'text-slate-600'}`}>
                         {link.taxa}%
                       </span>
-                    </td>
-                    <td className="py-3">
-                      <div className="w-24 bg-slate-100 rounded-full h-2 overflow-hidden ml-auto">
-                        <div 
-                          className="h-full bg-blue-500 rounded-full"
-                          style={{ width: `${(link.leads / topLinks[0].leads) * 100}%` }}
-                        ></div>
-                      </div>
-                    </td>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Versão Desktop - Tabela */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-xs text-slate-500 border-b border-slate-100">
+                    <th className="text-left py-2 font-medium">#</th>
+                    <th className="text-left py-2 font-medium">Link</th>
+                    <th className="text-center py-2 font-medium">Leads</th>
+                    <th className="text-center py-2 font-medium">Conv.</th>
+                    <th className="text-center py-2 font-medium">Taxa</th>
+                    <th className="text-right py-2 font-medium">Perf.</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {topLinks.map((link, idx) => (
+                    <tr key={link.code} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="py-3">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs ${
+                          idx === 0 ? 'bg-blue-500' : idx === 1 ? 'bg-blue-400' : idx === 2 ? 'bg-blue-300' : 'bg-slate-300'
+                        }`}>
+                          {idx + 1}
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        <p className="text-sm font-medium text-slate-900">{link.nome}</p>
+                        <p className="text-xs text-slate-400">Código: {link.code}</p>
+                      </td>
+                      <td className="py-3 text-center">
+                        <span className="text-sm font-semibold text-slate-900">{link.leads}</span>
+                      </td>
+                      <td className="py-3 text-center">
+                        <span className="text-sm font-semibold text-emerald-600">{link.convertidos}</span>
+                      </td>
+                      <td className="py-3 text-center">
+                        <span className={`text-sm font-semibold ${link.taxa >= 10 ? 'text-emerald-600' : link.taxa >= 5 ? 'text-amber-600' : 'text-slate-600'}`}>
+                          {link.taxa}%
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        <div className="w-24 bg-slate-100 rounded-full h-2 overflow-hidden ml-auto">
+                          <div 
+                            className="h-full bg-blue-500 rounded-full"
+                            style={{ width: `${(link.leads / topLinks[0].leads) * 100}%` }}
+                          ></div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
-          <div className="h-32 flex items-center justify-center text-slate-400">
-            <p>Nenhum link rastreável com leads no período</p>
+          <div className="h-24 sm:h-32 flex items-center justify-center text-slate-400">
+            <p className="text-xs sm:text-sm">Nenhum link com leads</p>
           </div>
         )}
       </div>
