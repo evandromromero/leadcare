@@ -76,6 +76,9 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   // Estado para busca por nome/telefone
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Estado para aba selecionada no mobile
+  const [mobileSelectedColumn, setMobileSelectedColumn] = useState<ChatStatus>('Novo Lead');
+  
   // Estados para envio de email
   const [smtpConfigured, setSmtpConfigured] = useState(false);
   const [emailTemplates, setEmailTemplates] = useState<Array<{ id: string; name: string; subject: string; html_content: string }>>([]);
@@ -825,11 +828,192 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
         </div>
       )}
 
+      {/* ========== VERSÃO MOBILE - Abas com lista de cards ========== */}
+      <div className="md:hidden flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Abas de etapas */}
+        <div className="flex overflow-x-auto gap-1 pb-2 mb-3 -mx-4 px-4 shrink-0">
+          {columns.map(column => {
+            const leadsInCol = filteredChats.filter(c => c.status === column);
+            const config = columnConfig[column];
+            const isSelected = mobileSelectedColumn === column;
+            return (
+              <button
+                key={column}
+                onClick={() => setMobileSelectedColumn(column)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors flex-shrink-0 ${
+                  isSelected 
+                    ? `bg-${config.color}-100 text-${config.color}-700 border border-${config.color}-200` 
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                <div className={`size-2 rounded-full bg-${config.color}-500`}></div>
+                <span className="truncate max-w-[60px]">{pipelineLabels[column]}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                  isSelected ? `bg-${config.color}-200 text-${config.color}-800` : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {leadsInCol.length}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Lista de cards da etapa selecionada */}
+        <div className="flex-1 overflow-y-auto space-y-3 pb-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600 mx-auto mb-3"></div>
+                <p className="text-slate-500 text-sm">Carregando...</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {filteredChats.filter(c => c.status === mobileSelectedColumn).length === 0 ? (
+                <div className="text-center py-10">
+                  <span className="material-symbols-outlined text-slate-300 text-4xl mb-2">inbox</span>
+                  <p className="text-slate-400 text-sm">Nenhum lead nesta etapa</p>
+                </div>
+              ) : (
+                filteredChats.filter(c => c.status === mobileSelectedColumn).map(lead => (
+                  <div 
+                    key={lead.id}
+                    className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"
+                  >
+                    {/* Header do card com nome e ações */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-slate-900 text-sm truncate">{lead.client_name}</h4>
+                        <div className="flex items-center gap-1 text-slate-400 text-xs mt-0.5">
+                          <span className="material-symbols-outlined text-[12px]">call</span>
+                          {lead.phone_number}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 ml-2">
+                        <button
+                          onClick={() => handleShowLeadInfo(lead)}
+                          className="p-1.5 rounded-lg hover:bg-cyan-50 text-slate-400 hover:text-cyan-600"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">info</span>
+                        </button>
+                        <button
+                          onClick={() => handleGoToChat(lead.id)}
+                          className="p-1.5 rounded-lg hover:bg-green-50 text-slate-400 hover:text-green-600"
+                        >
+                          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                          </svg>
+                        </button>
+                        {smtpConfigured && lead.lead_id && leadsEmailMap[lead.lead_id] && (
+                          <button
+                            onClick={() => handleOpenEmailModal(lead)}
+                            className="p-1.5 rounded-lg hover:bg-purple-50 text-slate-400 hover:text-purple-600"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">mail</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tags */}
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {lead.source_id && leadSourcesMap[lead.source_id] && (
+                        <span 
+                          className="px-1.5 py-0.5 rounded text-[9px] font-black border flex items-center gap-1"
+                          style={{ 
+                            backgroundColor: `${leadSourcesMap[lead.source_id].color}15`, 
+                            color: leadSourcesMap[lead.source_id].color, 
+                            borderColor: `${leadSourcesMap[lead.source_id].color}40` 
+                          }}
+                        >
+                          {leadSourcesMap[lead.source_id].icon && (
+                            <span className="material-symbols-outlined text-[10px]">{leadSourcesMap[lead.source_id].icon}</span>
+                          )}
+                          {leadSourcesMap[lead.source_id].name}
+                        </span>
+                      )}
+                      {campaignCodesMap[lead.id] && (!lead.source_id || !leadSourcesMap[lead.source_id]?.code || leadSourcesMap[lead.source_id].code !== campaignCodesMap[lead.id].code) && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black border bg-violet-50 text-violet-700 border-violet-200 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[10px]">link</span>
+                          {campaignCodesMap[lead.id].code}
+                        </span>
+                      )}
+                      {lead.tags.map(tag => (
+                        <span key={tag.id} className="px-1.5 py-0.5 rounded text-[9px] font-black border" style={{ backgroundColor: `${tag.color}20`, color: tag.color, borderColor: `${tag.color}40` }}>
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Orçamentos */}
+                    {quotesMap[lead.id]?.length > 0 && (
+                      <div className="space-y-1 mb-3">
+                        {quotesMap[lead.id].map((q, idx) => (
+                          <div 
+                            key={idx} 
+                            className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg border ${
+                              q.status === 'approved' 
+                                ? 'bg-green-50 border-green-200' 
+                                : 'bg-amber-50 border-amber-200'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className={`material-symbols-outlined text-[14px] ${q.status === 'approved' ? 'text-green-600' : 'text-amber-600'}`}>
+                                {q.status === 'approved' ? 'check_circle' : 'schedule'}
+                              </span>
+                              <span className={`truncate ${q.status === 'approved' ? 'text-green-700' : 'text-amber-700'}`}>{q.service_type}</span>
+                            </div>
+                            <span className={`font-black ml-2 flex-shrink-0 ${q.status === 'approved' ? 'text-green-700' : 'text-amber-700'}`}>
+                              R$ {q.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Footer com tempo e seletor de etapa */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase">
+                        <span className="material-symbols-outlined text-[12px]">schedule</span>
+                        {formatTimeAgo(lead.updated_at)}
+                      </div>
+                      {canMoveLead && (
+                        <select
+                          value={lead.status}
+                          onChange={(e) => updateChatStatus(lead.id, e.target.value as ChatStatus)}
+                          className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 font-medium"
+                        >
+                          {columns.map(col => (
+                            <option key={col} value={col}>{pipelineLabels[col]}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+              
+              {/* Botão adicionar lead */}
+              {canCreateLead && (
+                <button 
+                  onClick={() => setShowNewLeadModal(true)}
+                  className="w-full py-3 flex items-center justify-center gap-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50/50 border border-dashed border-slate-200 rounded-xl transition-all text-sm font-medium"
+                >
+                  <span className="material-symbols-outlined text-[18px]">add</span>
+                  Adicionar Lead
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ========== VERSÃO DESKTOP/TABLET - Kanban tradicional ========== */}
       {/* Scroll horizontal duplicado no topo */}
       <div 
         ref={topScrollRef}
         onScroll={handleTopScroll}
-        className="overflow-x-auto overflow-y-hidden shrink-0 mb-2"
+        className="hidden md:block overflow-x-auto overflow-y-hidden shrink-0 mb-2"
         style={{ height: '12px' }}
       >
         <div style={{ width: scrollWidth, height: '1px' }}></div>
@@ -838,7 +1022,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
       <div 
         ref={mainScrollRef}
         onScroll={handleMainScroll}
-        className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex gap-4 lg:gap-6 pb-4">
+        className="hidden md:flex flex-1 min-h-0 overflow-x-auto overflow-y-hidden gap-4 lg:gap-6 pb-4">
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
@@ -853,11 +1037,11 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
           return (
             <div 
               key={column} 
-              className="w-[260px] md:w-[280px] lg:w-[320px] h-full flex flex-col shrink-0"
+              className="w-[260px] md:w-[280px] lg:w-[320px] h-full flex flex-col shrink-0 pb-2"
               onDragOver={onDragOver}
               onDrop={(e) => onDrop(e, column)}
             >
-              <div className="flex items-center justify-between mb-3 md:mb-4 px-1 md:px-2">
+              <div className="flex items-center justify-between mb-3 md:mb-4 px-1 md:px-2 shrink-0">
                 <div className="flex items-center gap-1.5 md:gap-2">
                   <div className={`size-2 md:size-2.5 rounded-full bg-${config.color}-500`}></div>
                   <h3 className="font-black text-slate-700 uppercase text-[10px] md:text-[11px] tracking-widest truncate max-w-[100px] md:max-w-none">{pipelineLabels[column]}</h3>
@@ -871,7 +1055,18 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                     info
                   </span>
                 </div>
-                <button className="text-slate-400 hover:text-slate-600"><span className="material-symbols-outlined text-[18px] md:text-[20px]">more_horiz</span></button>
+                <div className="flex items-center gap-1">
+                  {canCreateLead && (
+                    <button 
+                      onClick={() => setShowNewLeadModal(true)}
+                      className="p-1.5 rounded-lg hover:bg-cyan-50 text-slate-400 hover:text-cyan-600 transition-colors"
+                      title="Adicionar Lead"
+                    >
+                      <span className="material-symbols-outlined text-[18px] md:text-[20px]">add</span>
+                    </button>
+                  )}
+                  <button className="text-slate-400 hover:text-slate-600"><span className="material-symbols-outlined text-[18px] md:text-[20px]">more_horiz</span></button>
+                </div>
               </div>
 
               <div className={`flex-1 min-h-0 overflow-y-auto space-y-3 md:space-y-4 pr-1 rounded-xl transition-colors ${draggedId ? 'bg-slate-100/50' : ''}`}>
@@ -1009,19 +1204,27 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                       <div className="flex items-center gap-1 text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
                         <span className="material-symbols-outlined text-[12px] md:text-[14px]">schedule</span> {formatTimeAgo(lead.updated_at)}
                       </div>
-                      <img src={lead.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(lead.client_name)}&background=0891b2&color=fff&size=32`} className="size-5 md:size-6 rounded-full border border-white shadow-sm" />
+                      <div className="flex items-center gap-2">
+                        {canMoveLead && (
+                          <select
+                            value={lead.status}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              updateChatStatus(lead.id, e.target.value as ChatStatus);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[10px] md:text-xs bg-slate-50 border border-slate-200 rounded-lg px-1.5 md:px-2 py-0.5 md:py-1 text-slate-600 font-medium cursor-pointer hover:border-cyan-400 focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
+                          >
+                            {columns.map(col => (
+                              <option key={col} value={col}>{pipelineLabels[col]}</option>
+                            ))}
+                          </select>
+                        )}
+                        <img src={lead.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(lead.client_name)}&background=0891b2&color=fff&size=32`} className="size-5 md:size-6 rounded-full border border-white shadow-sm" />
+                      </div>
                     </div>
                   </div>
                 ))}
-                
-                <button 
-                  onClick={() => setShowNewLeadModal(true)}
-                  className="w-full py-2 md:py-3 flex items-center justify-center gap-1.5 md:gap-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50/50 border border-dashed border-slate-200 rounded-xl md:rounded-2xl transition-all text-xs md:text-sm font-medium"
-                >
-                   <span className="material-symbols-outlined text-[16px] md:text-[18px]">add</span> 
-                   <span className="hidden md:inline">Adicionar Lead</span>
-                   <span className="md:hidden">Adicionar</span>
-                </button>
               </div>
             </div>
           );
