@@ -2351,6 +2351,109 @@ O webhook detecta códigos nos seguintes formatos:
 
 ---
 
+## Fase 11: Adaptação Mobile/Tablet ✅ COMPLETA
+
+### Data: 04/02/2026
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Kanban - Adaptação para Tablet | ✅ Completo |
+| Kanban - Adaptação para Celular | ✅ Completo |
+| Inbox - Header do Layout oculto | ✅ Completo |
+| Inbox - Caixa de mensagem ampliada | ✅ Completo |
+| Inbox - Painel do Lead como Drawer (Tablet) | ✅ Completo |
+| Inbox - Drawer com paridade Desktop | ✅ Completo |
+| Inbox - Lista de conversas responsiva | ✅ Completo |
+| Inbox - Navegação em telas separadas (Celular) | ✅ Completo |
+| Inbox - Otimizações visuais para Mobile | ✅ Completo |
+
+### Kanban - Adaptação para Tablet
+- Layout responsivo com cards redimensionados
+- Colunas do pipeline ajustadas para telas menores
+- Scroll horizontal suave entre etapas
+
+### Kanban - Adaptação para Celular
+- Visualização em coluna única
+- Cards compactos e otimizados
+- Navegação intuitiva entre etapas
+
+### Inbox - Header do Layout
+- Header do sistema ocultado na página Inbox para maximizar espaço útil
+- Mais área disponível para conversas e mensagens
+
+### Inbox - Caixa de Mensagem Ampliada
+- Área de digitação expandida
+- Placeholder adaptado para telas menores
+- Melhor experiência de digitação em dispositivos móveis
+
+### Inbox - Painel do Lead como Drawer (Tablet)
+- Painel de detalhes do lead convertido em drawer lateral
+- Abre ao clicar no botão ℹ️ no header do chat
+- Overlay com animação suave de entrada
+- Botão X para fechar o drawer
+
+### Inbox - Drawer Completo com Paridade Desktop
+
+**Header com 4 botões de ação:**
+- 📧 Email (condicional - ativo se SMTP configurado)
+- 📞 Ligar
+- 👤 Editar/Cadastrar cliente
+- ⚙️ Configurações
+
+**Seções completas:**
+- **Etapa do Pipeline** - Com barra de progresso colorida dinâmica e botão "Alterar"
+- **Responsável** - Com avatar, botões "Encaminhar" e "Assumir"
+- **Origem do Lead** - Dropdown funcional com origens cadastradas e cores
+- **Etiquetas** - Com botão "+ Adicionar"
+- **Orçamentos** - Com botão "+ Adicionar"
+- **Negociações Comerciais** - Com botão "+ Adicionar"
+- **Tarefas** - Com botão "+ Adicionar"
+- **Lançamentos da Clínica** - Com botão "+ Adicionar"
+- **Follow-up** - Com botão "+ Agendar"
+- **Observações** - Com campo de input e botão "Salvar Observação"
+
+### Inbox - Lista de Conversas Responsiva
+- Largura ajustada: 240px (mobile) → 280px (md) → 320px (lg) → 380px (xl)
+- Melhor aproveitamento do espaço em diferentes tamanhos de tela
+
+### Inbox - Navegação em Telas Separadas (Celular)
+- **Tela 1**: Lista de conversas ocupa 100% da largura quando não há chat selecionado
+- **Tela 2**: Chat ocupa 100% da largura quando selecionado
+- **Botão Voltar (←)**: Adicionado no header do chat para retornar à lista
+- Seleção automática de conversa desabilitada em mobile (< 640px)
+
+### Inbox - Otimizações Visuais para Mobile
+- **Header**: Padding reduzido (`p-1.5` em mobile, `p-2` em desktop)
+- **Barra de busca**: Mais compacta (`py-1.5` em mobile, `py-2` em desktop)
+- **Avatares**: 40px em mobile (`size-10`), 48px em desktop (`size-12`)
+- **Itens da lista**: Padding reduzido (`p-3` em mobile, `p-4` em desktop)
+- **Botão de fixar conversa (📌)**: Sempre visível em mobile, hover em desktop
+
+### Breakpoints Utilizados
+
+| Breakpoint | Largura | Uso |
+|------------|---------|-----|
+| `sm:` | 640px | Mobile → Tablet |
+| `md:` | 768px | Tablet pequeno → Tablet |
+| `lg:` | 1024px | Tablet → Desktop |
+| `xl:` | 1280px | Desktop → Desktop grande |
+
+### Arquivos Modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `pages/Inbox.tsx` | +450 linhas de código responsivo, drawer, navegação mobile |
+| `components/Layout.tsx` | Header condicional para página Inbox |
+
+### Benefícios
+
+1. **Experiência unificada** - Mesmas funcionalidades em todos os dispositivos
+2. **Produtividade** - Atendentes podem trabalhar de tablets e celulares
+3. **Usabilidade** - Interface otimizada para touch e telas menores
+4. **Performance** - Carregamento sob demanda de mensagens
+
+---
+
 ## Desenvolvido por
 
 **Betix** - CRM para Clínicas

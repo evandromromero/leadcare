@@ -2217,8 +2217,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   }, [location.search, chats]);
 
+  // Selecionar primeira conversa automaticamente apenas em telas maiores (não mobile)
   useEffect(() => {
-    if (chats.length > 0 && !selectedChatId) {
+    if (chats.length > 0 && !selectedChatId && window.innerWidth >= 640) {
       setSelectedChatId(chats[0].id);
     }
   }, [chats, selectedChatId]);
@@ -3397,10 +3398,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
 
   return (
     <div className="flex h-full bg-slate-50 overflow-hidden">
-      {/* Col 1: Chat List */}
-      <aside className="w-[240px] md:w-[280px] lg:w-[320px] xl:w-[380px] flex flex-col bg-white border-r border-slate-200 h-full overflow-hidden shrink-0">
+      {/* Col 1: Chat List - Em mobile, ocupa tela cheia quando não há chat selecionado */}
+      <aside className={`${selectedChat ? 'hidden sm:flex' : 'flex'} w-full sm:w-[240px] md:w-[280px] lg:w-[320px] xl:w-[380px] flex-col bg-white border-r border-slate-200 h-full overflow-hidden shrink-0`}>
         {/* Channel Selector + Status */}
-        <div className="flex items-center justify-between gap-2 p-2 border-b border-slate-100">
+        <div className="flex items-center justify-between gap-2 p-1.5 sm:p-2 border-b border-slate-100">
           <div className="flex items-center gap-1.5">
             {/* WhatsApp */}
             <button
@@ -3519,7 +3520,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               placeholder="Buscar conversa..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-cyan-600"
+              className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-cyan-600"
             />
           </div>
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
@@ -3590,14 +3591,14 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     console.log('[Inbox] Messages loaded, hasMore:', hasMore);
                   }
                 }}
-                className={`group flex items-start gap-3 p-4 cursor-pointer transition-colors relative border-l-4 ${
+                className={`group flex items-start gap-2 sm:gap-3 p-3 sm:p-4 cursor-pointer transition-colors relative border-l-4 ${
                   selectedChatId === chat.id ? 'bg-cyan-50/50 border-cyan-600' : 'hover:bg-slate-50 border-transparent'
                 }`}
               >
                 <div className="relative shrink-0">
                   <img 
                     src={chat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.client_name)}&background=0891b2&color=fff`} 
-                    className="size-12 rounded-full border border-slate-100"
+                    className="size-10 sm:size-12 rounded-full border border-slate-100"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
                       target.onerror = null;
@@ -3623,11 +3624,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           e.stopPropagation();
                           togglePinChat(chat.id);
                         }}
-                        className="p-1 rounded hover:bg-slate-200 transition-colors opacity-0 group-hover:opacity-100"
+                        className={`p-1 rounded hover:bg-slate-200 transition-colors ${(chat as any).is_pinned ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
                         title={(chat as any).is_pinned ? 'Desafixar' : 'Fixar'}
                       >
                         <span className={`material-symbols-outlined text-sm ${(chat as any).is_pinned ? 'text-cyan-600' : 'text-slate-400'}`}>
-                          {(chat as any).is_pinned ? 'push_pin' : 'push_pin'}
+                          push_pin
                         </span>
                       </button>
                       <span className="text-[10px] font-bold text-slate-400">{formatTime(chat.last_message_time)}</span>
@@ -3662,12 +3663,20 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         </div>
       </aside>
 
-      {/* Col 2: Active Chat Area */}
-      <section className="flex-1 flex flex-col min-w-0 bg-[#e5ddd5]/30 relative">
+      {/* Col 2: Active Chat Area - Em mobile, ocupa tela cheia quando há chat selecionado */}
+      <section className={`${selectedChat ? 'flex' : 'hidden sm:flex'} flex-1 flex-col min-w-0 bg-[#e5ddd5]/30 relative`}>
         {selectedChat ? (
           <>
-            <header className="h-14 md:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 shrink-0 z-10">
-              <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+            <header className="h-14 md:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-2 sm:px-3 md:px-6 shrink-0 z-10">
+              <div className="flex items-center gap-1 sm:gap-2 md:gap-3 min-w-0 flex-1">
+                {/* Botão voltar - apenas mobile */}
+                <button 
+                  onClick={() => setSelectedChatId(null)}
+                  className="sm:hidden p-1.5 -ml-1 rounded-full text-slate-500 hover:text-cyan-600 hover:bg-cyan-50 transition-colors"
+                  title="Voltar para lista"
+                >
+                  <span className="material-symbols-outlined text-[22px]">arrow_back</span>
+                </button>
                 <img 
                   src={selectedChat.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.client_name)}&background=0891b2&color=fff`} 
                   className="size-9 md:size-10 rounded-full shrink-0"
