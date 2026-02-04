@@ -429,63 +429,68 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-3 sm:p-8">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <button 
-          onClick={() => navigate(-1)}
-          className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-        >
-          <span className="material-symbols-outlined">arrow_back</span>
-        </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">{lead.client_name}</h1>
-          <p className="text-slate-500">{lead.phone_number}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-8">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => navigate(-1)}
+            className="p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <span className="material-symbols-outlined text-xl sm:text-2xl">arrow_back</span>
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold text-slate-900 truncate">{lead.client_name}</h1>
+            <p className="text-xs sm:text-base text-slate-500">{lead.phone_number}</p>
+          </div>
         </div>
-        <span className={`px-4 py-2 rounded-full text-sm font-medium border ${getStatusColor(lead.status)}`}>
-          {lead.status}
-        </span>
-        <button
-          onClick={() => navigate(`/inbox?chat=${chatId}`)}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
-        >
-          <span className="material-symbols-outlined text-sm">chat</span>
-          Ver Conversa
-        </button>
+        <div className="flex items-center gap-2 sm:gap-3 ml-9 sm:ml-0">
+          <span className={`px-2 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium border ${getStatusColor(lead.status)}`}>
+            {lead.status}
+          </span>
+          <button
+            onClick={() => navigate(`/inbox?chat=${chatId}`)}
+            className="px-3 sm:px-4 py-1.5 sm:py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
+          >
+            <span className="material-symbols-outlined text-sm">chat</span>
+            <span className="hidden sm:inline">Ver Conversa</span>
+            <span className="sm:hidden">Chat</span>
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Coluna 1: Informações do Lead */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
           {/* Card: Origem do Lead */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 bg-gradient-to-r from-indigo-600 to-blue-600">
-              <h2 className="text-white font-bold flex items-center gap-2">
-                <span className="material-symbols-outlined">analytics</span>
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-indigo-600 to-blue-600">
+              <h2 className="text-white font-bold flex items-center gap-2 text-sm sm:text-base">
+                <span className="material-symbols-outlined text-lg sm:text-xl">analytics</span>
                 Origem do Lead
               </h2>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <p className="text-xs text-slate-500 uppercase font-medium mb-1">Código</p>
-                  <span className="px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 font-medium text-sm">
+                  <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1">Código</p>
+                  <span className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-indigo-100 text-indigo-700 font-medium text-xs sm:text-sm">
                     {lead.lead_sources?.code || '-'}
                   </span>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 uppercase font-medium mb-1">Origem</p>
-                  <p className="text-slate-800 font-medium">
-                    {lead.ad_title ? 'Meta Ads (Click to WhatsApp)' : lead.lead_sources?.name || 'Orgânico'}
+                  <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1">Origem</p>
+                  <p className="text-slate-800 font-medium text-xs sm:text-base truncate">
+                    {lead.ad_title ? 'Meta Ads' : lead.lead_sources?.name || 'Orgânico'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 uppercase font-medium mb-1">Chegou em</p>
-                  <p className="text-slate-800">{new Date(lead.created_at).toLocaleString('pt-BR')}</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1">Chegou em</p>
+                  <p className="text-slate-800 text-xs sm:text-base">{new Date(lead.created_at).toLocaleString('pt-BR')}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 uppercase font-medium mb-1">Status Atual</p>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(lead.status)}`}>
+                  <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1">Status</p>
+                  <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(lead.status)}`}>
                     {lead.status}
                   </span>
                 </div>
@@ -495,53 +500,53 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
 
           {/* Card: Dados do Link Rastreável */}
           {trackableLink && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-4 bg-gradient-to-r from-cyan-600 to-blue-600">
-                <h2 className="text-white font-bold flex items-center gap-2">
-                  <span className="material-symbols-outlined">link</span>
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-3 sm:p-4 bg-gradient-to-r from-cyan-600 to-blue-600">
+                <h2 className="text-white font-bold flex items-center gap-2 text-sm sm:text-base">
+                  <span className="material-symbols-outlined text-lg sm:text-xl">link</span>
                   Link Rastreável
                 </h2>
               </div>
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-1">Nome do Link</p>
-                    <p className="text-slate-800 font-medium">{trackableLink.name}</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1">Nome</p>
+                    <p className="text-slate-800 font-medium text-xs sm:text-base truncate">{trackableLink.name}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-1">Código</p>
-                    <span className="px-3 py-1 rounded-full bg-cyan-100 text-cyan-700 font-bold text-sm">
+                    <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1">Código</p>
+                    <span className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-cyan-100 text-cyan-700 font-bold text-xs sm:text-sm">
                       {trackableLink.code}
                     </span>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-1">Total de Cliques</p>
-                    <p className="text-slate-800 font-bold text-lg">{trackableLink.clicks_count || 0}</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1">Cliques</p>
+                    <p className="text-slate-800 font-bold text-base sm:text-lg">{trackableLink.clicks_count || 0}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-1">Total de Leads</p>
-                    <p className="text-slate-800 font-bold text-lg">{trackableLink.leads_count || 0}</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1">Leads</p>
+                    <p className="text-slate-800 font-bold text-base sm:text-lg">{trackableLink.leads_count || 0}</p>
                   </div>
                 </div>
                 
                 {/* UTMs do Link */}
                 {(trackableLink.utm_source || trackableLink.utm_medium || trackableLink.utm_campaign) && (
-                  <div className="pt-4 border-t border-slate-100">
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-2">UTMs Configurados no Link</p>
-                    <div className="flex flex-wrap gap-2">
+                  <div className="pt-3 sm:pt-4 border-t border-slate-100">
+                    <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-2">UTMs</p>
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {trackableLink.utm_source && (
-                        <span className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-600">
-                          source: {trackableLink.utm_source}
+                        <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-slate-100 rounded text-[10px] sm:text-xs text-slate-600">
+                          src: {trackableLink.utm_source}
                         </span>
                       )}
                       {trackableLink.utm_medium && (
-                        <span className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-600">
-                          medium: {trackableLink.utm_medium}
+                        <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-slate-100 rounded text-[10px] sm:text-xs text-slate-600">
+                          med: {trackableLink.utm_medium}
                         </span>
                       )}
                       {trackableLink.utm_campaign && (
-                        <span className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-600">
-                          campaign: {trackableLink.utm_campaign}
+                        <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-slate-100 rounded text-[10px] sm:text-xs text-slate-600">
+                          camp: {trackableLink.utm_campaign}
                         </span>
                       )}
                     </div>
@@ -550,48 +555,48 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                 
                 {/* Dados do Clique */}
                 {linkClick && (
-                  <div className="pt-4 border-t border-slate-100">
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-3">Dados Capturados no Clique</p>
+                  <div className="pt-3 sm:pt-4 border-t border-slate-100">
+                    <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-2 sm:mb-3">Dados do Clique</p>
                     
                     {/* Dispositivo */}
-                    <div className="bg-slate-50 rounded-xl p-4 mb-3">
-                      <p className="text-xs text-slate-500 uppercase font-medium mb-2">Dispositivo</p>
-                      <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 rounded-lg sm:rounded-xl p-2.5 sm:p-4 mb-2 sm:mb-3">
+                      <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1.5 sm:mb-2">Dispositivo</p>
+                      <div className="grid grid-cols-2 gap-2 sm:gap-3">
                         {linkClick.device_type && (
-                          <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-cyan-500 text-lg">
+                          <div className="flex items-center gap-1.5 sm:gap-2">
+                            <span className="material-symbols-outlined text-cyan-500 text-base sm:text-lg">
                               {linkClick.device_type === 'mobile' ? 'smartphone' : linkClick.device_type === 'tablet' ? 'tablet' : 'computer'}
                             </span>
                             <div>
-                              <p className="text-xs text-slate-500">Tipo</p>
-                              <p className="text-sm text-slate-800 font-medium capitalize">{linkClick.device_type}</p>
+                              <p className="text-[9px] sm:text-xs text-slate-500">Tipo</p>
+                              <p className="text-[10px] sm:text-sm text-slate-800 font-medium capitalize">{linkClick.device_type}</p>
                             </div>
                           </div>
                         )}
                         {linkClick.os && (
-                          <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-cyan-500 text-lg">memory</span>
+                          <div className="flex items-center gap-1.5 sm:gap-2">
+                            <span className="material-symbols-outlined text-cyan-500 text-base sm:text-lg">memory</span>
                             <div>
-                              <p className="text-xs text-slate-500">Sistema</p>
-                              <p className="text-sm text-slate-800 font-medium">{linkClick.os}</p>
+                              <p className="text-[9px] sm:text-xs text-slate-500">Sistema</p>
+                              <p className="text-[10px] sm:text-sm text-slate-800 font-medium truncate">{linkClick.os}</p>
                             </div>
                           </div>
                         )}
                         {linkClick.browser && (
-                          <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-cyan-500 text-lg">public</span>
+                          <div className="flex items-center gap-1.5 sm:gap-2">
+                            <span className="material-symbols-outlined text-cyan-500 text-base sm:text-lg">public</span>
                             <div>
-                              <p className="text-xs text-slate-500">Navegador</p>
-                              <p className="text-sm text-slate-800 font-medium">{linkClick.browser}</p>
+                              <p className="text-[9px] sm:text-xs text-slate-500">Navegador</p>
+                              <p className="text-[10px] sm:text-sm text-slate-800 font-medium truncate">{linkClick.browser}</p>
                             </div>
                           </div>
                         )}
                         {linkClick.device_model && (
-                          <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-cyan-500 text-lg">phone_android</span>
+                          <div className="flex items-center gap-1.5 sm:gap-2">
+                            <span className="material-symbols-outlined text-cyan-500 text-base sm:text-lg">phone_android</span>
                             <div>
-                              <p className="text-xs text-slate-500">Modelo</p>
-                              <p className="text-sm text-slate-800 font-medium">{linkClick.device_model}</p>
+                              <p className="text-[9px] sm:text-xs text-slate-500">Modelo</p>
+                              <p className="text-[10px] sm:text-sm text-slate-800 font-medium truncate">{linkClick.device_model}</p>
                             </div>
                           </div>
                         )}
@@ -600,31 +605,31 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                     
                     {/* UTMs do Clique */}
                     {(linkClick.utm_source || linkClick.utm_medium || linkClick.utm_campaign) && (
-                      <div className="bg-amber-50 rounded-xl p-4 mb-3">
-                        <p className="text-xs text-amber-700 uppercase font-medium mb-2">UTMs Capturados</p>
-                        <div className="flex flex-wrap gap-2">
+                      <div className="bg-amber-50 rounded-lg sm:rounded-xl p-2.5 sm:p-4 mb-2 sm:mb-3">
+                        <p className="text-[10px] sm:text-xs text-amber-700 uppercase font-medium mb-1.5 sm:mb-2">UTMs</p>
+                        <div className="flex flex-wrap gap-1 sm:gap-2">
                           {linkClick.utm_source && (
-                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
-                              source: {linkClick.utm_source}
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-amber-100 text-amber-800 rounded text-[9px] sm:text-xs font-medium">
+                              src: {linkClick.utm_source}
                             </span>
                           )}
                           {linkClick.utm_medium && (
-                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
-                              medium: {linkClick.utm_medium}
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-amber-100 text-amber-800 rounded text-[9px] sm:text-xs font-medium">
+                              med: {linkClick.utm_medium}
                             </span>
                           )}
                           {linkClick.utm_campaign && (
-                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
-                              campaign: {linkClick.utm_campaign}
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-amber-100 text-amber-800 rounded text-[9px] sm:text-xs font-medium">
+                              camp: {linkClick.utm_campaign}
                             </span>
                           )}
                           {linkClick.utm_content && (
-                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
-                              content: {linkClick.utm_content}
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-amber-100 text-amber-800 rounded text-[9px] sm:text-xs font-medium">
+                              cont: {linkClick.utm_content}
                             </span>
                           )}
                           {linkClick.utm_term && (
-                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs font-medium">
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-amber-100 text-amber-800 rounded text-[9px] sm:text-xs font-medium">
                               term: {linkClick.utm_term}
                             </span>
                           )}
@@ -634,25 +639,25 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                     
                     {/* IDs de Rastreamento (Meta/Google) */}
                     {(linkClick.fbclid || linkClick.gclid || linkClick.belitx_fbid) && (
-                      <div className="bg-purple-50 rounded-xl p-4 mb-3">
-                        <p className="text-xs text-purple-700 uppercase font-medium mb-2">IDs de Rastreamento</p>
-                        <div className="space-y-2">
+                      <div className="bg-purple-50 rounded-lg sm:rounded-xl p-2.5 sm:p-4 mb-2 sm:mb-3">
+                        <p className="text-[10px] sm:text-xs text-purple-700 uppercase font-medium mb-1.5 sm:mb-2">IDs Rastreamento</p>
+                        <div className="space-y-1.5 sm:space-y-2">
                           {linkClick.fbclid && (
                             <div>
-                              <p className="text-xs text-purple-600">Facebook Click ID (fbclid)</p>
-                              <code className="text-xs bg-purple-100 px-2 py-1 rounded text-purple-800 block truncate">{linkClick.fbclid}</code>
+                              <p className="text-[9px] sm:text-xs text-purple-600">fbclid</p>
+                              <code className="text-[9px] sm:text-xs bg-purple-100 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-purple-800 block truncate">{linkClick.fbclid}</code>
                             </div>
                           )}
                           {linkClick.gclid && (
                             <div>
-                              <p className="text-xs text-purple-600">Google Click ID (gclid)</p>
-                              <code className="text-xs bg-purple-100 px-2 py-1 rounded text-purple-800 block truncate">{linkClick.gclid}</code>
+                              <p className="text-[9px] sm:text-xs text-purple-600">gclid</p>
+                              <code className="text-[9px] sm:text-xs bg-purple-100 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-purple-800 block truncate">{linkClick.gclid}</code>
                             </div>
                           )}
                           {linkClick.belitx_fbid && (
                             <div>
-                              <p className="text-xs text-purple-600">Belitx FB ID</p>
-                              <code className="text-xs bg-purple-100 px-2 py-1 rounded text-purple-800 block truncate">{linkClick.belitx_fbid}</code>
+                              <p className="text-[9px] sm:text-xs text-purple-600">Belitx FB ID</p>
+                              <code className="text-[9px] sm:text-xs bg-purple-100 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-purple-800 block truncate">{linkClick.belitx_fbid}</code>
                             </div>
                           )}
                         </div>
@@ -661,25 +666,25 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                     
                     {/* Dados do Anúncio Meta */}
                     {(linkClick.ad_id || linkClick.site_source || linkClick.placement) && (
-                      <div className="bg-pink-50 rounded-xl p-4 mb-3">
-                        <p className="text-xs text-pink-700 uppercase font-medium mb-2">Dados do Anúncio Meta</p>
-                        <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-pink-50 rounded-lg sm:rounded-xl p-2.5 sm:p-4 mb-2 sm:mb-3">
+                        <p className="text-[10px] sm:text-xs text-pink-700 uppercase font-medium mb-1.5 sm:mb-2">Anúncio Meta</p>
+                        <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                           {linkClick.ad_id && (
                             <div>
-                              <p className="text-xs text-pink-600">ID do Anúncio</p>
-                              <p className="text-sm text-pink-800 font-medium">{linkClick.ad_id}</p>
+                              <p className="text-[9px] sm:text-xs text-pink-600">ID</p>
+                              <p className="text-[10px] sm:text-sm text-pink-800 font-medium truncate">{linkClick.ad_id}</p>
                             </div>
                           )}
                           {linkClick.site_source && (
                             <div>
-                              <p className="text-xs text-pink-600">Origem</p>
-                              <p className="text-sm text-pink-800 font-medium">{linkClick.site_source}</p>
+                              <p className="text-[9px] sm:text-xs text-pink-600">Origem</p>
+                              <p className="text-[10px] sm:text-sm text-pink-800 font-medium truncate">{linkClick.site_source}</p>
                             </div>
                           )}
                           {linkClick.placement && (
                             <div className="col-span-2">
-                              <p className="text-xs text-pink-600">Posicionamento</p>
-                              <p className="text-sm text-pink-800 font-medium">{linkClick.placement}</p>
+                              <p className="text-[9px] sm:text-xs text-pink-600">Posicionamento</p>
+                              <p className="text-[10px] sm:text-sm text-pink-800 font-medium truncate">{linkClick.placement}</p>
                             </div>
                           )}
                         </div>
@@ -687,25 +692,25 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                     )}
                     
                     {/* Outras Informações */}
-                    <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs sm:text-sm">
                       {linkClick.clicked_at && (
                         <div>
-                          <p className="text-xs text-slate-500">Data do Clique</p>
-                          <p className="text-slate-800 font-medium">{new Date(linkClick.clicked_at).toLocaleString('pt-BR')}</p>
+                          <p className="text-[9px] sm:text-xs text-slate-500">Data Clique</p>
+                          <p className="text-slate-800 font-medium text-[10px] sm:text-sm">{new Date(linkClick.clicked_at).toLocaleString('pt-BR')}</p>
                         </div>
                       )}
                       {linkClick.ip_address && (
                         <div>
-                          <p className="text-xs text-slate-500">IP</p>
-                          <p className="text-slate-800 font-medium">{linkClick.ip_address}</p>
+                          <p className="text-[9px] sm:text-xs text-slate-500">IP</p>
+                          <p className="text-slate-800 font-medium text-[10px] sm:text-sm">{linkClick.ip_address}</p>
                         </div>
                       )}
                     </div>
                     
                     {linkClick.referrer && (
-                      <div className="mt-3">
-                        <p className="text-xs text-slate-500 mb-1">Referrer (de onde veio)</p>
-                        <p className="text-xs text-slate-600 bg-slate-100 p-2 rounded truncate">{linkClick.referrer}</p>
+                      <div className="mt-2 sm:mt-3">
+                        <p className="text-[9px] sm:text-xs text-slate-500 mb-1">Referrer</p>
+                        <p className="text-[9px] sm:text-xs text-slate-600 bg-slate-100 p-1.5 sm:p-2 rounded truncate">{linkClick.referrer}</p>
                       </div>
                     )}
                   </div>
@@ -716,46 +721,43 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
 
           {/* Card: Dados do Anúncio Meta (Click to WhatsApp) */}
           {lead.ad_title && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-4 bg-gradient-to-r from-pink-600 to-purple-600">
-                <h2 className="text-white font-bold flex items-center gap-2">
-                  <span className="material-symbols-outlined">campaign</span>
-                  Anúncio Meta (Click to WhatsApp)
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-3 sm:p-4 bg-gradient-to-r from-pink-600 to-purple-600">
+                <h2 className="text-white font-bold flex items-center gap-2 text-sm sm:text-base">
+                  <span className="material-symbols-outlined text-lg sm:text-xl">campaign</span>
+                  Anúncio Meta
                 </h2>
               </div>
-              <div className="p-6 space-y-4">
+              <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
                 {/* Hierarquia da Campanha */}
-                <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl p-4">
-                  <p className="text-xs text-pink-700 uppercase font-medium mb-3">Hierarquia da Campanha</p>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-pink-100 rounded-lg flex items-center justify-center">
-                        <span className="material-symbols-outlined text-pink-600 text-sm">flag</span>
+                <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg sm:rounded-xl p-2.5 sm:p-4">
+                  <p className="text-[10px] sm:text-xs text-pink-700 uppercase font-medium mb-2 sm:mb-3">Hierarquia</p>
+                  <div className="space-y-2 sm:space-y-3">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 bg-pink-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-pink-600 text-xs sm:text-sm">flag</span>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-xs text-slate-500">Campanha</p>
-                        <p className="text-slate-800 font-medium">{lead.meta_campaign_name || '-'}</p>
-                        {lead.meta_campaign_id && <code className="text-xs text-pink-600">ID: {lead.meta_campaign_id}</code>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 ml-4 border-l-2 border-pink-200 pl-4">
-                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <span className="material-symbols-outlined text-purple-600 text-sm">folder</span>
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-xs text-slate-500">Conjunto de Anúncios</p>
-                        <p className="text-slate-800 font-medium">{lead.meta_adset_name || '-'}</p>
-                        {lead.meta_adset_id && <code className="text-xs text-purple-600">ID: {lead.meta_adset_id}</code>}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[9px] sm:text-xs text-slate-500">Campanha</p>
+                        <p className="text-slate-800 font-medium text-[10px] sm:text-base truncate">{lead.meta_campaign_name || '-'}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 ml-8 border-l-2 border-purple-200 pl-4">
-                      <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
-                        <span className="material-symbols-outlined text-indigo-600 text-sm">ads_click</span>
+                    <div className="flex items-center gap-2 sm:gap-3 ml-3 sm:ml-4 border-l-2 border-pink-200 pl-2 sm:pl-4">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-purple-600 text-xs sm:text-sm">folder</span>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-xs text-slate-500">Anúncio</p>
-                        <p className="text-slate-800 font-medium">{lead.meta_ad_name || '-'}</p>
-                        {lead.meta_ad_id && <code className="text-xs text-indigo-600">ID: {lead.meta_ad_id}</code>}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[9px] sm:text-xs text-slate-500">Conjunto</p>
+                        <p className="text-slate-800 font-medium text-[10px] sm:text-base truncate">{lead.meta_adset_name || '-'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 sm:gap-3 ml-6 sm:ml-8 border-l-2 border-purple-200 pl-2 sm:pl-4">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-indigo-600 text-xs sm:text-sm">ads_click</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[9px] sm:text-xs text-slate-500">Anúncio</p>
+                        <p className="text-slate-800 font-medium text-[10px] sm:text-base truncate">{lead.meta_ad_name || '-'}</p>
                       </div>
                     </div>
                   </div>
@@ -763,53 +765,53 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                 
                 {/* Conteúdo do Anúncio */}
                 <div>
-                  <p className="text-xs text-slate-500 uppercase font-medium mb-2">Título do Anúncio</p>
-                  <p className="text-slate-800 font-medium">{lead.ad_title}</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1 sm:mb-2">Título</p>
+                  <p className="text-slate-800 font-medium text-xs sm:text-base">{lead.ad_title}</p>
                 </div>
                 
                 {lead.ad_body && (
                   <div>
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-2">Texto do Anúncio</p>
-                    <p className="text-slate-600 text-sm whitespace-pre-wrap bg-slate-50 p-3 rounded-lg max-h-40 overflow-y-auto">{lead.ad_body}</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1 sm:mb-2">Texto</p>
+                    <p className="text-slate-600 text-[10px] sm:text-sm whitespace-pre-wrap bg-slate-50 p-2 sm:p-3 rounded-lg max-h-28 sm:max-h-40 overflow-y-auto">{lead.ad_body}</p>
                   </div>
                 )}
                 
                 {/* Link do Post/Anúncio */}
                 {lead.ad_source_url && (
                   <div>
-                    <p className="text-xs text-slate-500 uppercase font-medium mb-2">Link do Anúncio</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1 sm:mb-2">Link</p>
                     <a 
                       href={lead.ad_source_url} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-sm text-pink-600 hover:text-pink-700 flex items-center gap-1 truncate"
+                      className="text-[10px] sm:text-sm text-pink-600 hover:text-pink-700 flex items-center gap-1 truncate"
                     >
-                      <span className="material-symbols-outlined text-sm">open_in_new</span>
-                      {lead.ad_source_url}
+                      <span className="material-symbols-outlined text-xs sm:text-sm">open_in_new</span>
+                      <span className="truncate">{lead.ad_source_url}</span>
                     </a>
                   </div>
                 )}
                 
                 {/* IDs Técnicos */}
-                <div className="pt-4 border-t border-slate-100">
-                  <p className="text-xs text-slate-500 uppercase font-medium mb-2">IDs Técnicos</p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="pt-3 sm:pt-4 border-t border-slate-100">
+                  <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1.5 sm:mb-2">IDs Técnicos</p>
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2 text-[9px] sm:text-xs">
                     {lead.ad_source_id && (
                       <div>
                         <p className="text-slate-500">ad_source_id</p>
-                        <code className="bg-slate-100 px-2 py-1 rounded block truncate">{lead.ad_source_id}</code>
+                        <code className="bg-slate-100 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded block truncate text-[8px] sm:text-xs">{lead.ad_source_id}</code>
                       </div>
                     )}
                     {lead.ad_source_type && (
                       <div>
                         <p className="text-slate-500">ad_source_type</p>
-                        <code className="bg-slate-100 px-2 py-1 rounded block">{lead.ad_source_type}</code>
+                        <code className="bg-slate-100 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded block text-[8px] sm:text-xs">{lead.ad_source_type}</code>
                       </div>
                     )}
                     {lead.meta_account_id && (
-                      <div>
+                      <div className="col-span-2">
                         <p className="text-slate-500">meta_account_id</p>
-                        <code className="bg-slate-100 px-2 py-1 rounded block truncate">{lead.meta_account_id}</code>
+                        <code className="bg-slate-100 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded block truncate text-[8px] sm:text-xs">{lead.meta_account_id}</code>
                       </div>
                     )}
                   </div>
@@ -820,18 +822,18 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
           
           {/* Card: Google Ads (gclid) */}
           {lead.gclid && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-4 bg-gradient-to-r from-blue-500 to-green-500">
-                <h2 className="text-white font-bold flex items-center gap-2">
-                  <span className="material-symbols-outlined">ads_click</span>
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-3 sm:p-4 bg-gradient-to-r from-blue-500 to-green-500">
+                <h2 className="text-white font-bold flex items-center gap-2 text-sm sm:text-base">
+                  <span className="material-symbols-outlined text-lg sm:text-xl">ads_click</span>
                   Google Ads
                 </h2>
               </div>
-              <div className="p-6">
+              <div className="p-3 sm:p-6">
                 <div>
-                  <p className="text-xs text-slate-500 uppercase font-medium mb-2">Google Click ID (gclid)</p>
-                  <code className="text-xs bg-slate-100 px-3 py-2 rounded-lg block break-all">{lead.gclid}</code>
-                  <p className="text-xs text-slate-500 mt-2">Este lead veio de um anúncio do Google Ads</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-1 sm:mb-2">gclid</p>
+                  <code className="text-[9px] sm:text-xs bg-slate-100 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg block break-all">{lead.gclid}</code>
+                  <p className="text-[10px] sm:text-xs text-slate-500 mt-1.5 sm:mt-2">Lead de Google Ads</p>
                 </div>
               </div>
             </div>
@@ -839,43 +841,43 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
 
           {/* Card: UTM Parameters */}
           {(lead.utm_source || lead.utm_medium || lead.utm_campaign) && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-4 bg-gradient-to-r from-amber-500 to-orange-500">
-                <h2 className="text-white font-bold flex items-center gap-2">
-                  <span className="material-symbols-outlined">link</span>
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-3 sm:p-4 bg-gradient-to-r from-amber-500 to-orange-500">
+                <h2 className="text-white font-bold flex items-center gap-2 text-sm sm:text-base">
+                  <span className="material-symbols-outlined text-lg sm:text-xl">link</span>
                   Parâmetros UTM
                 </h2>
               </div>
-              <div className="p-6">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="p-3 sm:p-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4">
                   {lead.utm_source && (
                     <div>
-                      <p className="text-xs text-slate-500 uppercase font-medium mb-1">utm_source</p>
-                      <p className="text-slate-800 font-medium">{lead.utm_source}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-0.5 sm:mb-1">source</p>
+                      <p className="text-slate-800 font-medium text-xs sm:text-base truncate">{lead.utm_source}</p>
                     </div>
                   )}
                   {lead.utm_medium && (
                     <div>
-                      <p className="text-xs text-slate-500 uppercase font-medium mb-1">utm_medium</p>
-                      <p className="text-slate-800 font-medium">{lead.utm_medium}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-0.5 sm:mb-1">medium</p>
+                      <p className="text-slate-800 font-medium text-xs sm:text-base truncate">{lead.utm_medium}</p>
                     </div>
                   )}
                   {lead.utm_campaign && (
                     <div>
-                      <p className="text-xs text-slate-500 uppercase font-medium mb-1">utm_campaign</p>
-                      <p className="text-slate-800 font-medium">{lead.utm_campaign}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-0.5 sm:mb-1">campaign</p>
+                      <p className="text-slate-800 font-medium text-xs sm:text-base truncate">{lead.utm_campaign}</p>
                     </div>
                   )}
                   {lead.utm_content && (
                     <div>
-                      <p className="text-xs text-slate-500 uppercase font-medium mb-1">utm_content</p>
-                      <p className="text-slate-800 font-medium">{lead.utm_content}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-0.5 sm:mb-1">content</p>
+                      <p className="text-slate-800 font-medium text-xs sm:text-base truncate">{lead.utm_content}</p>
                     </div>
                   )}
                   {lead.utm_term && (
                     <div>
-                      <p className="text-xs text-slate-500 uppercase font-medium mb-1">utm_term</p>
-                      <p className="text-slate-800 font-medium">{lead.utm_term}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 uppercase font-medium mb-0.5 sm:mb-1">term</p>
+                      <p className="text-slate-800 font-medium text-xs sm:text-base truncate">{lead.utm_term}</p>
                     </div>
                   )}
                 </div>
@@ -885,47 +887,47 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
         </div>
 
         {/* Coluna 2: Eventos Meta e Pagamentos */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Card: Receita Total */}
           {totalRevenue > 0 && (
-            <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="material-symbols-outlined text-3xl">payments</span>
+            <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className="material-symbols-outlined text-2xl sm:text-3xl">payments</span>
                 <div>
-                  <p className="text-green-100 text-sm">Receita Total</p>
-                  <p className="text-3xl font-black">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-green-100 text-[10px] sm:text-sm">Receita Total</p>
+                  <p className="text-xl sm:text-3xl font-black">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>
           )}
 
           {/* Card: Eventos Meta */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600">
-              <h2 className="text-white font-bold flex items-center gap-2">
-                <span className="material-symbols-outlined">send</span>
-                Eventos Enviados para Meta
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-blue-600 to-indigo-600">
+              <h2 className="text-white font-bold flex items-center gap-2 text-sm sm:text-base">
+                <span className="material-symbols-outlined text-lg sm:text-xl">send</span>
+                Eventos Meta
               </h2>
             </div>
-            <div className="p-4">
+            <div className="p-3 sm:p-4">
               {metaEvents.length === 0 ? (
-                <p className="text-slate-500 text-center py-4">Nenhum evento enviado ainda</p>
+                <p className="text-slate-500 text-center py-3 sm:py-4 text-xs sm:text-sm">Nenhum evento enviado</p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {metaEvents.map((event) => (
                     <div 
                       key={event.id} 
-                      className={`p-3 rounded-xl border ${event.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50'}`}
+                      className={`p-2 sm:p-3 rounded-lg sm:rounded-xl border ${event.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50'}`}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${getEventColor(event.event_name, event.status)}`}>
+                      <div className="flex items-center justify-between mb-1 sm:mb-2">
+                        <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold ${getEventColor(event.event_name, event.status)}`}>
                           {event.event_name}
                         </span>
-                        <span className={`text-xs font-medium ${event.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                        <span className={`text-[10px] sm:text-xs font-medium ${event.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
                           {event.status === 'success' ? '✓ Enviado' : '✗ Erro'}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center justify-between text-[10px] sm:text-sm">
                         <span className="text-slate-500">
                           {new Date(event.event_time * 1000).toLocaleString('pt-BR')}
                         </span>
@@ -936,7 +938,7 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                         )}
                       </div>
                       {event.error_message && (
-                        <p className="text-xs text-red-600 mt-2">{event.error_message}</p>
+                        <p className="text-[9px] sm:text-xs text-red-600 mt-1 sm:mt-2 truncate">{event.error_message}</p>
                       )}
                     </div>
                   ))}
@@ -946,23 +948,23 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
           </div>
 
           {/* Card: Timeline de Interações */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 bg-gradient-to-r from-violet-600 to-purple-600">
-              <h2 className="text-white font-bold flex items-center gap-2">
-                <span className="material-symbols-outlined">timeline</span>
-                Timeline de Interações
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-violet-600 to-purple-600">
+              <h2 className="text-white font-bold flex items-center gap-2 text-sm sm:text-base">
+                <span className="material-symbols-outlined text-lg sm:text-xl">timeline</span>
+                Timeline
               </h2>
             </div>
-            <div className="p-4">
+            <div className="p-3 sm:p-4">
               {timeline.length === 0 ? (
-                <div className="text-center py-6">
-                  <span className="material-symbols-outlined text-4xl text-slate-300">history</span>
-                  <p className="text-slate-500 mt-2">Nenhuma interação registrada</p>
+                <div className="text-center py-4 sm:py-6">
+                  <span className="material-symbols-outlined text-3xl sm:text-4xl text-slate-300">history</span>
+                  <p className="text-slate-500 mt-1 sm:mt-2 text-xs sm:text-sm">Nenhuma interação</p>
                 </div>
               ) : (
                 <div className="relative">
-                  <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200"></div>
-                  <div className="space-y-4">
+                  <div className="absolute left-3 sm:left-4 top-0 bottom-0 w-0.5 bg-slate-200"></div>
+                  <div className="space-y-2 sm:space-y-4">
                     {timeline.map((event, index) => {
                       const colorClasses: Record<string, string> = {
                         cyan: 'bg-cyan-100 text-cyan-600 border-cyan-300',
@@ -974,22 +976,22 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                       const bgColor = colorClasses[event.color] || colorClasses.indigo;
                       
                       return (
-                        <div key={event.id} className="relative pl-10">
-                          <div className={`absolute left-2 w-5 h-5 rounded-full border-2 flex items-center justify-center ${bgColor}`}>
-                            <span className="material-symbols-outlined text-xs">{event.icon}</span>
+                        <div key={event.id} className="relative pl-8 sm:pl-10">
+                          <div className={`absolute left-1 sm:left-2 w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 flex items-center justify-center ${bgColor}`}>
+                            <span className="material-symbols-outlined text-[9px] sm:text-xs">{event.icon}</span>
                           </div>
-                          <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                            <div className="flex items-start justify-between gap-2">
+                          <div className="bg-slate-50 rounded-lg p-2 sm:p-3 border border-slate-100">
+                            <div className="flex items-start justify-between gap-1 sm:gap-2">
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-slate-800 text-sm">{event.title}</p>
-                                <p className="text-xs text-slate-500 mt-0.5 truncate">{event.description}</p>
+                                <p className="font-medium text-slate-800 text-[10px] sm:text-sm">{event.title}</p>
+                                <p className="text-[9px] sm:text-xs text-slate-500 mt-0.5 truncate">{event.description}</p>
                               </div>
-                              <span className="text-xs text-slate-400 whitespace-nowrap">
-                                {new Date(event.timestamp).toLocaleDateString('pt-BR')} {new Date(event.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              <span className="text-[8px] sm:text-xs text-slate-400 whitespace-nowrap">
+                                {new Date(event.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
                             {event.metadata?.utm_source && (
-                              <span className="inline-block mt-2 px-2 py-0.5 bg-cyan-50 text-cyan-600 text-xs rounded">
+                              <span className="inline-block mt-1 sm:mt-2 px-1.5 sm:px-2 py-0.5 bg-cyan-50 text-cyan-600 text-[9px] sm:text-xs rounded">
                                 {event.metadata.utm_source}
                               </span>
                             )}
@@ -1004,59 +1006,59 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
           </div>
 
           {/* Card: Histórico de Negociações */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 bg-gradient-to-r from-emerald-600 to-green-600">
-              <h2 className="text-white font-bold flex items-center gap-2">
-                <span className="material-symbols-outlined">receipt_long</span>
-                Histórico de Negociações
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-emerald-600 to-green-600">
+              <h2 className="text-white font-bold flex items-center gap-2 text-sm sm:text-base">
+                <span className="material-symbols-outlined text-lg sm:text-xl">receipt_long</span>
+                Negociações
               </h2>
             </div>
-            <div className="p-4">
+            <div className="p-3 sm:p-4">
               {payments.length === 0 ? (
-                <div className="text-center py-6">
-                  <span className="material-symbols-outlined text-4xl text-slate-300">money_off</span>
-                  <p className="text-slate-500 mt-2">Nenhuma negociação registrada</p>
+                <div className="text-center py-4 sm:py-6">
+                  <span className="material-symbols-outlined text-3xl sm:text-4xl text-slate-300">money_off</span>
+                  <p className="text-slate-500 mt-1 sm:mt-2 text-xs sm:text-sm">Nenhuma negociação</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {payments.map((payment) => (
                     <div 
                       key={payment.id} 
-                      className={`p-4 rounded-xl border-l-4 ${
+                      className={`p-2.5 sm:p-4 rounded-lg sm:rounded-xl border-l-4 ${
                         payment.status === 'cancelled' 
                           ? 'border-red-400 bg-red-50/50' 
                           : 'border-emerald-500 bg-slate-50'
                       }`}
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <span className={`text-xl font-black ${
+                      <div className="flex items-start justify-between mb-1 sm:mb-2">
+                        <span className={`text-base sm:text-xl font-black ${
                           payment.status === 'cancelled' ? 'text-red-400 line-through' : 'text-emerald-600'
                         }`}>
                           R$ {payment.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>
                         {payment.status === 'cancelled' && (
-                          <span className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs font-medium">
+                          <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-red-100 text-red-600 rounded text-[9px] sm:text-xs font-medium">
                             Cancelado
                           </span>
                         )}
                       </div>
                       {payment.description && (
-                        <p className="text-sm text-slate-700 mb-2">{payment.description}</p>
+                        <p className="text-[10px] sm:text-sm text-slate-700 mb-1 sm:mb-2 truncate">{payment.description}</p>
                       )}
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <span className="material-symbols-outlined text-sm">calendar_today</span>
+                      <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-0.5 sm:gap-y-1 text-[9px] sm:text-xs text-slate-500">
+                        <span className="flex items-center gap-0.5 sm:gap-1">
+                          <span className="material-symbols-outlined text-xs sm:text-sm">calendar_today</span>
                           {new Date(payment.payment_date).toLocaleDateString('pt-BR')}
                         </span>
                         {payment.payment_method && (
-                          <span className="flex items-center gap-1">
-                            <span className="material-symbols-outlined text-sm">credit_card</span>
+                          <span className="flex items-center gap-0.5 sm:gap-1">
+                            <span className="material-symbols-outlined text-xs sm:text-sm">credit_card</span>
                             {payment.payment_method}
                           </span>
                         )}
                         {payment.created_by_name && (
-                          <span className="flex items-center gap-1">
-                            <span className="material-symbols-outlined text-sm">person</span>
+                          <span className="flex items-center gap-0.5 sm:gap-1 hidden sm:flex">
+                            <span className="material-symbols-outlined text-xs sm:text-sm">person</span>
                             {payment.created_by_name}
                           </span>
                         )}

@@ -215,86 +215,87 @@ export default function LinkSettings() {
   const metaAdsParams = `utm_source={{site_source_name}}&utm_medium={{placement}}&utm_campaign={{campaign.name}}&utm_content={{adset.name}}_{{ad.name}}&belitx_fbid={{ad.id}}_{{site_source_name}}_{{placement}}`;
 
   return (
-    <div className="p-6">
+    <div className="p-3 sm:p-6">
       {/* Header com botões de ação */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
         <button 
           onClick={() => navigate('/links')} 
-          className="text-slate-500 hover:text-slate-700 transition-colors"
+          className="text-slate-500 hover:text-slate-700 transition-colors text-sm"
         >
           ← Voltar
         </button>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button 
             onClick={() => navigate(`/link/${linkId}/conversations`)}
-            className="px-4 py-2 border border-cyan-500 text-cyan-600 rounded-lg hover:bg-cyan-50 flex items-center gap-2"
+            className="flex-1 sm:flex-none px-3 sm:px-4 py-2 border border-cyan-500 text-cyan-600 rounded-lg hover:bg-cyan-50 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
           >
-            <span className="material-symbols-outlined text-lg">chat</span>
-            Ver Conversas do Link
+            <span className="material-symbols-outlined text-base sm:text-lg">chat</span>
+            <span className="hidden sm:inline">Ver Conversas</span>
+            <span className="sm:hidden">Conversas</span>
           </button>
           <button 
             onClick={() => navigate('/links')}
-            className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 flex items-center gap-2"
+            className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
           >
-            <span className="material-symbols-outlined text-lg">edit</span>
-            Editar Link
+            <span className="material-symbols-outlined text-base sm:text-lg">edit</span>
+            Editar
           </button>
         </div>
       </div>
 
       {/* Tabs de Navegação */}
-      <div className="flex gap-1 mb-6 border-b border-slate-200">
+      <div className="flex gap-1 mb-4 sm:mb-6 border-b border-slate-200 overflow-x-auto">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`px-4 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+          className={`px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
             activeTab === 'dashboard'
               ? 'bg-white border border-b-white border-slate-200 -mb-px text-orange-600'
               : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
           }`}
         >
-          <span className="material-symbols-outlined text-[18px]">bar_chart</span>
+          <span className="material-symbols-outlined text-[16px] sm:text-[18px]">bar_chart</span>
           Dashboard
         </button>
         <button
           onClick={() => setActiveTab('links')}
-          className={`px-4 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+          className={`px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
             activeTab === 'links'
               ? 'bg-white border border-b-white border-slate-200 -mb-px text-indigo-600'
               : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
           }`}
         >
-          <span className="material-symbols-outlined text-[18px]">link</span>
+          <span className="material-symbols-outlined text-[16px] sm:text-[18px]">link</span>
           Links
         </button>
         <button
           onClick={() => setActiveTab('clicks')}
-          className={`px-4 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+          className={`px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
             activeTab === 'clicks'
               ? 'bg-white border border-b-white border-slate-200 -mb-px text-cyan-600'
               : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
           }`}
         >
-          <span className="material-symbols-outlined text-[18px]">touch_app</span>
+          <span className="material-symbols-outlined text-[16px] sm:text-[18px]">touch_app</span>
           Cliques ({clicks.length})
         </button>
       </div>
 
       {/* Dashboard Tab */}
       {activeTab === 'dashboard' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Filtro de Período */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+            <div className="flex items-center gap-1 sm:gap-2 bg-slate-100 rounded-lg p-1 overflow-x-auto">
               {[
                 { value: 'today', label: 'Hoje' },
-                { value: '7d', label: '7 dias' },
-                { value: '15d', label: '15 dias' },
-                { value: '30d', label: '30 dias' },
+                { value: '7d', label: '7d' },
+                { value: '15d', label: '15d' },
+                { value: '30d', label: '30d' },
               ].map((period) => (
                 <button
                   key={period.value}
                   onClick={() => setDashboardPeriod(period.value as 'today' | '7d' | '15d' | '30d')}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
                     dashboardPeriod === period.value
                       ? 'bg-cyan-500 text-white shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'
@@ -306,42 +307,42 @@ export default function LinkSettings() {
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Visão Geral das Conversas */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <h3 className="text-lg font-bold text-slate-800 mb-6">Visão Geral das Conversas</h3>
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-4 sm:p-6">
+              <h3 className="text-sm sm:text-lg font-bold text-slate-800 mb-4 sm:mb-6">Visão Geral</h3>
               
-              <div className="flex items-center gap-2 mb-4">
-                <span className="material-symbols-outlined text-slate-400">chat</span>
-                <span className="text-sm text-slate-500">Total de Conversas Novas Ativas</span>
+              <div className="flex items-center gap-2 mb-2 sm:mb-4">
+                <span className="material-symbols-outlined text-slate-400 text-lg sm:text-xl">chat</span>
+                <span className="text-xs sm:text-sm text-slate-500">Total Conversas</span>
               </div>
-              <p className="text-4xl font-bold text-slate-900 mb-6">{dashboardData.totalConversas}</p>
+              <p className="text-2xl sm:text-4xl font-bold text-slate-900 mb-4 sm:mb-6">{dashboardData.totalConversas}</p>
               
-              <div className="space-y-3 mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center">
-                    <span className="material-symbols-outlined text-cyan-600 text-sm">check_circle</span>
+              <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 bg-cyan-100 rounded-lg flex items-center justify-center">
+                    <span className="material-symbols-outlined text-cyan-600 text-xs sm:text-sm">check_circle</span>
                   </div>
-                  <div>
-                    <p className="text-sm text-slate-500">Conversas Rastreadas</p>
-                    <p className="text-xl font-bold text-slate-900">
+                  <div className="flex-1">
+                    <p className="text-xs sm:text-sm text-slate-500">Rastreadas</p>
+                    <p className="text-base sm:text-xl font-bold text-slate-900">
                       {dashboardData.rastreadas}{' '}
-                      <span className="text-sm font-normal text-slate-400">
-                        {dashboardData.totalConversas > 0 ? ((dashboardData.rastreadas / dashboardData.totalConversas) * 100).toFixed(2) : 0}%
+                      <span className="text-[10px] sm:text-sm font-normal text-slate-400">
+                        ({dashboardData.totalConversas > 0 ? ((dashboardData.rastreadas / dashboardData.totalConversas) * 100).toFixed(0) : 0}%)
                       </span>
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <span className="material-symbols-outlined text-orange-600 text-sm">help</span>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <span className="material-symbols-outlined text-orange-600 text-xs sm:text-sm">help</span>
                   </div>
-                  <div>
-                    <p className="text-sm text-slate-500">Conversas não rastreadas</p>
-                    <p className="text-xl font-bold text-slate-900">
+                  <div className="flex-1">
+                    <p className="text-xs sm:text-sm text-slate-500">Não rastreadas</p>
+                    <p className="text-base sm:text-xl font-bold text-slate-900">
                       {dashboardData.naoRastreadas}{' '}
-                      <span className="text-sm font-normal text-slate-400">
-                        {dashboardData.totalConversas > 0 ? ((dashboardData.naoRastreadas / dashboardData.totalConversas) * 100).toFixed(2) : 0}%
+                      <span className="text-[10px] sm:text-sm font-normal text-slate-400">
+                        ({dashboardData.totalConversas > 0 ? ((dashboardData.naoRastreadas / dashboardData.totalConversas) * 100).toFixed(0) : 0}%)
                       </span>
                     </p>
                   </div>
@@ -350,7 +351,7 @@ export default function LinkSettings() {
               
               {/* Gráfico Donut */}
               <div className="flex justify-center">
-                <ResponsiveContainer width={200} height={200}>
+                <ResponsiveContainer width={150} height={150} className="sm:!w-[200px] sm:!h-[200px]">
                   <PieChart>
                     <Pie
                       data={[
@@ -359,8 +360,8 @@ export default function LinkSettings() {
                       ]}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
+                      innerRadius={40}
+                      outerRadius={60}
                       dataKey="value"
                     >
                       <Cell fill="#06B6D4" />
@@ -369,76 +370,76 @@ export default function LinkSettings() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="text-center -mt-24 mb-8">
-                <p className="text-3xl font-bold text-slate-900">{dashboardData.totalConversas}</p>
+              <div className="text-center -mt-[72px] sm:-mt-24 mb-6 sm:mb-8">
+                <p className="text-xl sm:text-3xl font-bold text-slate-900">{dashboardData.totalConversas}</p>
               </div>
-              <div className="flex justify-center gap-6 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-cyan-500 rounded-full"></div>
+              <div className="flex justify-center gap-4 sm:gap-6 text-xs sm:text-sm">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-cyan-500 rounded-full"></div>
                   <span className="text-slate-600">Rastreadas</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-orange-500 rounded-full"></div>
                   <span className="text-slate-600">Não rastreadas</span>
                 </div>
               </div>
             </div>
 
             {/* Origem das Conversas */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <h3 className="text-lg font-bold text-slate-800 mb-6">Origem das Conversas</h3>
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-4 sm:p-6">
+              <h3 className="text-sm sm:text-lg font-bold text-slate-800 mb-4 sm:mb-6">Origem</h3>
               
               {/* Cards de Origem */}
-              <div className="grid grid-cols-4 gap-3 mb-6">
+              <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
                 <div className="text-center">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                    <span className="text-blue-600 font-bold text-lg">M</span>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-1 sm:mb-2">
+                    <span className="text-blue-600 font-bold text-sm sm:text-lg">M</span>
                   </div>
-                  <p className="text-xs text-slate-500">Meta Ads</p>
-                  <p className="text-xl font-bold text-slate-900">{dashboardData.metaAds}</p>
+                  <p className="text-[9px] sm:text-xs text-slate-500">Meta</p>
+                  <p className="text-base sm:text-xl font-bold text-slate-900">{dashboardData.metaAds}</p>
                 </div>
                 <div className="text-center">
-                  <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                    <span className="text-amber-600 font-bold text-lg">G</span>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-amber-100 rounded-lg flex items-center justify-center mx-auto mb-1 sm:mb-2">
+                    <span className="text-amber-600 font-bold text-sm sm:text-lg">G</span>
                   </div>
-                  <p className="text-xs text-slate-500">Google Ads</p>
-                  <p className="text-xl font-bold text-slate-900">{dashboardData.googleAds}</p>
+                  <p className="text-[9px] sm:text-xs text-slate-500">Google</p>
+                  <p className="text-base sm:text-xl font-bold text-slate-900">{dashboardData.googleAds}</p>
                 </div>
                 <div className="text-center">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                    <span className="material-symbols-outlined text-green-600">language</span>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-1 sm:mb-2">
+                    <span className="material-symbols-outlined text-green-600 text-sm sm:text-base">language</span>
                   </div>
-                  <p className="text-xs text-slate-500">Outras</p>
-                  <p className="text-xl font-bold text-slate-900">{dashboardData.outras}</p>
+                  <p className="text-[9px] sm:text-xs text-slate-500">Outras</p>
+                  <p className="text-base sm:text-xl font-bold text-slate-900">{dashboardData.outras}</p>
                 </div>
                 <div className="text-center">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
-                    <span className="material-symbols-outlined text-orange-600">help</span>
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-1 sm:mb-2">
+                    <span className="material-symbols-outlined text-orange-600 text-sm sm:text-base">help</span>
                   </div>
-                  <p className="text-xs text-slate-500">Não Rastreada</p>
-                  <p className="text-xl font-bold text-slate-900">{dashboardData.naoRastreadas}</p>
+                  <p className="text-[9px] sm:text-xs text-slate-500">N/R</p>
+                  <p className="text-base sm:text-xl font-bold text-slate-900">{dashboardData.naoRastreadas}</p>
                 </div>
               </div>
               
               {/* Gráfico de Barras */}
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={180} className="sm:!h-[250px]">
                 <BarChart data={dashboardData.porDia}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="#94A3B8" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="#94A3B8" />
+                  <XAxis dataKey="date" tick={{ fontSize: 9 }} stroke="#94A3B8" />
+                  <YAxis tick={{ fontSize: 9 }} stroke="#94A3B8" width={25} />
                   <Tooltip 
                     contentStyle={{ 
                       backgroundColor: 'white', 
                       border: '1px solid #E2E8F0',
                       borderRadius: '8px',
-                      fontSize: '12px'
+                      fontSize: '10px'
                     }} 
                   />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Bar dataKey="metaAds" name="Meta Ads" stackId="a" fill="#3B82F6" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="googleAds" name="Google Ads" stackId="a" fill="#F59E0B" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="outras" name="Outras Origens" stackId="a" fill="#22C55E" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="naoRastreada" name="Não rastreada" stackId="a" fill="#F97316" radius={[4, 4, 0, 0]} />
+                  <Legend wrapperStyle={{ fontSize: '9px' }} />
+                  <Bar dataKey="metaAds" name="Meta" stackId="a" fill="#3B82F6" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="googleAds" name="Google" stackId="a" fill="#F59E0B" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="outras" name="Outras" stackId="a" fill="#22C55E" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="naoRastreada" name="N/R" stackId="a" fill="#F97316" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -450,20 +451,20 @@ export default function LinkSettings() {
       {activeTab === 'links' && (
       <>
       {/* Link Principal - Gradiente Indigo/Purple */}
-      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 rounded-2xl p-6 text-white mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <span className="material-symbols-outlined text-2xl">link</span>
+      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-xl sm:text-2xl">link</span>
             </div>
             <div>
-              <h2 className="text-lg font-bold">Link Principal</h2>
-              <p className="text-indigo-200 text-sm">Use em qualquer lugar</p>
+              <h2 className="text-sm sm:text-lg font-bold">Link Principal</h2>
+              <p className="text-indigo-200 text-xs sm:text-sm">Use em qualquer lugar</p>
             </div>
           </div>
           <button
             onClick={() => copyToClipboard(`${baseUrl}/${link.code}`, 'principal')}
-            className={`px-5 py-2.5 rounded-lg font-medium transition-all ${
+            className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-all text-sm ${
               copiedCode === 'principal' 
                 ? 'bg-green-500 text-white' 
                 : 'bg-white text-indigo-600 hover:bg-indigo-50'
@@ -472,98 +473,98 @@ export default function LinkSettings() {
             {copiedCode === 'principal' ? 'Copiado!' : 'Copiar'}
           </button>
         </div>
-        <div className="mt-4 bg-white/10 rounded-xl p-4">
-          <code className="text-sm font-mono">{baseUrl}/{link.code}</code>
+        <div className="mt-3 sm:mt-4 bg-white/10 rounded-lg sm:rounded-xl p-3 sm:p-4">
+          <code className="text-xs sm:text-sm font-mono break-all">{baseUrl}/{link.code}</code>
         </div>
       </div>
 
       {/* Grid de Cards por Plataforma */}
-      <div className="grid md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
         {/* Instagram Bio */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-lg">📸</span>
+        <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 p-3 sm:p-5 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-sm sm:text-lg">📸</span>
               </div>
               <div>
-                <h4 className="font-bold text-slate-800">Instagram Bio</h4>
-                <p className="text-xs text-slate-500">Com página de redirecionamento (5 seg)</p>
+                <h4 className="font-bold text-slate-800 text-xs sm:text-base">Instagram Bio</h4>
+                <p className="text-[9px] sm:text-xs text-slate-500 hidden sm:block">Com redirecionamento (5 seg)</p>
               </div>
             </div>
             <button
               onClick={() => copyToClipboard(`${baseUrl}/${link.code}?utm_source=instagram&utm_medium=bio`, 'instagram')}
-              className={`p-2 rounded-lg transition-all ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-all ${
                 copiedCode === 'instagram' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
             >
-              <span className="material-symbols-outlined">{copiedCode === 'instagram' ? 'check' : 'content_copy'}</span>
+              <span className="material-symbols-outlined text-lg sm:text-xl">{copiedCode === 'instagram' ? 'check' : 'content_copy'}</span>
             </button>
           </div>
-          <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all">
+          <code className="text-[9px] sm:text-xs text-slate-600 bg-slate-50 p-2 sm:p-3 rounded-lg block break-all">
             {baseUrl}/{link.code}?utm_source=instagram&utm_medium=bio
           </code>
         </div>
 
         {/* Google Ads */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-lg">🔍</span>
+        <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 p-3 sm:p-5 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-500 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-sm sm:text-lg">🔍</span>
               </div>
               <div>
-                <h4 className="font-bold text-slate-800">Google Ads</h4>
-                <p className="text-xs text-slate-500">Com página de redirecionamento (5 seg)</p>
+                <h4 className="font-bold text-slate-800 text-xs sm:text-base">Google Ads</h4>
+                <p className="text-[9px] sm:text-xs text-slate-500 hidden sm:block">Com redirecionamento (5 seg)</p>
               </div>
             </div>
             <button
               onClick={() => copyToClipboard(`${baseUrl}/${link.code}?utm_source=google&utm_medium=cpc`, 'google')}
-              className={`p-2 rounded-lg transition-all ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-all ${
                 copiedCode === 'google' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
             >
-              <span className="material-symbols-outlined">{copiedCode === 'google' ? 'check' : 'content_copy'}</span>
+              <span className="material-symbols-outlined text-lg sm:text-xl">{copiedCode === 'google' ? 'check' : 'content_copy'}</span>
             </button>
           </div>
-          <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all">
+          <code className="text-[9px] sm:text-xs text-slate-600 bg-slate-50 p-2 sm:p-3 rounded-lg block break-all">
             {baseUrl}/{link.code}?utm_source=google&utm_medium=cpc
           </code>
         </div>
 
         {/* Meta Ads */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-pink-500 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-lg">📣</span>
+        <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 p-3 sm:p-5 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-orange-500 to-pink-500 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-sm sm:text-lg">📣</span>
               </div>
               <div>
-                <h4 className="font-bold text-slate-800">Meta Ads (Facebook/Instagram)</h4>
-                <p className="text-xs text-slate-500">Com página de redirecionamento (5 seg)</p>
+                <h4 className="font-bold text-slate-800 text-xs sm:text-base">Meta Ads</h4>
+                <p className="text-[9px] sm:text-xs text-slate-500 hidden sm:block">Com redirecionamento (5 seg)</p>
               </div>
             </div>
             <button
               onClick={() => copyToClipboard(`${baseUrl}/${link.code}`, 'meta')}
-              className={`p-2 rounded-lg transition-all ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-all ${
                 copiedCode === 'meta' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
             >
-              <span className="material-symbols-outlined">{copiedCode === 'meta' ? 'check' : 'content_copy'}</span>
+              <span className="material-symbols-outlined text-lg sm:text-xl">{copiedCode === 'meta' ? 'check' : 'content_copy'}</span>
             </button>
           </div>
-          <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all mb-3">
+          <code className="text-[9px] sm:text-xs text-slate-600 bg-slate-50 p-2 sm:p-3 rounded-lg block break-all mb-2 sm:mb-3">
             {baseUrl}/{link.code}
           </code>
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-            <p className="text-xs text-purple-800 font-medium mb-2">Parâmetros de URL (cole no Meta Ads):</p>
-            <div className="flex items-center gap-2">
-              <code className="text-[10px] text-purple-700 bg-purple-100 p-2 rounded flex-1 break-all">
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 sm:p-3">
+            <p className="text-[9px] sm:text-xs text-purple-800 font-medium mb-1.5 sm:mb-2">Parâmetros URL (Meta Ads):</p>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <code className="text-[8px] sm:text-[10px] text-purple-700 bg-purple-100 p-1.5 sm:p-2 rounded flex-1 break-all">
                 {metaAdsParams}
               </code>
               <button
                 onClick={() => copyToClipboard(metaAdsParams, 'metaParams')}
-                className={`p-1.5 rounded transition-all ${
+                className={`p-1 sm:p-1.5 rounded transition-all flex-shrink-0 ${
                   copiedCode === 'metaParams' ? 'bg-green-100 text-green-600' : 'hover:bg-purple-100 text-purple-600'
                 }`}
               >
@@ -574,94 +575,94 @@ export default function LinkSettings() {
         </div>
 
         {/* Botão no Site */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-cyan-500 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-lg">🌐</span>
+        <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 p-3 sm:p-5 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-cyan-500 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-sm sm:text-lg">🌐</span>
               </div>
               <div>
-                <h4 className="font-bold text-slate-800">Botão no Site</h4>
-                <p className="text-xs text-slate-500">Com página de redirecionamento (5 seg)</p>
+                <h4 className="font-bold text-slate-800 text-xs sm:text-base">Botão no Site</h4>
+                <p className="text-[9px] sm:text-xs text-slate-500 hidden sm:block">Com redirecionamento (5 seg)</p>
               </div>
             </div>
             <button
               onClick={() => copyToClipboard(`${baseUrl}/${link.code}?utm_source=website&utm_medium=button`, 'site')}
-              className={`p-2 rounded-lg transition-all ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-all ${
                 copiedCode === 'site' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
             >
-              <span className="material-symbols-outlined">{copiedCode === 'site' ? 'check' : 'content_copy'}</span>
+              <span className="material-symbols-outlined text-lg sm:text-xl">{copiedCode === 'site' ? 'check' : 'content_copy'}</span>
             </button>
           </div>
-          <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all">
+          <code className="text-[9px] sm:text-xs text-slate-600 bg-slate-50 p-2 sm:p-3 rounded-lg block break-all">
             {baseUrl}/{link.code}?utm_source=website&utm_medium=button
           </code>
         </div>
 
         {/* QR Code */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-lg">📱</span>
+        <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 p-3 sm:p-5 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-700 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-sm sm:text-lg">📱</span>
               </div>
               <div>
-                <h4 className="font-bold text-slate-800">QR Code</h4>
-                <p className="text-xs text-slate-500">Com página de redirecionamento (5 seg)</p>
+                <h4 className="font-bold text-slate-800 text-xs sm:text-base">QR Code</h4>
+                <p className="text-[9px] sm:text-xs text-slate-500 hidden sm:block">Com redirecionamento (5 seg)</p>
               </div>
             </div>
             <button
               onClick={() => copyToClipboard(`${baseUrl}/${link.code}?utm_source=offline&utm_medium=qrcode`, 'qr')}
-              className={`p-2 rounded-lg transition-all ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-all ${
                 copiedCode === 'qr' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
             >
-              <span className="material-symbols-outlined">{copiedCode === 'qr' ? 'check' : 'content_copy'}</span>
+              <span className="material-symbols-outlined text-lg sm:text-xl">{copiedCode === 'qr' ? 'check' : 'content_copy'}</span>
             </button>
           </div>
-          <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all">
+          <code className="text-[9px] sm:text-xs text-slate-600 bg-slate-50 p-2 sm:p-3 rounded-lg block break-all">
             {baseUrl}/{link.code}?utm_source=offline&utm_medium=qrcode
           </code>
         </div>
 
         {/* Email Marketing */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-violet-500 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold text-lg">📧</span>
+        <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 p-3 sm:p-5 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-violet-500 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-sm sm:text-lg">📧</span>
               </div>
               <div>
-                <h4 className="font-bold text-slate-800">Email Marketing</h4>
-                <p className="text-xs text-slate-500">Com página de redirecionamento (5 seg)</p>
+                <h4 className="font-bold text-slate-800 text-xs sm:text-base">Email Marketing</h4>
+                <p className="text-[9px] sm:text-xs text-slate-500 hidden sm:block">Com redirecionamento (5 seg)</p>
               </div>
             </div>
             <button
               onClick={() => copyToClipboard(`${baseUrl}/${link.code}?utm_source=email&utm_medium=newsletter`, 'email')}
-              className={`p-2 rounded-lg transition-all ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-all ${
                 copiedCode === 'email' ? 'bg-green-100 text-green-600' : 'hover:bg-slate-100 text-slate-400'
               }`}
             >
-              <span className="material-symbols-outlined">{copiedCode === 'email' ? 'check' : 'content_copy'}</span>
+              <span className="material-symbols-outlined text-lg sm:text-xl">{copiedCode === 'email' ? 'check' : 'content_copy'}</span>
             </button>
           </div>
-          <code className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg block break-all">
+          <code className="text-[9px] sm:text-xs text-slate-600 bg-slate-50 p-2 sm:p-3 rounded-lg block break-all">
             {baseUrl}/{link.code}?utm_source=email&utm_medium=newsletter
           </code>
         </div>
       </div>
 
       {/* Pixel de Rastreamento - Gradiente Azul */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <span className="material-symbols-outlined text-2xl">code</span>
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-xl sm:text-2xl">code</span>
             </div>
             <div>
-              <h3 className="text-lg font-bold">Pixel de Rastreamento</h3>
-              <p className="text-blue-100 text-sm">Instale no seu site para rastrear conversões (antes do &lt;/head&gt;)</p>
+              <h3 className="text-sm sm:text-lg font-bold">Pixel de Rastreamento</h3>
+              <p className="text-blue-100 text-[10px] sm:text-sm">Cole antes do &lt;/head&gt;</p>
             </div>
           </div>
           <button
@@ -682,16 +683,16 @@ export default function LinkSettings() {
 </script>`;
               copyToClipboard(pixelCode, 'pixel');
             }}
-            className={`px-5 py-2.5 rounded-lg font-medium transition-all ${
+            className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-all text-xs sm:text-sm ${
               copiedCode === 'pixel' 
                 ? 'bg-white text-blue-600' 
                 : 'bg-white/20 hover:bg-white/30 text-white'
             }`}
           >
-            {copiedCode === 'pixel' ? 'Copiado!' : 'Copiar Código'}
+            {copiedCode === 'pixel' ? 'Copiado!' : 'Copiar'}
           </button>
         </div>
-        <pre className="bg-white/10 rounded-xl p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap text-blue-100">
+        <pre className="bg-white/10 rounded-lg sm:rounded-xl p-2 sm:p-4 text-[8px] sm:text-xs font-mono overflow-x-auto whitespace-pre-wrap text-blue-100 max-h-32 sm:max-h-none">
 {`<script>
 (function(window, document, script) {
   if (!window.belitx) {
@@ -706,21 +707,21 @@ export default function LinkSettings() {
 })(window, document, 'https://belitx.com.br/pixel/belitx-1.0.js');
 </script>`}
         </pre>
-        <p className="text-blue-200 text-xs mt-3">
+        <p className="text-blue-200 text-[9px] sm:text-xs mt-2 sm:mt-3 hidden sm:block">
           O pixel captura: dispositivo, navegador, UTMs, fbclid/gclid, referrer e cliques em links Belitx.
         </p>
       </div>
 
       {/* Botão Flutuante WhatsApp - Gradiente Verde */}
-      <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-6 text-white mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <span className="material-symbols-outlined text-2xl">widgets</span>
+      <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-xl sm:text-2xl">widgets</span>
             </div>
             <div>
-              <h3 className="text-lg font-bold">Botão Flutuante WhatsApp</h3>
-              <p className="text-green-100 text-sm">Cole este código HTML antes do &lt;/body&gt; do seu site</p>
+              <h3 className="text-sm sm:text-lg font-bold">Botão Flutuante</h3>
+              <p className="text-green-100 text-[10px] sm:text-sm">Cole antes do &lt;/body&gt;</p>
             </div>
           </div>
           <button
@@ -731,16 +732,16 @@ export default function LinkSettings() {
 </a>`;
               copyToClipboard(floatCode, 'float');
             }}
-            className={`px-5 py-2.5 rounded-lg font-medium transition-all ${
+            className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-all text-xs sm:text-sm ${
               copiedCode === 'float' 
                 ? 'bg-white text-green-600' 
                 : 'bg-white/20 hover:bg-white/30 text-white'
             }`}
           >
-            {copiedCode === 'float' ? 'Copiado!' : 'Copiar HTML'}
+            {copiedCode === 'float' ? 'Copiado!' : 'Copiar'}
           </button>
         </div>
-        <pre className="bg-white/10 rounded-xl p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap text-green-100">
+        <pre className="bg-white/10 rounded-lg sm:rounded-xl p-2 sm:p-4 text-[8px] sm:text-xs font-mono overflow-x-auto whitespace-pre-wrap text-green-100">
 {`<a href="${baseUrl}/${link.code}?utm_source=website&utm_medium=float" 
    target="_blank" 
    style="position:fixed;bottom:20px;right:20px;...">
@@ -753,7 +754,7 @@ export default function LinkSettings() {
       <div className="text-center">
         <button 
           onClick={() => navigate('/links')}
-          className="text-slate-500 hover:text-slate-700"
+          className="text-slate-500 hover:text-slate-700 text-sm"
         >
           Voltar
         </button>
@@ -763,55 +764,86 @@ export default function LinkSettings() {
 
       {/* Clicks Tab */}
       {activeTab === 'clicks' && (
-        <div className="bg-white rounded-2xl border border-slate-200">
-          <div className="p-6 border-b border-slate-200">
-            <h3 className="text-lg font-bold text-slate-800">Histórico de Cliques</h3>
-            <p className="text-sm text-slate-500">Últimos 50 cliques neste link</p>
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200">
+          <div className="p-3 sm:p-6 border-b border-slate-200">
+            <h3 className="text-sm sm:text-lg font-bold text-slate-800">Histórico de Cliques</h3>
+            <p className="text-xs sm:text-sm text-slate-500">Últimos 50 cliques</p>
           </div>
           {clicks.length === 0 ? (
-            <div className="p-12 text-center">
-              <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">touch_app</span>
-              <p className="text-slate-500">Nenhum clique registrado ainda</p>
+            <div className="p-8 sm:p-12 text-center">
+              <span className="material-symbols-outlined text-3xl sm:text-4xl text-slate-300 mb-2">touch_app</span>
+              <p className="text-slate-500 text-xs sm:text-sm">Nenhum clique registrado</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="text-left py-3 px-4 font-medium text-slate-500">Data/Hora</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-500">Dispositivo</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-500">Navegador</th>
-                    <th className="text-left py-3 px-4 font-medium text-slate-500">Origem (UTM)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {clicks.map((click) => (
-                    <tr key={click.id} className="hover:bg-slate-50">
-                      <td className="py-3 px-4 text-sm text-slate-600">
+            <>
+              {/* Versão Mobile - Cards */}
+              <div className="sm:hidden p-2 space-y-2">
+                {clicks.map((click) => (
+                  <div key={click.id} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] text-slate-500">
                         {new Date(click.clicked_at).toLocaleString('pt-BR')}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          click.device_type === 'mobile' ? 'bg-blue-100 text-blue-700' :
-                          click.device_type === 'tablet' ? 'bg-purple-100 text-purple-700' :
-                          'bg-slate-100 text-slate-700'
-                        }`}>
-                          {click.device_type || 'desktop'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-slate-600">{click.browser || '-'}</td>
-                      <td className="py-3 px-4 text-sm">
-                        {click.utm_source ? (
-                          <span className="text-indigo-600">{click.utm_source}</span>
-                        ) : (
-                          <span className="text-slate-400">Direto</span>
-                        )}
-                      </td>
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                        click.device_type === 'mobile' ? 'bg-blue-100 text-blue-700' :
+                        click.device_type === 'tablet' ? 'bg-purple-100 text-purple-700' :
+                        'bg-slate-100 text-slate-700'
+                      }`}>
+                        {click.device_type || 'desktop'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-600">{click.browser || '-'}</span>
+                      {click.utm_source ? (
+                        <span className="text-xs text-indigo-600 font-medium">{click.utm_source}</span>
+                      ) : (
+                        <span className="text-xs text-slate-400">Direto</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Versão Desktop - Tabela */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="text-left py-3 px-4 font-medium text-slate-500">Data/Hora</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-500">Dispositivo</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-500">Navegador</th>
+                      <th className="text-left py-3 px-4 font-medium text-slate-500">Origem (UTM)</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {clicks.map((click) => (
+                      <tr key={click.id} className="hover:bg-slate-50">
+                        <td className="py-3 px-4 text-sm text-slate-600">
+                          {new Date(click.clicked_at).toLocaleString('pt-BR')}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            click.device_type === 'mobile' ? 'bg-blue-100 text-blue-700' :
+                            click.device_type === 'tablet' ? 'bg-purple-100 text-purple-700' :
+                            'bg-slate-100 text-slate-700'
+                          }`}>
+                            {click.device_type || 'desktop'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-slate-600">{click.browser || '-'}</td>
+                        <td className="py-3 px-4 text-sm">
+                          {click.utm_source ? (
+                            <span className="text-indigo-600">{click.utm_source}</span>
+                          ) : (
+                            <span className="text-slate-400">Direto</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
