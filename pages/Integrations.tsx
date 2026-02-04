@@ -731,73 +731,73 @@ export default function Integrations() {
   }
 
   return (
-    <div className="p-8">
-      <div className="space-y-6">
+    <div className="p-3 sm:p-8">
+      <div className="space-y-4 sm:space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Integrações</h1>
-          <p className="text-slate-500">Configure suas integrações externas</p>
+          <h1 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight">Integrações</h1>
+          <p className="text-xs sm:text-base text-slate-500">Configure suas integrações externas</p>
         </div>
 
         {/* Card Conectar Meta Business - Fluxo Unificado */}
         {metaAppId && (
-          <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-2xl p-6 text-white">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                  <span className="material-symbols-outlined text-3xl">link</span>
+          <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-14 sm:h-14 bg-white/20 rounded-lg sm:rounded-xl flex items-center justify-center backdrop-blur-sm">
+                  <span className="material-symbols-outlined text-xl sm:text-3xl">link</span>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold">Conectar Meta Business</h2>
-                  <p className="text-white/80 text-sm">WhatsApp, Instagram e Facebook em um único login</p>
+                  <h2 className="text-base sm:text-xl font-bold">Conectar Meta Business</h2>
+                  <p className="text-white/80 text-[10px] sm:text-sm">WhatsApp, Instagram e Facebook</p>
                 </div>
               </div>
               <button
                 onClick={handleConnectMetaBusiness}
                 disabled={connectingMetaBusiness}
-                className="px-6 py-3 bg-white text-purple-700 rounded-xl font-semibold hover:bg-white/90 transition-all flex items-center gap-2 disabled:opacity-50"
+                className="px-4 sm:px-6 py-2 sm:py-3 bg-white text-purple-700 rounded-lg sm:rounded-xl font-semibold hover:bg-white/90 transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-sm sm:text-base"
               >
                 {connectingMetaBusiness ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin"></div>
-                    Conectando...
+                    <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-purple-300 border-t-purple-700 rounded-full animate-spin"></div>
+                    <span className="hidden sm:inline">Conectando...</span>
                   </>
                 ) : (
                   <>
-                    <span className="material-symbols-outlined text-[20px]">add_link</span>
-                    Conectar Canais
+                    <span className="material-symbols-outlined text-[18px] sm:text-[20px]">add_link</span>
+                    Conectar
                   </>
                 )}
               </button>
             </div>
             
             {/* Status dos canais conectados */}
-            <div className="flex gap-4 mt-4 pt-4 border-t border-white/20">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">chat</span>
-                <span className="text-sm">WhatsApp</span>
+            <div className="flex flex-wrap gap-3 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/20">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="material-symbols-outlined text-[14px] sm:text-[18px]">chat</span>
+                <span className="text-[10px] sm:text-sm">WhatsApp</span>
                 {whatsappCloudConfig?.cloud_api_enabled ? (
-                  <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                  <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full"></span>
                 ) : (
-                  <span className="w-2 h-2 bg-white/40 rounded-full"></span>
+                  <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white/40 rounded-full"></span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">photo_camera</span>
-                <span className="text-sm">Instagram</span>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="material-symbols-outlined text-[14px] sm:text-[18px]">photo_camera</span>
+                <span className="text-[10px] sm:text-sm">Instagram</span>
                 {metaConnection.instagram_enabled ? (
-                  <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                  <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full"></span>
                 ) : (
-                  <span className="w-2 h-2 bg-white/40 rounded-full"></span>
+                  <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white/40 rounded-full"></span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">thumb_up</span>
-                <span className="text-sm">Facebook</span>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="material-symbols-outlined text-[14px] sm:text-[18px]">thumb_up</span>
+                <span className="text-[10px] sm:text-sm">Facebook</span>
                 {metaConnection.facebook_enabled ? (
-                  <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                  <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full"></span>
                 ) : (
-                  <span className="w-2 h-2 bg-white/40 rounded-full"></span>
+                  <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white/40 rounded-full"></span>
                 )}
               </div>
             </div>
@@ -809,74 +809,79 @@ export default function Integrations() {
         {(() => {
           const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
           return (
-            <div className="flex gap-2 border-b border-slate-200">
+            <div className="flex gap-1 sm:gap-2 border-b border-slate-200 overflow-x-auto pb-px -mx-3 px-3 sm:mx-0 sm:px-0">
               <button
                 onClick={() => { setActiveTab('email'); setTestResult(null); }}
-                className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                   activeTab === 'email'
                     ? 'bg-white border border-b-white border-slate-200 -mb-px text-purple-600'
                     : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                <span className="material-symbols-outlined text-[20px]">mail</span>
-                Email Marketing
+                <span className="material-symbols-outlined text-[16px] sm:text-[20px]">mail</span>
+                <span className="hidden sm:inline">Email Marketing</span>
+                <span className="sm:hidden">Email</span>
               </button>
               {isLocalhost ? (
                 <>
                   <button
                     onClick={() => { setActiveTab('instagram'); setTestResult(null); }}
-                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                       activeTab === 'instagram'
                         ? 'bg-white border border-b-white border-slate-200 -mb-px text-pink-600'
                         : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px]">photo_camera</span>
-                    Instagram
+                    <span className="material-symbols-outlined text-[16px] sm:text-[20px]">photo_camera</span>
+                    <span className="hidden sm:inline">Instagram</span>
+                    <span className="sm:hidden">Insta</span>
                     {metaConnection.instagram_enabled && (
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></span>
                     )}
                   </button>
                   <button
                     onClick={() => { setActiveTab('facebook'); setTestResult(null); }}
-                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                       activeTab === 'facebook'
                         ? 'bg-white border border-b-white border-slate-200 -mb-px text-blue-600'
                         : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px]">thumb_up</span>
-                    Facebook
+                    <span className="material-symbols-outlined text-[16px] sm:text-[20px]">thumb_up</span>
+                    <span className="hidden sm:inline">Facebook</span>
+                    <span className="sm:hidden">Face</span>
                     {metaConnection.facebook_enabled && (
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></span>
                     )}
                   </button>
                   <button
                     onClick={() => { setActiveTab('meta_ads'); setTestResult(null); }}
-                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                       activeTab === 'meta_ads'
                         ? 'bg-white border border-b-white border-slate-200 -mb-px text-pink-600'
                         : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px]">ads_click</span>
-                    Meta Ads
+                    <span className="material-symbols-outlined text-[16px] sm:text-[20px]">ads_click</span>
+                    <span className="hidden sm:inline">Meta Ads</span>
+                    <span className="sm:hidden">Ads</span>
                     {metaAdsConfiguredByAdmin && (
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></span>
                     )}
                   </button>
                   <button
                     onClick={() => { setActiveTab('whatsapp'); setTestResult(null); }}
-                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                       activeTab === 'whatsapp'
                         ? 'bg-white border border-b-white border-slate-200 -mb-px text-emerald-600'
                         : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px]">chat</span>
-                    WhatsApp API
+                    <span className="material-symbols-outlined text-[16px] sm:text-[20px]">chat</span>
+                    <span className="hidden sm:inline">WhatsApp API</span>
+                    <span className="sm:hidden">Zap</span>
                     {whatsappCloudConfig?.cloud_api_enabled && whatsappCloudConfig?.cloud_api_phone_number_id && (
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></span>
                     )}
                   </button>
                   </>
@@ -884,58 +889,62 @@ export default function Integrations() {
                 <>
                   <button
                     onClick={() => { setActiveTab('instagram'); setTestResult(null); }}
-                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                       activeTab === 'instagram'
                         ? 'bg-white border border-b-white border-slate-200 -mb-px text-pink-600'
                         : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px]">photo_camera</span>
-                    Instagram
+                    <span className="material-symbols-outlined text-[16px] sm:text-[20px]">photo_camera</span>
+                    <span className="hidden sm:inline">Instagram</span>
+                    <span className="sm:hidden">Insta</span>
                     {metaConnection.instagram_enabled && (
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></span>
                     )}
                   </button>
                   <button
                     onClick={() => { setActiveTab('facebook'); setTestResult(null); }}
-                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                       activeTab === 'facebook'
                         ? 'bg-white border border-b-white border-slate-200 -mb-px text-blue-600'
                         : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px]">thumb_up</span>
-                    Facebook
+                    <span className="material-symbols-outlined text-[16px] sm:text-[20px]">thumb_up</span>
+                    <span className="hidden sm:inline">Facebook</span>
+                    <span className="sm:hidden">Face</span>
                     {metaConnection.facebook_enabled && (
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></span>
                     )}
                   </button>
                   <button
                     onClick={() => { setActiveTab('meta_ads'); setTestResult(null); }}
-                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                       activeTab === 'meta_ads'
                         ? 'bg-white border border-b-white border-slate-200 -mb-px text-pink-600'
                         : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px]">ads_click</span>
-                    Meta Ads
+                    <span className="material-symbols-outlined text-[16px] sm:text-[20px]">ads_click</span>
+                    <span className="hidden sm:inline">Meta Ads</span>
+                    <span className="sm:hidden">Ads</span>
                     {metaAdsConfiguredByAdmin && (
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></span>
                     )}
                   </button>
                   <button
                     onClick={() => { setActiveTab('whatsapp'); setTestResult(null); }}
-                    className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-colors flex items-center gap-1 sm:gap-2 whitespace-nowrap ${
                       activeTab === 'whatsapp'
                         ? 'bg-white border border-b-white border-slate-200 -mb-px text-emerald-600'
                         : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="material-symbols-outlined text-[20px]">chat</span>
-                    WhatsApp API
+                    <span className="material-symbols-outlined text-[16px] sm:text-[20px]">chat</span>
+                    <span className="hidden sm:inline">WhatsApp API</span>
+                    <span className="sm:hidden">Zap</span>
                     {whatsappCloudConfig?.cloud_api_enabled && whatsappCloudConfig?.cloud_api_phone_number_id && (
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></span>
                     )}
                   </button>
                 </>
@@ -946,37 +955,38 @@ export default function Integrations() {
 
         {/* Tab Content */}
         {activeTab === 'email' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Email Marketing SMTP */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
-          <div className="p-6 border-b border-slate-200">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                <span className="material-symbols-outlined text-2xl text-purple-600">mail</span>
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200">
+          <div className="p-4 sm:p-6 border-b border-slate-200">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg sm:rounded-xl flex items-center justify-center">
+                <span className="material-symbols-outlined text-xl sm:text-2xl text-purple-600">mail</span>
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-slate-800">Email Marketing (SMTP)</h2>
-                <p className="text-sm text-slate-500">Configure seu servidor SMTP para envio de emails</p>
+                <h2 className="text-base sm:text-xl font-semibold text-slate-800">Email Marketing (SMTP)</h2>
+                <p className="text-[10px] sm:text-sm text-slate-500">Configure seu servidor SMTP</p>
               </div>
             </div>
           </div>
 
-          <div className="p-6 space-y-6">
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             {/* Informações do servidor */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
-                <div className="text-sm text-blue-800">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <span className="material-symbols-outlined text-blue-600 mt-0.5 text-lg sm:text-xl">info</span>
+                <div className="text-xs sm:text-sm text-blue-800">
                   <p className="font-medium mb-1">Como obter as credenciais SMTP?</p>
-                  <p>Acesse o painel do seu provedor de email (Hostinger, Gmail, etc.) e procure por "Configurações SMTP" ou "Email Settings".</p>
+                  <p className="hidden sm:block">Acesse o painel do seu provedor de email (Hostinger, Gmail, etc.) e procure por "Configurações SMTP" ou "Email Settings".</p>
+                  <p className="sm:hidden">Acesse o painel do seu provedor de email.</p>
                 </div>
               </div>
             </div>
 
             {/* Formulário */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1 sm:mb-2">
                   Host SMTP *
                 </label>
                 <input
@@ -984,12 +994,12 @@ export default function Integrations() {
                   value={smtpConfig.smtp_host}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_host: e.target.value })}
                   placeholder="smtp.hostinger.com"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1 sm:mb-2">
                   Porta *
                 </label>
                 <input
@@ -997,12 +1007,12 @@ export default function Integrations() {
                   value={smtpConfig.smtp_port}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_port: parseInt(e.target.value) || 465 })}
                   placeholder="465"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1 sm:mb-2">
                   Usuário/Email *
                 </label>
                 <input
@@ -1010,12 +1020,12 @@ export default function Integrations() {
                   value={smtpConfig.smtp_user}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_user: e.target.value })}
                   placeholder="seu@email.com"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1 sm:mb-2">
                   Senha *
                 </label>
                 <input
@@ -1023,12 +1033,12 @@ export default function Integrations() {
                   value={smtpConfig.smtp_password}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_password: e.target.value })}
                   placeholder="••••••••"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-sm"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1 sm:mb-2">
                   Email Remetente
                 </label>
                 <input
@@ -1036,13 +1046,13 @@ export default function Integrations() {
                   value={smtpConfig.smtp_from_email}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_from_email: e.target.value })}
                   placeholder="contato@suaempresa.com"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-sm"
                 />
-                <p className="text-xs text-slate-500 mt-1">Se vazio, usará o email de usuário</p>
+                <p className="text-[10px] sm:text-xs text-slate-500 mt-1">Se vazio, usará o email de usuário</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1 sm:mb-2">
                   Nome Remetente
                 </label>
                 <input
@@ -1050,23 +1060,23 @@ export default function Integrations() {
                   value={smtpConfig.smtp_from_name}
                   onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_from_name: e.target.value })}
                   placeholder="Sua Empresa"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors text-sm"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1 sm:mb-2">
                   Criptografia *
                 </label>
-                <div className="flex gap-4">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
                   {[
-                    { value: 'ssl', label: 'SSL (Porta 465)', desc: 'Recomendado' },
-                    { value: 'tls', label: 'TLS (Porta 587)', desc: 'Alternativa' },
-                    { value: 'none', label: 'Nenhuma', desc: 'Não recomendado' },
+                    { value: 'ssl', label: 'SSL (465)', labelFull: 'SSL (Porta 465)', desc: 'Recomendado' },
+                    { value: 'tls', label: 'TLS (587)', labelFull: 'TLS (Porta 587)', desc: 'Alternativa' },
+                    { value: 'none', label: 'Nenhuma', labelFull: 'Nenhuma', desc: 'Não recomendado' },
                   ].map((option) => (
                     <label
                       key={option.value}
-                      className={`flex-1 p-4 border rounded-lg cursor-pointer transition-all ${
+                      className={`flex-1 p-2.5 sm:p-4 border rounded-lg cursor-pointer transition-all ${
                         smtpConfig.smtp_encryption === option.value
                           ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-500'
                           : 'border-slate-300 hover:border-slate-400'
@@ -1080,8 +1090,11 @@ export default function Integrations() {
                         onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_encryption: e.target.value as any })}
                         className="sr-only"
                       />
-                      <span className="font-medium text-slate-800">{option.label}</span>
-                      <span className="block text-xs text-slate-500 mt-1">{option.desc}</span>
+                      <span className="font-medium text-slate-800 text-xs sm:text-sm">
+                        <span className="sm:hidden">{option.label}</span>
+                        <span className="hidden sm:inline">{option.labelFull}</span>
+                      </span>
+                      <span className="block text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">{option.desc}</span>
                     </label>
                   ))}
                 </div>
@@ -1090,12 +1103,12 @@ export default function Integrations() {
 
             {/* Resultado do teste */}
             {testResult && (
-              <div className={`p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                <div className="flex items-center gap-3">
-                  <span className={`material-symbols-outlined ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+              <div className={`p-3 sm:p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <span className={`material-symbols-outlined text-lg sm:text-xl ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
                     {testResult.success ? 'check_circle' : 'error'}
                   </span>
-                  <span className={testResult.success ? 'text-green-800' : 'text-red-800'}>
+                  <span className={`text-xs sm:text-sm ${testResult.success ? 'text-green-800' : 'text-red-800'}`}>
                     {testResult.message}
                   </span>
                 </div>
@@ -1103,30 +1116,30 @@ export default function Integrations() {
             )}
 
             {/* Botões */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-slate-200">
               <button
                 onClick={handleOpenTestModal}
                 disabled={!smtpConfig.smtp_host || !smtpConfig.smtp_user}
-                className="px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                <span className="material-symbols-outlined text-[18px]">send</span>
-                Testar Conexão
+                <span className="material-symbols-outlined text-[16px] sm:text-[18px]">send</span>
+                Testar
               </button>
               
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-6 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {saving ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Salvando...
+                    <span className="hidden sm:inline">Salvando...</span>
                   </>
                 ) : (
                   <>
-                    <span className="material-symbols-outlined text-[18px]">save</span>
-                    Salvar Configurações
+                    <span className="material-symbols-outlined text-[16px] sm:text-[18px]">save</span>
+                    Salvar
                   </>
                 )}
               </button>
@@ -1135,42 +1148,42 @@ export default function Integrations() {
         </div>
 
         {/* Configurações comuns de SMTP */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Configurações Comuns de SMTP</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 h-fit">
+          <h3 className="text-sm sm:text-lg font-semibold text-slate-800 mb-3 sm:mb-4">Configurações Comuns</h3>
+          <div className="overflow-x-auto -mx-2 px-2">
+            <table className="w-full text-xs sm:text-sm min-w-[300px]">
               <thead>
                 <tr className="text-left border-b border-slate-200">
-                  <th className="pb-3 font-medium text-slate-600">Provedor</th>
-                  <th className="pb-3 font-medium text-slate-600">Host</th>
-                  <th className="pb-3 font-medium text-slate-600">Porta</th>
-                  <th className="pb-3 font-medium text-slate-600">Criptografia</th>
+                  <th className="pb-2 sm:pb-3 font-medium text-slate-600">Provedor</th>
+                  <th className="pb-2 sm:pb-3 font-medium text-slate-600">Host</th>
+                  <th className="pb-2 sm:pb-3 font-medium text-slate-600">Porta</th>
+                  <th className="pb-2 sm:pb-3 font-medium text-slate-600 hidden sm:table-cell">Cripto</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 <tr>
-                  <td className="py-3 font-medium text-slate-800">Hostinger</td>
-                  <td className="py-3 text-slate-600">smtp.hostinger.com</td>
-                  <td className="py-3 text-slate-600">465</td>
-                  <td className="py-3 text-slate-600">SSL</td>
+                  <td className="py-2 sm:py-3 font-medium text-slate-800">Hostinger</td>
+                  <td className="py-2 sm:py-3 text-slate-600 text-[10px] sm:text-sm">smtp.hostinger.com</td>
+                  <td className="py-2 sm:py-3 text-slate-600">465</td>
+                  <td className="py-2 sm:py-3 text-slate-600 hidden sm:table-cell">SSL</td>
                 </tr>
                 <tr>
-                  <td className="py-3 font-medium text-slate-800">Gmail</td>
-                  <td className="py-3 text-slate-600">smtp.gmail.com</td>
-                  <td className="py-3 text-slate-600">587</td>
-                  <td className="py-3 text-slate-600">TLS</td>
+                  <td className="py-2 sm:py-3 font-medium text-slate-800">Gmail</td>
+                  <td className="py-2 sm:py-3 text-slate-600 text-[10px] sm:text-sm">smtp.gmail.com</td>
+                  <td className="py-2 sm:py-3 text-slate-600">587</td>
+                  <td className="py-2 sm:py-3 text-slate-600 hidden sm:table-cell">TLS</td>
                 </tr>
                 <tr>
-                  <td className="py-3 font-medium text-slate-800">Outlook/Office 365</td>
-                  <td className="py-3 text-slate-600">smtp.office365.com</td>
-                  <td className="py-3 text-slate-600">587</td>
-                  <td className="py-3 text-slate-600">TLS</td>
+                  <td className="py-2 sm:py-3 font-medium text-slate-800">Outlook</td>
+                  <td className="py-2 sm:py-3 text-slate-600 text-[10px] sm:text-sm">smtp.office365.com</td>
+                  <td className="py-2 sm:py-3 text-slate-600">587</td>
+                  <td className="py-2 sm:py-3 text-slate-600 hidden sm:table-cell">TLS</td>
                 </tr>
                 <tr>
-                  <td className="py-3 font-medium text-slate-800">SendGrid</td>
-                  <td className="py-3 text-slate-600">smtp.sendgrid.net</td>
-                  <td className="py-3 text-slate-600">587</td>
-                  <td className="py-3 text-slate-600">TLS</td>
+                  <td className="py-2 sm:py-3 font-medium text-slate-800">SendGrid</td>
+                  <td className="py-2 sm:py-3 text-slate-600 text-[10px] sm:text-sm">smtp.sendgrid.net</td>
+                  <td className="py-2 sm:py-3 text-slate-600">587</td>
+                  <td className="py-2 sm:py-3 text-slate-600 hidden sm:table-cell">TLS</td>
                 </tr>
               </tbody>
             </table>
@@ -1182,52 +1195,53 @@ export default function Integrations() {
         {/* Instagram Tab */}
         {activeTab === 'instagram' && (
           <div className="max-w-2xl">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
-              <div className="p-6 border-b border-slate-200">
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200">
+              <div className="p-4 sm:p-6 border-b border-slate-200">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 rounded-xl flex items-center justify-center">
-                      <span className="material-symbols-outlined text-2xl text-white">photo_camera</span>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 rounded-lg sm:rounded-xl flex items-center justify-center">
+                      <span className="material-symbols-outlined text-xl sm:text-2xl text-white">photo_camera</span>
                     </div>
                     <div>
-                      <h2 className="text-xl font-semibold text-slate-800">Instagram Direct</h2>
-                      <p className="text-sm text-slate-500">Receba mensagens do Instagram no seu Inbox</p>
+                      <h2 className="text-base sm:text-xl font-semibold text-slate-800">Instagram Direct</h2>
+                      <p className="text-[10px] sm:text-sm text-slate-500">Receba mensagens no Inbox</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowMetaHelpModal(true)}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                     title="Como funciona?"
                   >
-                    <span className="material-symbols-outlined">help</span>
+                    <span className="material-symbols-outlined text-lg sm:text-xl">help</span>
                   </button>
                 </div>
               </div>
 
-              <div className="p-6 space-y-6">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                 {metaConnection.instagram_enabled ? (
                   <>
-                    <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
-                      <span className="material-symbols-outlined text-green-600">check_circle</span>
+                    <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
+                      <span className="material-symbols-outlined text-green-600 text-lg sm:text-xl">check_circle</span>
                       <div>
-                        <p className="font-medium text-green-800">Instagram conectado</p>
-                        <p className="text-sm text-green-600">
+                        <p className="font-medium text-green-800 text-sm sm:text-base">Instagram conectado</p>
+                        <p className="text-xs sm:text-sm text-green-600">
                           {metaConnection.instagram_username ? `@${metaConnection.instagram_username}` : `ID: ${metaConnection.instagram_business_account_id}`}
                         </p>
                         {(metaConnection.instagram_connected_at || metaConnection.meta_connected_at) && (
-                          <p className="text-xs text-green-500 mt-1">
+                          <p className="text-[10px] sm:text-xs text-green-500 mt-1">
                             Conectado em {new Date(metaConnection.instagram_connected_at || metaConnection.meta_connected_at!).toLocaleDateString('pt-BR')}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-blue-600">info</span>
-                        <div className="text-sm text-blue-700">
+                    <div className="p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <span className="material-symbols-outlined text-blue-600 text-lg sm:text-xl">info</span>
+                        <div className="text-xs sm:text-sm text-blue-700">
                           <p className="font-medium mb-1">Pronto para receber mensagens!</p>
-                          <p>As mensagens do Instagram Direct aparecerão automaticamente no seu Inbox.</p>
+                          <p className="hidden sm:block">As mensagens do Instagram Direct aparecerão automaticamente no seu Inbox.</p>
+                          <p className="sm:hidden">Mensagens aparecerão no Inbox.</p>
                         </div>
                       </div>
                     </div>
@@ -1235,53 +1249,53 @@ export default function Integrations() {
                     <button
                       onClick={() => handleDisconnectMeta('instagram')}
                       disabled={disconnectingMeta}
-                      className="w-full px-4 py-3 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium flex items-center justify-center gap-2"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium flex items-center justify-center gap-2 text-xs sm:text-sm"
                     >
                       {disconnectingMeta ? (
                         <div className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
                       ) : (
-                        <span className="material-symbols-outlined text-[18px]">link_off</span>
+                        <span className="material-symbols-outlined text-[16px] sm:text-[18px]">link_off</span>
                       )}
-                      Desconectar Instagram
+                      Desconectar
                     </button>
                   </>
                 ) : (
                   <>
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-slate-500">info</span>
-                        <div className="text-sm text-slate-600">
+                    <div className="p-3 sm:p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <span className="material-symbols-outlined text-slate-500 text-lg sm:text-xl">info</span>
+                        <div className="text-xs sm:text-sm text-slate-600">
                           <p className="font-medium mb-1">Como funciona:</p>
-                          <ul className="list-disc list-inside space-y-1">
+                          <ul className="list-disc list-inside space-y-0.5 sm:space-y-1">
                             <li>Clique em "Conectar Instagram"</li>
-                            <li>Faça login na sua conta do Facebook</li>
-                            <li>Autorize o acesso à sua conta Instagram Business</li>
-                            <li>Pronto! As mensagens aparecerão no Inbox</li>
+                            <li>Faça login no Facebook</li>
+                            <li>Autorize o acesso</li>
+                            <li className="hidden sm:list-item">Pronto! As mensagens aparecerão no Inbox</li>
                           </ul>
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-amber-600">warning</span>
-                        <div className="text-sm text-amber-700">
+                    <div className="p-3 sm:p-4 bg-amber-50 rounded-lg border border-amber-200">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <span className="material-symbols-outlined text-amber-600 text-lg sm:text-xl">warning</span>
+                        <div className="text-xs sm:text-sm text-amber-700">
                           <p className="font-medium mb-1">Requisitos:</p>
-                          <ul className="list-disc list-inside space-y-1">
-                            <li>Conta Instagram Business ou Creator</li>
-                            <li>Instagram vinculado a uma Página do Facebook</li>
+                          <ul className="list-disc list-inside space-y-0.5 sm:space-y-1">
+                            <li>Conta Instagram Business</li>
+                            <li className="hidden sm:list-item">Instagram vinculado a uma Página do Facebook</li>
                           </ul>
                         </div>
                       </div>
                     </div>
 
                     {!metaAppId && (
-                      <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                        <div className="flex items-start gap-3">
-                          <span className="material-symbols-outlined text-red-600">error</span>
-                          <div className="text-sm text-red-700">
+                      <div className="p-3 sm:p-4 bg-red-50 rounded-lg border border-red-200">
+                        <div className="flex items-start gap-2 sm:gap-3">
+                          <span className="material-symbols-outlined text-red-600 text-lg sm:text-xl">error</span>
+                          <div className="text-xs sm:text-sm text-red-700">
                             <p className="font-medium">Integração não disponível</p>
-                            <p>Entre em contato com o suporte para habilitar esta integração.</p>
+                            <p className="hidden sm:block">Entre em contato com o suporte para habilitar esta integração.</p>
                           </div>
                         </div>
                       </div>
@@ -1290,25 +1304,25 @@ export default function Integrations() {
                     <button
                       onClick={() => handleConnectMeta('instagram')}
                       disabled={!metaAppId || connectingMeta}
-                      className="w-full px-4 py-3 text-white bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 rounded-lg hover:opacity-90 transition-opacity font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-white bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 rounded-lg hover:opacity-90 transition-opacity font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
                     >
                       {connectingMeta ? (
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                       ) : (
-                        <span className="material-symbols-outlined text-[18px]">link</span>
+                        <span className="material-symbols-outlined text-[16px] sm:text-[18px]">link</span>
                       )}
-                      Conectar Instagram
+                      Conectar
                     </button>
                   </>
                 )}
 
                 {testResult && (
-                  <div className={`p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`material-symbols-outlined ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                  <div className={`p-3 sm:p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <span className={`material-symbols-outlined text-lg sm:text-xl ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
                         {testResult.success ? 'check_circle' : 'error'}
                       </span>
-                      <span className={testResult.success ? 'text-green-800' : 'text-red-800'}>
+                      <span className={`text-xs sm:text-sm ${testResult.success ? 'text-green-800' : 'text-red-800'}`}>
                         {testResult.message}
                       </span>
                     </div>
@@ -1322,52 +1336,53 @@ export default function Integrations() {
         {/* Facebook Tab */}
         {activeTab === 'facebook' && (
           <div className="max-w-2xl">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
-              <div className="p-6 border-b border-slate-200">
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200">
+              <div className="p-4 sm:p-6 border-b border-slate-200">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
-                      <span className="material-symbols-outlined text-2xl text-white">thumb_up</span>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-lg sm:rounded-xl flex items-center justify-center">
+                      <span className="material-symbols-outlined text-xl sm:text-2xl text-white">thumb_up</span>
                     </div>
                     <div>
-                      <h2 className="text-xl font-semibold text-slate-800">Facebook Messenger</h2>
-                      <p className="text-sm text-slate-500">Receba mensagens do Messenger no seu Inbox</p>
+                      <h2 className="text-base sm:text-xl font-semibold text-slate-800">Facebook Messenger</h2>
+                      <p className="text-[10px] sm:text-sm text-slate-500">Receba mensagens no Inbox</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowMetaHelpModal(true)}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                     title="Como funciona?"
                   >
-                    <span className="material-symbols-outlined">help</span>
+                    <span className="material-symbols-outlined text-lg sm:text-xl">help</span>
                   </button>
                 </div>
               </div>
 
-              <div className="p-6 space-y-6">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                 {metaConnection.facebook_enabled ? (
                   <>
-                    <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
-                      <span className="material-symbols-outlined text-green-600">check_circle</span>
+                    <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
+                      <span className="material-symbols-outlined text-green-600 text-lg sm:text-xl">check_circle</span>
                       <div>
-                        <p className="font-medium text-green-800">Facebook conectado</p>
-                        <p className="text-sm text-green-600">
-                          Página: {metaConnection.facebook_page_name || metaConnection.facebook_page_id}
+                        <p className="font-medium text-green-800 text-sm sm:text-base">Facebook conectado</p>
+                        <p className="text-xs sm:text-sm text-green-600 truncate max-w-[200px] sm:max-w-none">
+                          {metaConnection.facebook_page_name || metaConnection.facebook_page_id}
                         </p>
                         {metaConnection.meta_connected_at && (
-                          <p className="text-xs text-green-500 mt-1">
+                          <p className="text-[10px] sm:text-xs text-green-500 mt-1">
                             Conectado em {new Date(metaConnection.meta_connected_at).toLocaleDateString('pt-BR')}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-blue-600">info</span>
-                        <div className="text-sm text-blue-700">
+                    <div className="p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <span className="material-symbols-outlined text-blue-600 text-lg sm:text-xl">info</span>
+                        <div className="text-xs sm:text-sm text-blue-700">
                           <p className="font-medium mb-1">Pronto para receber mensagens!</p>
-                          <p>As mensagens do Messenger aparecerão automaticamente no seu Inbox.</p>
+                          <p className="hidden sm:block">As mensagens do Messenger aparecerão automaticamente no seu Inbox.</p>
+                          <p className="sm:hidden">Mensagens aparecerão no Inbox.</p>
                         </div>
                       </div>
                     </div>
@@ -1375,53 +1390,52 @@ export default function Integrations() {
                     <button
                       onClick={() => handleDisconnectMeta('facebook')}
                       disabled={disconnectingMeta}
-                      className="w-full px-4 py-3 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium flex items-center justify-center gap-2"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium flex items-center justify-center gap-2 text-xs sm:text-sm"
                     >
                       {disconnectingMeta ? (
                         <div className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
                       ) : (
-                        <span className="material-symbols-outlined text-[18px]">link_off</span>
+                        <span className="material-symbols-outlined text-[16px] sm:text-[18px]">link_off</span>
                       )}
-                      Desconectar Facebook
+                      Desconectar
                     </button>
                   </>
                 ) : (
                   <>
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-slate-500">info</span>
-                        <div className="text-sm text-slate-600">
+                    <div className="p-3 sm:p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <span className="material-symbols-outlined text-slate-500 text-lg sm:text-xl">info</span>
+                        <div className="text-xs sm:text-sm text-slate-600">
                           <p className="font-medium mb-1">Como funciona:</p>
-                          <ul className="list-disc list-inside space-y-1">
+                          <ul className="list-disc list-inside space-y-0.5 sm:space-y-1">
                             <li>Clique em "Conectar Facebook"</li>
-                            <li>Faça login na sua conta do Facebook</li>
-                            <li>Selecione a Página que deseja conectar</li>
-                            <li>Pronto! As mensagens aparecerão no Inbox</li>
+                            <li>Faça login no Facebook</li>
+                            <li>Selecione a Página</li>
+                            <li className="hidden sm:list-item">Pronto! As mensagens aparecerão no Inbox</li>
                           </ul>
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-amber-600">warning</span>
-                        <div className="text-sm text-amber-700">
+                    <div className="p-3 sm:p-4 bg-amber-50 rounded-lg border border-amber-200">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <span className="material-symbols-outlined text-amber-600 text-lg sm:text-xl">warning</span>
+                        <div className="text-xs sm:text-sm text-amber-700">
                           <p className="font-medium mb-1">Requisitos:</p>
-                          <ul className="list-disc list-inside space-y-1">
-                            <li>Página do Facebook (não perfil pessoal)</li>
-                            <li>Ser administrador da Página</li>
+                          <ul className="list-disc list-inside space-y-0.5 sm:space-y-1">
+                            <li>Página do Facebook</li>
+                            <li>Ser administrador</li>
                           </ul>
                         </div>
                       </div>
                     </div>
 
                     {!metaAppId && (
-                      <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                        <div className="flex items-start gap-3">
-                          <span className="material-symbols-outlined text-red-600">error</span>
-                          <div className="text-sm text-red-700">
+                      <div className="p-3 sm:p-4 bg-red-50 rounded-lg border border-red-200">
+                        <div className="flex items-start gap-2 sm:gap-3">
+                          <span className="material-symbols-outlined text-red-600 text-lg sm:text-xl">error</span>
+                          <div className="text-xs sm:text-sm text-red-700">
                             <p className="font-medium">Integração não disponível</p>
-                            <p>Entre em contato com o suporte para habilitar esta integração.</p>
                           </div>
                         </div>
                       </div>
@@ -1430,25 +1444,25 @@ export default function Integrations() {
                     <button
                       onClick={() => handleConnectMeta('facebook')}
                       disabled={!metaAppId || connectingMeta}
-                      className="w-full px-4 py-3 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
                     >
                       {connectingMeta ? (
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                       ) : (
-                        <span className="material-symbols-outlined text-[18px]">link</span>
+                        <span className="material-symbols-outlined text-[16px] sm:text-[18px]">link</span>
                       )}
-                      Conectar Facebook
+                      Conectar
                     </button>
                   </>
                 )}
 
                 {testResult && (
-                  <div className={`p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`material-symbols-outlined ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                  <div className={`p-3 sm:p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <span className={`material-symbols-outlined text-lg sm:text-xl ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
                         {testResult.success ? 'check_circle' : 'error'}
                       </span>
-                      <span className={testResult.success ? 'text-green-800' : 'text-red-800'}>
+                      <span className={`text-xs sm:text-sm ${testResult.success ? 'text-green-800' : 'text-red-800'}`}>
                         {testResult.message}
                       </span>
                     </div>
@@ -1462,67 +1476,67 @@ export default function Integrations() {
         {/* Meta Ads Tab */}
         {activeTab === 'meta_ads' && (
           <div className="max-w-2xl">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
-              <div className="p-6 border-b border-slate-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="size-12 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-white text-2xl">ads_click</span>
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200">
+              <div className="p-4 sm:p-6 border-b border-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-pink-500 to-rose-600 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-white text-xl sm:text-2xl">ads_click</span>
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-slate-900">Meta Ads API</h2>
-                      <p className="text-sm text-slate-500">Gerencie múltiplas contas de anúncios</p>
+                      <h2 className="text-base sm:text-xl font-bold text-slate-900">Meta Ads API</h2>
+                      <p className="text-[10px] sm:text-sm text-slate-500">Gerencie contas de anúncios</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowAddAccountModal(true)}
-                    className="px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg hover:opacity-90 transition-opacity font-medium flex items-center gap-2"
+                    className="px-3 sm:px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg hover:opacity-90 transition-opacity font-medium flex items-center justify-center gap-2 text-xs sm:text-sm"
                   >
-                    <span className="material-symbols-outlined text-[18px]">add</span>
-                    Adicionar Conta
+                    <span className="material-symbols-outlined text-[16px] sm:text-[18px]">add</span>
+                    Adicionar
                   </button>
                 </div>
               </div>
 
-              <div className="p-6 space-y-6">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                 {/* Lista de contas configuradas */}
                 {metaAdsAccounts.length > 0 ? (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium text-slate-700">Contas Configuradas ({metaAdsAccounts.length})</h3>
+                  <div className="space-y-2 sm:space-y-3">
+                    <h3 className="text-xs sm:text-sm font-medium text-slate-700">Contas ({metaAdsAccounts.length})</h3>
                     {metaAdsAccounts.map((account) => (
-                      <div key={account.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`size-10 rounded-lg flex items-center justify-center ${account.has_token ? 'bg-green-100' : 'bg-amber-100'}`}>
-                            <span className={`material-symbols-outlined ${account.has_token ? 'text-green-600' : 'text-amber-600'}`}>
+                      <div key={account.id} className="p-3 sm:p-4 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center ${account.has_token ? 'bg-green-100' : 'bg-amber-100'}`}>
+                            <span className={`material-symbols-outlined text-lg sm:text-xl ${account.has_token ? 'text-green-600' : 'text-amber-600'}`}>
                               {account.has_token ? 'check_circle' : 'warning'}
                             </span>
                           </div>
                           <div>
-                            <p className="font-medium text-slate-900">{account.account_name}</p>
-                            <p className="text-xs text-slate-500">ID: ***{account.account_id.slice(-6)}</p>
+                            <p className="font-medium text-slate-900 text-xs sm:text-sm truncate max-w-[120px] sm:max-w-none">{account.account_name}</p>
+                            <p className="text-[10px] sm:text-xs text-slate-500">***{account.account_id.slice(-6)}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 sm:gap-2">
                           {!account.has_token && (
-                            <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">Sem token</span>
+                            <span className="text-[9px] sm:text-xs text-amber-600 bg-amber-50 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded hidden sm:inline">Sem token</span>
                           )}
                           <button
                             onClick={() => handleEditMetaAccount(account)}
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                            className="p-1.5 sm:p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Editar token"
                           >
-                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                            <span className="material-symbols-outlined text-[16px] sm:text-[18px]">edit</span>
                           </button>
                           <button
                             onClick={() => handleDeleteMetaAccount(account.id)}
                             disabled={deletingAccountId === account.id}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                            className="p-1.5 sm:p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                             title="Remover conta"
                           >
                             {deletingAccountId === account.id ? (
                               <div className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
                             ) : (
-                              <span className="material-symbols-outlined text-[18px]">delete</span>
+                              <span className="material-symbols-outlined text-[16px] sm:text-[18px]">delete</span>
                             )}
                           </button>
                         </div>
@@ -1530,52 +1544,52 @@ export default function Integrations() {
                     ))}
                   </div>
                 ) : (
-                  <div className="p-8 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                    <span className="material-symbols-outlined text-4xl text-slate-400 mb-2">ads_click</span>
-                    <p className="text-slate-600 font-medium">Nenhuma conta configurada</p>
-                    <p className="text-sm text-slate-500 mt-1">Clique em "Adicionar Conta" para começar</p>
+                  <div className="p-6 sm:p-8 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                    <span className="material-symbols-outlined text-3xl sm:text-4xl text-slate-400 mb-2">ads_click</span>
+                    <p className="text-slate-600 font-medium text-sm">Nenhuma conta</p>
+                    <p className="text-xs text-slate-500 mt-1">Adicione uma conta</p>
                   </div>
                 )}
 
-                <div className="p-4 bg-pink-50 rounded-lg border border-pink-200">
-                  <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-pink-600 mt-0.5">info</span>
-                    <div className="text-sm text-pink-700">
+                <div className="p-3 sm:p-4 bg-pink-50 rounded-lg border border-pink-200">
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <span className="material-symbols-outlined text-pink-600 mt-0.5 text-lg sm:text-xl">info</span>
+                    <div className="text-xs sm:text-sm text-pink-700">
                       <p className="font-medium mb-1">O que você pode fazer:</p>
-                      <ul className="list-disc list-inside space-y-1">
-                        <li>Ver dados detalhados das campanhas no Dashboard</li>
-                        <li>Identificar qual anúncio trouxe cada lead</li>
-                        <li>Analisar performance por campanha</li>
-                        <li>Gerenciar múltiplas contas de anúncios</li>
+                      <ul className="list-disc list-inside space-y-0.5 sm:space-y-1">
+                        <li>Ver dados das campanhas</li>
+                        <li>Identificar origem dos leads</li>
+                        <li className="hidden sm:list-item">Analisar performance por campanha</li>
+                        <li className="hidden sm:list-item">Gerenciar múltiplas contas</li>
                       </ul>
                     </div>
                   </div>
                 </div>
 
                 {/* Guia passo a passo */}
-                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="p-3 sm:p-4 bg-slate-50 rounded-lg border border-slate-200">
                   <button 
                     onClick={() => setShowMetaAdsHelpModal(true)}
                     className="w-full flex items-center justify-between text-left"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-slate-600">help</span>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <span className="material-symbols-outlined text-slate-600 text-lg sm:text-xl">help</span>
                       <div>
-                        <p className="font-medium text-slate-800">Como conectar o Meta Ads?</p>
-                        <p className="text-xs text-slate-500">Clique para ver o passo a passo completo</p>
+                        <p className="font-medium text-slate-800 text-xs sm:text-sm">Como conectar?</p>
+                        <p className="text-[10px] sm:text-xs text-slate-500">Ver passo a passo</p>
                       </div>
                     </div>
-                    <span className="material-symbols-outlined text-slate-400">chevron_right</span>
+                    <span className="material-symbols-outlined text-slate-400 text-lg sm:text-xl">chevron_right</span>
                   </button>
                 </div>
 
                 {testResult && (
-                  <div className={`p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`material-symbols-outlined ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                  <div className={`p-3 sm:p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <span className={`material-symbols-outlined text-lg sm:text-xl ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
                         {testResult.success ? 'check_circle' : 'error'}
                       </span>
-                      <span className={testResult.success ? 'text-green-800' : 'text-red-800'}>
+                      <span className={`text-xs sm:text-sm ${testResult.success ? 'text-green-800' : 'text-red-800'}`}>
                         {testResult.message}
                       </span>
                     </div>
@@ -1953,45 +1967,46 @@ export default function Integrations() {
       {/* WhatsApp Cloud API Tab */}
       {activeTab === 'whatsapp' && (
         <div className="max-w-2xl">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
-            <div className="p-6 border-b border-slate-200">
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200">
+            <div className="p-4 sm:p-6 border-b border-slate-200">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                    <span className="material-symbols-outlined text-2xl text-emerald-600">chat</span>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-100 rounded-lg sm:rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-xl sm:text-2xl text-emerald-600">chat</span>
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-slate-800">WhatsApp Cloud API</h2>
-                    <p className="text-sm text-slate-500">API Oficial do Meta para WhatsApp Business</p>
+                    <h2 className="text-base sm:text-xl font-semibold text-slate-800">WhatsApp Cloud API</h2>
+                    <p className="text-[10px] sm:text-sm text-slate-500">API Oficial do Meta</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               {whatsappCloudConfig?.cloud_api_enabled && whatsappCloudConfig?.cloud_api_phone_number_id ? (
                 <>
-                  <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200">
-                    <span className="material-symbols-outlined text-green-600">check_circle</span>
+                  <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
+                    <span className="material-symbols-outlined text-green-600 text-lg sm:text-xl">check_circle</span>
                     <div>
-                      <p className="font-medium text-green-800">WhatsApp conectado</p>
-                      <p className="text-sm text-green-600">
+                      <p className="font-medium text-green-800 text-sm sm:text-base">WhatsApp conectado</p>
+                      <p className="text-xs sm:text-sm text-green-600 truncate max-w-[180px] sm:max-w-none">
                         {whatsappCloudConfig.cloud_api_phone_number || `ID: ${whatsappCloudConfig.cloud_api_phone_number_id}`}
                       </p>
                       {whatsappCloudConfig.cloud_api_connected_at && (
-                        <p className="text-xs text-green-500 mt-1">
+                        <p className="text-[10px] sm:text-xs text-green-500 mt-1">
                           Conectado em {new Date(whatsappCloudConfig.cloud_api_connected_at).toLocaleDateString('pt-BR')}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-blue-600">info</span>
-                      <div className="text-sm text-blue-700">
+                  <div className="p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <span className="material-symbols-outlined text-blue-600 text-lg sm:text-xl">info</span>
+                      <div className="text-xs sm:text-sm text-blue-700">
                         <p className="font-medium mb-1">Pronto para usar!</p>
-                        <p>Você pode enviar e receber mensagens via API Oficial do WhatsApp.</p>
+                        <p className="hidden sm:block">Você pode enviar e receber mensagens via API Oficial do WhatsApp.</p>
+                        <p className="sm:hidden">Envie e receba mensagens.</p>
                       </div>
                     </div>
                   </div>
@@ -1999,103 +2014,103 @@ export default function Integrations() {
                   <button
                     onClick={handleDisconnectWhatsApp}
                     disabled={connectingWhatsApp}
-                    className="w-full px-4 py-3 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium flex items-center justify-center gap-2"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium flex items-center justify-center gap-2 text-xs sm:text-sm"
                   >
                     {connectingWhatsApp ? (
                       <div className="w-4 h-4 border-2 border-red-300 border-t-red-600 rounded-full animate-spin"></div>
                     ) : (
-                      <span className="material-symbols-outlined text-[18px]">link_off</span>
+                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]">link_off</span>
                     )}
-                    Desconectar WhatsApp
+                    Desconectar
                   </button>
                 </>
               ) : (
                 <>
                   {/* Seletor de modo de conexão */}
-                  <div className="p-4 bg-white rounded-lg border border-slate-200">
-                    <p className="font-medium text-slate-700 mb-3">Escolha o modo de conexão:</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-3 sm:p-4 bg-white rounded-lg border border-slate-200">
+                    <p className="font-medium text-slate-700 mb-2 sm:mb-3 text-xs sm:text-sm">Modo de conexão:</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                       <button
                         onClick={() => setConnectionMode('new')}
-                        className={`p-4 rounded-lg border-2 text-left transition-all ${
+                        className={`p-3 sm:p-4 rounded-lg border-2 text-left transition-all ${
                           connectionMode === 'new'
                             ? 'border-emerald-500 bg-emerald-50'
                             : 'border-slate-200 hover:border-slate-300'
                         }`}
                       >
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`material-symbols-outlined ${connectionMode === 'new' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                          <span className={`material-symbols-outlined text-lg sm:text-xl ${connectionMode === 'new' ? 'text-emerald-600' : 'text-slate-400'}`}>
                             add_circle
                           </span>
-                          <span className="font-medium text-slate-800">Número Novo</span>
+                          <span className="font-medium text-slate-800 text-xs sm:text-sm">Número Novo</span>
                         </div>
-                        <p className="text-xs text-slate-500">
-                          Cadastrar um número que NÃO está no WhatsApp Business App
+                        <p className="text-[10px] sm:text-xs text-slate-500">
+                          Número NÃO está no WhatsApp Business App
                         </p>
                       </button>
                       
                       <button
                         onClick={() => setConnectionMode('coexistence')}
-                        className={`p-4 rounded-lg border-2 text-left transition-all ${
+                        className={`p-3 sm:p-4 rounded-lg border-2 text-left transition-all ${
                           connectionMode === 'coexistence'
                             ? 'border-emerald-500 bg-emerald-50'
                             : 'border-slate-200 hover:border-slate-300'
                         }`}
                       >
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`material-symbols-outlined ${connectionMode === 'coexistence' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                          <span className={`material-symbols-outlined text-lg sm:text-xl ${connectionMode === 'coexistence' ? 'text-emerald-600' : 'text-slate-400'}`}>
                             sync
                           </span>
-                          <span className="font-medium text-slate-800">Coexistência</span>
+                          <span className="font-medium text-slate-800 text-xs sm:text-sm">Coexistência</span>
                         </div>
-                        <p className="text-xs text-slate-500">
-                          Manter WhatsApp Business App + usar Cloud API (espelhamento)
+                        <p className="text-[10px] sm:text-xs text-slate-500">
+                          Manter App + Cloud API
                         </p>
                       </button>
                     </div>
                   </div>
 
                   {connectionMode === 'coexistence' ? (
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-blue-600">info</span>
-                        <div className="text-sm text-blue-700">
+                    <div className="p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <span className="material-symbols-outlined text-blue-600 text-lg sm:text-xl">info</span>
+                        <div className="text-xs sm:text-sm text-blue-700">
                           <p className="font-medium mb-1">Modo Coexistência:</p>
-                          <ul className="list-disc list-inside space-y-1">
-                            <li>Continue usando o WhatsApp Business App no celular</li>
-                            <li>Mensagens são espelhadas entre app e painel</li>
-                            <li>Histórico dos últimos 6 meses pode ser sincronizado</li>
-                            <li>Requer WhatsApp Business App 2.24.17+</li>
+                          <ul className="list-disc list-inside space-y-0.5 sm:space-y-1">
+                            <li>Continue usando o App no celular</li>
+                            <li>Mensagens espelhadas</li>
+                            <li className="hidden sm:list-item">Histórico dos últimos 6 meses pode ser sincronizado</li>
+                            <li className="hidden sm:list-item">Requer WhatsApp Business App 2.24.17+</li>
                           </ul>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-slate-500">info</span>
-                        <div className="text-sm text-slate-600">
+                    <div className="p-3 sm:p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <span className="material-symbols-outlined text-slate-500 text-lg sm:text-xl">info</span>
+                        <div className="text-xs sm:text-sm text-slate-600">
                           <p className="font-medium mb-1">Número Novo:</p>
-                          <ul className="list-disc list-inside space-y-1">
-                            <li>Use um número que NÃO está registrado no WhatsApp</li>
-                            <li>O número será usado exclusivamente pela Cloud API</li>
-                            <li>Não poderá usar o WhatsApp App com esse número</li>
+                          <ul className="list-disc list-inside space-y-0.5 sm:space-y-1">
+                            <li>Número NÃO registrado no WhatsApp</li>
+                            <li>Uso exclusivo pela Cloud API</li>
+                            <li className="hidden sm:list-item">Não poderá usar o WhatsApp App com esse número</li>
                           </ul>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
-                    <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-amber-600">warning</span>
-                      <div className="text-sm text-amber-700">
+                  <div className="p-3 sm:p-4 bg-amber-50 rounded-lg border border-amber-200">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <span className="material-symbols-outlined text-amber-600 text-lg sm:text-xl">warning</span>
+                      <div className="text-xs sm:text-sm text-amber-700">
                         <p className="font-medium mb-1">Requisitos:</p>
-                        <ul className="list-disc list-inside space-y-1">
-                          <li>Conta WhatsApp Business (não pessoal)</li>
-                          <li>Acesso ao Meta Business Manager</li>
+                        <ul className="list-disc list-inside space-y-0.5 sm:space-y-1">
+                          <li>Conta WhatsApp Business</li>
+                          <li>Meta Business Manager</li>
                           {connectionMode === 'coexistence' && (
-                            <li>WhatsApp Business App versão 2.24.17 ou superior</li>
+                            <li className="hidden sm:list-item">WhatsApp Business App 2.24.17+</li>
                           )}
                         </ul>
                       </div>
@@ -2103,12 +2118,11 @@ export default function Integrations() {
                   </div>
 
                   {!metaAppId && (
-                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-red-600">error</span>
-                        <div className="text-sm text-red-700">
+                    <div className="p-3 sm:p-4 bg-red-50 rounded-lg border border-red-200">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <span className="material-symbols-outlined text-red-600 text-lg sm:text-xl">error</span>
+                        <div className="text-xs sm:text-sm text-red-700">
                           <p className="font-medium">Integração não disponível</p>
-                          <p>Entre em contato com o suporte para habilitar esta integração.</p>
                         </div>
                       </div>
                     </div>
@@ -2117,25 +2131,25 @@ export default function Integrations() {
                   <button
                     onClick={handleConnectWhatsApp}
                     disabled={!metaAppId || connectingWhatsApp}
-                    className="w-full px-4 py-3 text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
                   >
                     {connectingWhatsApp ? (
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                     ) : (
-                      <span className="material-symbols-outlined text-[18px]">link</span>
+                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]">link</span>
                     )}
-                    {connectionMode === 'coexistence' ? 'Conectar com Coexistência' : 'Conectar WhatsApp'}
+                    {connectionMode === 'coexistence' ? 'Conectar' : 'Conectar'}
                   </button>
                 </>
               )}
 
               {testResult && (
-                <div className={`p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`material-symbols-outlined ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                <div className={`p-3 sm:p-4 rounded-lg ${testResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <span className={`material-symbols-outlined text-lg sm:text-xl ${testResult.success ? 'text-green-600' : 'text-red-600'}`}>
                       {testResult.success ? 'check_circle' : 'error'}
                     </span>
-                    <p className={testResult.success ? 'text-green-700' : 'text-red-700'}>{testResult.message}</p>
+                    <p className={`text-xs sm:text-sm ${testResult.success ? 'text-green-700' : 'text-red-700'}`}>{testResult.message}</p>
                   </div>
                 </div>
               )}

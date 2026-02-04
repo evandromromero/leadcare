@@ -79,6 +79,9 @@ export default function LinkConversations() {
   const [historyModal, setHistoryModal] = useState<{ open: boolean; chatId: string | null; clientName: string }>({ open: false, chatId: null, clientName: '' });
   const [historyData, setHistoryData] = useState<ClickInteraction[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  
+  // Estado para cards expansíveis no mobile
+  const [expandedConvId, setExpandedConvId] = useState<string | null>(null);
 
   useEffect(() => {
     if (linkId && clinicId) {
@@ -514,104 +517,104 @@ export default function LinkConversations() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-3 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-4 sm:mb-6">
+        <div className="flex items-center gap-2 sm:gap-4">
           <button 
             onClick={() => navigate(`/link/${linkId}`)} 
-            className="text-slate-500 hover:text-slate-700 transition-colors"
+            className="text-slate-500 hover:text-slate-700 transition-colors text-sm"
           >
             ← Voltar
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Conversas do Link</h1>
-            {link && <p className="text-sm text-slate-500">{link.name} • belitx.com.br/w/{link.code}</p>}
+            <h1 className="text-lg sm:text-2xl font-bold text-slate-800">Conversas do Link</h1>
+            {link && <p className="text-[10px] sm:text-sm text-slate-500 truncate max-w-[200px] sm:max-w-none">{link.name} • {link.code}</p>}
           </div>
         </div>
       </div>
 
       {/* Cards de Resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-4 mb-4 sm:mb-6">
         <div 
           onClick={() => setOriginFilter('all')}
-          className={`bg-white rounded-xl border p-4 cursor-pointer transition-all ${originFilter === 'all' ? 'border-cyan-500 ring-2 ring-cyan-100' : 'border-slate-200 hover:border-slate-300'}`}
+          className={`bg-white rounded-lg sm:rounded-xl border p-2 sm:p-4 cursor-pointer transition-all ${originFilter === 'all' ? 'border-cyan-500 ring-2 ring-cyan-100' : 'border-slate-200 hover:border-slate-300'}`}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <span className="material-symbols-outlined text-slate-500">chat</span>
-            <span className="text-xs text-slate-500 font-medium">Total</span>
+          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+            <span className="material-symbols-outlined text-slate-500 text-sm sm:text-base">chat</span>
+            <span className="text-[9px] sm:text-xs text-slate-500 font-medium">Total</span>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
+          <p className="text-lg sm:text-2xl font-bold text-slate-900">{stats.total}</p>
         </div>
         
         <div 
           onClick={() => setOriginFilter('meta')}
-          className={`bg-white rounded-xl border p-4 cursor-pointer transition-all ${originFilter === 'meta' ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'}`}
+          className={`bg-white rounded-lg sm:rounded-xl border p-2 sm:p-4 cursor-pointer transition-all ${originFilter === 'meta' ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200 hover:border-slate-300'}`}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
-              <span className="text-blue-600 font-bold text-xs">M</span>
+          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+            <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-100 rounded flex items-center justify-center">
+              <span className="text-blue-600 font-bold text-[9px] sm:text-xs">M</span>
             </div>
-            <span className="text-xs text-slate-500 font-medium">Meta Ads</span>
+            <span className="text-[9px] sm:text-xs text-slate-500 font-medium hidden sm:inline">Meta Ads</span>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{stats.metaAds}</p>
+          <p className="text-lg sm:text-2xl font-bold text-slate-900">{stats.metaAds}</p>
         </div>
         
         <div 
           onClick={() => setOriginFilter('google')}
-          className={`bg-white rounded-xl border p-4 cursor-pointer transition-all ${originFilter === 'google' ? 'border-amber-500 ring-2 ring-amber-100' : 'border-slate-200 hover:border-slate-300'}`}
+          className={`bg-white rounded-lg sm:rounded-xl border p-2 sm:p-4 cursor-pointer transition-all ${originFilter === 'google' ? 'border-amber-500 ring-2 ring-amber-100' : 'border-slate-200 hover:border-slate-300'}`}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 bg-amber-100 rounded flex items-center justify-center">
-              <span className="text-amber-600 font-bold text-xs">G</span>
+          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+            <div className="w-5 h-5 sm:w-6 sm:h-6 bg-amber-100 rounded flex items-center justify-center">
+              <span className="text-amber-600 font-bold text-[9px] sm:text-xs">G</span>
             </div>
-            <span className="text-xs text-slate-500 font-medium">Google Ads</span>
+            <span className="text-[9px] sm:text-xs text-slate-500 font-medium hidden sm:inline">Google</span>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{stats.googleAds}</p>
+          <p className="text-lg sm:text-2xl font-bold text-slate-900">{stats.googleAds}</p>
         </div>
         
         <div 
           onClick={() => setOriginFilter('outras')}
-          className={`bg-white rounded-xl border p-4 cursor-pointer transition-all ${originFilter === 'outras' ? 'border-green-500 ring-2 ring-green-100' : 'border-slate-200 hover:border-slate-300'}`}
+          className={`bg-white rounded-lg sm:rounded-xl border p-2 sm:p-4 cursor-pointer transition-all ${originFilter === 'outras' ? 'border-green-500 ring-2 ring-green-100' : 'border-slate-200 hover:border-slate-300'}`}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
-              <span className="material-symbols-outlined text-green-600 text-sm">language</span>
+          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+            <div className="w-5 h-5 sm:w-6 sm:h-6 bg-green-100 rounded flex items-center justify-center">
+              <span className="material-symbols-outlined text-green-600 text-[10px] sm:text-sm">language</span>
             </div>
-            <span className="text-xs text-slate-500 font-medium">Outras Origens</span>
+            <span className="text-[9px] sm:text-xs text-slate-500 font-medium hidden sm:inline">Outras</span>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{stats.outras}</p>
+          <p className="text-lg sm:text-2xl font-bold text-slate-900">{stats.outras}</p>
         </div>
         
         <div 
           onClick={() => setOriginFilter('nao_rastreada')}
-          className={`bg-white rounded-xl border p-4 cursor-pointer transition-all ${originFilter === 'nao_rastreada' ? 'border-orange-500 ring-2 ring-orange-100' : 'border-slate-200 hover:border-slate-300'}`}
+          className={`bg-white rounded-lg sm:rounded-xl border p-2 sm:p-4 cursor-pointer transition-all ${originFilter === 'nao_rastreada' ? 'border-orange-500 ring-2 ring-orange-100' : 'border-slate-200 hover:border-slate-300'}`}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 bg-orange-100 rounded flex items-center justify-center">
-              <span className="material-symbols-outlined text-orange-600 text-sm">help</span>
+          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+            <div className="w-5 h-5 sm:w-6 sm:h-6 bg-orange-100 rounded flex items-center justify-center">
+              <span className="material-symbols-outlined text-orange-600 text-[10px] sm:text-sm">help</span>
             </div>
-            <span className="text-xs text-slate-500 font-medium">Não Rastreada</span>
+            <span className="text-[9px] sm:text-xs text-slate-500 font-medium hidden sm:inline">N/R</span>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{stats.naoRastreada}</p>
+          <p className="text-lg sm:text-2xl font-bold text-slate-900">{stats.naoRastreada}</p>
         </div>
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
-        <div className="flex flex-wrap items-center gap-4">
+      <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 p-2 sm:p-4 mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-4">
           {/* Filtro de Data */}
-          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 overflow-x-auto">
             {[
               { value: 'today', label: 'Hoje' },
-              { value: '7d', label: '7 dias' },
-              { value: '15d', label: '15 dias' },
-              { value: '30d', label: '30 dias' },
+              { value: '7d', label: '7d' },
+              { value: '15d', label: '15d' },
+              { value: '30d', label: '30d' },
             ].map((period) => (
               <button
                 key={period.value}
                 onClick={() => { setDateFilter(period.value as 'today' | '7d' | '15d' | '30d'); setCurrentPage(1); }}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${
                   dateFilter === period.value
                     ? 'bg-cyan-500 text-white shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'
@@ -623,14 +626,14 @@ export default function LinkConversations() {
           </div>
 
           {/* Busca */}
-          <div className="relative flex-1 min-w-[200px]">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+          <div className="relative flex-1 min-w-0 sm:min-w-[200px]">
+            <span className="material-symbols-outlined absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base sm:text-lg">search</span>
             <input
               type="text"
               placeholder="Nome ou telefone"
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+              className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-sm"
             />
           </div>
           
@@ -638,25 +641,131 @@ export default function LinkConversations() {
           {(searchTerm || originFilter !== 'all') && (
             <button
               onClick={() => { setSearchTerm(''); setOriginFilter('all'); setCurrentPage(1); }}
-              className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 flex items-center gap-1"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-slate-600 hover:text-slate-800 flex items-center justify-center gap-1"
             >
               <span className="material-symbols-outlined text-sm">close</span>
-              Limpar Filtros
+              Limpar
             </button>
           )}
         </div>
       </div>
 
       {/* Tabela */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 overflow-hidden">
         {filteredConversations.length === 0 ? (
-          <div className="p-12 text-center">
-            <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">chat_bubble_outline</span>
-            <p className="text-slate-500">Nenhuma conversa encontrada com o filtro selecionado.</p>
+          <div className="p-8 sm:p-12 text-center">
+            <span className="material-symbols-outlined text-3xl sm:text-4xl text-slate-300 mb-2">chat_bubble_outline</span>
+            <p className="text-slate-500 text-sm">Nenhuma conversa encontrada.</p>
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Versão Mobile - Cards Expansíveis */}
+            <div className="sm:hidden p-2 space-y-2">
+              {paginatedConversations.map((conv) => {
+                const isExpanded = expandedConvId === conv.id;
+                return (
+                  <div 
+                    key={conv.id}
+                    className={`bg-slate-50 rounded-xl border transition-all ${isExpanded ? 'border-cyan-300 bg-white shadow-sm' : 'border-slate-200'}`}
+                  >
+                    {/* Header do Card */}
+                    <div 
+                      className="flex items-center justify-between p-3 cursor-pointer"
+                      onClick={() => setExpandedConvId(isExpanded ? null : conv.id)}
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-slate-800 text-xs truncate">{conv.client_name || 'Sem nome'}</p>
+                          <p className="text-[10px] text-slate-400 truncate">{conv.phone_number}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {getOriginBadge(conv)}
+                        <span className="material-symbols-outlined text-slate-400 text-[16px]">
+                          {isExpanded ? 'expand_less' : 'expand_more'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Conteúdo Expandido */}
+                    {isExpanded && (
+                      <div className="px-3 pb-3 pt-1 border-t border-slate-100">
+                        {/* Info Grid */}
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <div className="bg-slate-100 rounded-lg p-2">
+                            <p className="text-[8px] text-slate-500 uppercase">Etapa</p>
+                            <div className="mt-0.5">{getStatusBadge(conv.status)}</div>
+                          </div>
+                          <div className="bg-slate-100 rounded-lg p-2">
+                            <p className="text-[8px] text-slate-500 uppercase">Tempo Resp.</p>
+                            {conv.response_time_seconds !== null ? (
+                              <p className={`text-sm font-bold ${conv.response_time_seconds <= 300 ? 'text-green-600' : conv.response_time_seconds <= 1800 ? 'text-amber-600' : 'text-red-600'}`}>
+                                {formatResponseTime(conv.response_time_seconds)}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-slate-400">-</p>
+                            )}
+                          </div>
+                          <div className="bg-slate-100 rounded-lg p-2">
+                            <p className="text-[8px] text-slate-500 uppercase">Respondido por</p>
+                            <p className="text-xs font-medium text-slate-700 truncate">
+                              {conv.responded_by_name || <span className="text-amber-600">Aguardando...</span>}
+                            </p>
+                          </div>
+                          <div className="bg-slate-100 rounded-lg p-2">
+                            <p className="text-[8px] text-slate-500 uppercase">Cliques</p>
+                            <p className="text-sm font-bold text-slate-700">
+                              {conv.click_count}
+                              {conv.click_count > 1 && <span className="ml-1 text-cyan-500">🔄</span>}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Datas */}
+                        <div className="flex justify-between text-[10px] text-slate-500 mb-3">
+                          <div>
+                            <span className="font-medium">1º Clique:</span>{' '}
+                            {conv.first_click_at ? new Date(conv.first_click_at).toLocaleDateString('pt-BR') : '-'}
+                          </div>
+                          <div>
+                            <span className="font-medium">Último:</span>{' '}
+                            {conv.last_click_at ? new Date(conv.last_click_at).toLocaleDateString('pt-BR') : '-'}
+                          </div>
+                        </div>
+                        
+                        {/* Ações */}
+                        <div className="flex gap-2 pt-2 border-t border-slate-100">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`/inbox?chat=${conv.id}`); }}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-green-100 text-green-600 rounded-lg text-xs font-medium"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                            </svg>
+                            Chat
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); fetchContactHistory(conv.id, conv.client_name); }}
+                            className="px-2 py-1.5 bg-cyan-100 text-cyan-600 rounded-lg"
+                          >
+                            <span className="material-symbols-outlined text-sm">history</span>
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`/lead/${conv.id}`); }}
+                            className="px-2 py-1.5 bg-indigo-100 text-indigo-600 rounded-lg"
+                          >
+                            <span className="material-symbols-outlined text-sm">visibility</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Versão Desktop - Tabela */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
@@ -756,15 +865,15 @@ export default function LinkConversations() {
 
             {/* Paginação */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
-                <p className="text-sm text-slate-500">
-                  Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredConversations.length)} de {filteredConversations.length}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-3 sm:px-4 py-2 sm:py-3 border-t border-slate-200">
+                <p className="text-xs sm:text-sm text-slate-500">
+                  {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, filteredConversations.length)} de {filteredConversations.length}
                 </p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
                       currentPage === 1
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -772,13 +881,13 @@ export default function LinkConversations() {
                   >
                     Anterior
                   </button>
-                  <span className="text-sm text-slate-600">
-                    Página {currentPage} de {totalPages}
+                  <span className="text-xs sm:text-sm text-slate-600">
+                    {currentPage}/{totalPages}
                   </span>
                   <button
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                     disabled={currentPage >= totalPages}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
                       currentPage >= totalPages
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -795,96 +904,96 @@ export default function LinkConversations() {
 
       {/* Modal de Histórico de Contatos */}
       {historyModal.open && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl max-w-2xl w-full max-h-[85vh] sm:max-h-[80vh] overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-slate-200">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Histórico de Contatos</h3>
-                <p className="text-sm text-slate-500">{historyModal.clientName}</p>
+                <h3 className="text-sm sm:text-lg font-semibold text-slate-900">Histórico de Contatos</h3>
+                <p className="text-xs sm:text-sm text-slate-500 truncate max-w-[200px] sm:max-w-none">{historyModal.clientName}</p>
               </div>
               <button
                 onClick={() => setHistoryModal({ open: false, chatId: null, clientName: '' })}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                className="p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <span className="material-symbols-outlined">close</span>
+                <span className="material-symbols-outlined text-lg sm:text-xl">close</span>
               </button>
             </div>
             
             {/* Content */}
-            <div className="p-4 overflow-y-auto max-h-[60vh]">
+            <div className="p-2 sm:p-4 overflow-y-auto max-h-[70vh] sm:max-h-[60vh]">
               {loadingHistory ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
+                <div className="flex items-center justify-center py-8 sm:py-12">
+                  <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-cyan-500"></div>
                 </div>
               ) : historyData.length === 0 ? (
-                <div className="text-center py-12">
-                  <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">history</span>
-                  <p className="text-slate-500">Nenhum clique registrado para este contato.</p>
+                <div className="text-center py-8 sm:py-12">
+                  <span className="material-symbols-outlined text-3xl sm:text-4xl text-slate-300 mb-2">history</span>
+                  <p className="text-slate-500 text-xs sm:text-sm">Nenhum clique registrado.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-2 sm:space-y-4">
                   {historyData.map((click, index) => (
                     <div 
                       key={click.id} 
-                      className={`border rounded-xl p-4 ${index === 0 ? 'border-cyan-300 bg-cyan-50/50' : 'border-slate-200'}`}
+                      className={`border rounded-lg sm:rounded-xl p-2.5 sm:p-4 ${index === 0 ? 'border-cyan-300 bg-cyan-50/50' : 'border-slate-200'}`}
                     >
                       {/* Header do clique */}
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${index === 0 ? 'bg-cyan-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                      <div className="flex items-center justify-between mb-2 sm:mb-3">
+                        <div className="flex items-center gap-1.5 sm:gap-2">
+                          <span className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold ${index === 0 ? 'bg-cyan-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
                             {historyData.length - index}
                           </span>
-                          <span className="font-medium text-slate-900">
-                            {index === 0 ? 'Último Contato' : `Contato #${historyData.length - index}`}
+                          <span className="font-medium text-slate-900 text-xs sm:text-sm">
+                            {index === 0 ? 'Último' : `#${historyData.length - index}`}
                           </span>
                           {index === 0 && (
-                            <span className="px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded text-xs font-medium">Mais recente</span>
+                            <span className="px-1.5 py-0.5 bg-cyan-100 text-cyan-700 rounded text-[9px] sm:text-xs font-medium hidden sm:inline">Mais recente</span>
                           )}
                         </div>
                         {getSourceBadge(click.utm_source)}
                       </div>
                       
                       {/* Dados do clique */}
-                      <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs sm:text-sm">
                         <div>
-                          <p className="text-slate-500 text-xs mb-0.5">Data do Clique</p>
-                          <p className="font-medium text-slate-900">
-                            {new Date(click.clicked_at).toLocaleDateString('pt-BR')} às {new Date(click.clicked_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          <p className="text-slate-500 text-[9px] sm:text-xs mb-0.5">Data</p>
+                          <p className="font-medium text-slate-900 text-[10px] sm:text-sm">
+                            {new Date(click.clicked_at).toLocaleDateString('pt-BR')} {new Date(click.clicked_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
                         <div>
-                          <p className="text-slate-500 text-xs mb-0.5">Tempo de Resposta</p>
-                          <p className={`font-medium ${click.response_time_seconds !== null ? (click.response_time_seconds <= 300 ? 'text-green-600' : click.response_time_seconds <= 1800 ? 'text-amber-600' : 'text-red-600') : 'text-slate-400'}`}>
+                          <p className="text-slate-500 text-[9px] sm:text-xs mb-0.5">Tempo Resp.</p>
+                          <p className={`font-medium text-[10px] sm:text-sm ${click.response_time_seconds !== null ? (click.response_time_seconds <= 300 ? 'text-green-600' : click.response_time_seconds <= 1800 ? 'text-amber-600' : 'text-red-600') : 'text-slate-400'}`}>
                             {click.response_time_seconds !== null ? formatResponseTime(click.response_time_seconds) : 'Sem resposta'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-slate-500 text-xs mb-0.5">Respondido por</p>
-                          <p className="font-medium text-slate-900">{click.responded_by_name || '-'}</p>
+                          <p className="text-slate-500 text-[9px] sm:text-xs mb-0.5">Respondido por</p>
+                          <p className="font-medium text-slate-900 text-[10px] sm:text-sm truncate">{click.responded_by_name || '-'}</p>
                         </div>
                         <div>
-                          <p className="text-slate-500 text-xs mb-0.5">Dispositivo</p>
-                          <p className="font-medium text-slate-900">{click.device_type || '-'} {click.os ? `(${click.os})` : ''}</p>
+                          <p className="text-slate-500 text-[9px] sm:text-xs mb-0.5">Dispositivo</p>
+                          <p className="font-medium text-slate-900 text-[10px] sm:text-sm truncate">{click.device_type || '-'} {click.os ? `(${click.os})` : ''}</p>
                         </div>
                       </div>
                       
                       {/* UTMs */}
                       {(click.utm_medium || click.utm_campaign || click.utm_content) && (
-                        <div className="mt-3 pt-3 border-t border-slate-100">
-                          <p className="text-slate-500 text-xs mb-1">UTMs Capturados</p>
+                        <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-100">
+                          <p className="text-slate-500 text-[9px] sm:text-xs mb-1">UTMs</p>
                           <div className="flex flex-wrap gap-1">
-                            {click.utm_source && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">source: {click.utm_source}</span>}
-                            {click.utm_medium && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">medium: {click.utm_medium}</span>}
-                            {click.utm_campaign && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">campaign: {click.utm_campaign}</span>}
-                            {click.utm_content && <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">content: {click.utm_content}</span>}
+                            {click.utm_source && <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] sm:text-xs">src: {click.utm_source}</span>}
+                            {click.utm_medium && <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] sm:text-xs">med: {click.utm_medium}</span>}
+                            {click.utm_campaign && <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] sm:text-xs truncate max-w-[100px] sm:max-w-none">camp: {click.utm_campaign}</span>}
+                            {click.utm_content && <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] sm:text-xs truncate max-w-[100px] sm:max-w-none">cont: {click.utm_content}</span>}
                           </div>
                         </div>
                       )}
                       
-                      {/* Referrer */}
+                      {/* Referrer - Oculto no mobile */}
                       {click.referrer && (
-                        <div className="mt-2">
+                        <div className="mt-2 hidden sm:block">
                           <p className="text-slate-500 text-xs mb-0.5">Referrer</p>
                           <p className="text-xs text-slate-600 truncate">{click.referrer}</p>
                         </div>
