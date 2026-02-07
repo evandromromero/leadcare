@@ -214,10 +214,10 @@ const AdminClinics: React.FC = () => {
         </div>
       </div>
 
-      {/* Clinics - Cards for mobile, Table for desktop */}
+      {/* Clinics - Cards for mobile/tablet, Table for desktop */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        {/* Desktop Table */}
-        <div className="hidden md:block overflow-x-auto">
+        {/* Desktop Table (lg+) */}
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -353,8 +353,8 @@ const AdminClinics: React.FC = () => {
           </table>
         </div>
 
-        {/* Mobile Cards */}
-        <div className="md:hidden divide-y divide-slate-200">
+        {/* Mobile/Tablet Cards */}
+        <div className="lg:hidden divide-y divide-slate-200">
           {filteredClinics.length === 0 ? (
             <div className="px-4 py-12 text-center text-slate-500">
               Nenhuma clínica encontrada

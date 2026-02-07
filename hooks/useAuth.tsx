@@ -48,13 +48,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [lastFetchedUserId, setLastFetchedUserId] = useState<string | null>(null);
 
   // Verificar se há impersonate ativo ao carregar
+  // Suporta Chrome (localStorage) e Safari (token na URL)
   useEffect(() => {
-    const savedImpersonate = sessionStorage.getItem('impersonateClinic');
-    if (savedImpersonate) {
-      const clinicData = JSON.parse(savedImpersonate);
-      setIsImpersonating(true);
-      setImpersonatedClinic(clinicData);
-    }
+    const checkImpersonate = async () => {
+      const url = new URL(window.location.href);
+      const impersonateToken = url.searchParams.get('impersonate');
+      
+      // Safari: token na URL - trocar por dados da clínica
+      if (impersonateToken) {
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/impersonate-exchange`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: impersonateToken }),
+            }
+          );
+          
+          if (response.ok) {
+            const { clinic } = await response.json();
+            
+            // Salvar no localStorage para próximas navegações
+            localStorage.setItem('impersonateClinic', JSON.stringify(clinic));
+            setIsImpersonating(true);
+            setImpersonatedClinic(clinic);
+            
+            // Remover token da URL (limpar histórico)
+            url.searchParams.delete('impersonate');
+            window.history.replaceState({}, '', url.toString());
+            return;
+          }
+        } catch (e) {
+          console.error('Erro ao trocar token de impersonate:', e);
+        }
+        
+        // Se falhou, remover token da URL
+        url.searchParams.delete('impersonate');
+        window.history.replaceState({}, '', url.toString());
+      }
+      
+      // Chrome: verificar localStorage
+      const savedImpersonate = localStorage.getItem('impersonateClinic');
+      if (savedImpersonate) {
+        try {
+          const clinicData = JSON.parse(savedImpersonate);
+          setIsImpersonating(true);
+          setImpersonatedClinic(clinicData);
+        } catch (e) {
+          localStorage.removeItem('impersonateClinic');
+        }
+      }
+    };
+    
+    checkImpersonate();
   }, []);
 
   const fetchUserProfile = async (authUser: SupabaseUser, accessToken: string) => {
@@ -220,7 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLastFetchedUserId(null);
     setIsImpersonating(false);
     setImpersonatedClinic(null);
-    sessionStorage.removeItem('impersonateClinic');
+    localStorage.removeItem('impersonateClinic');
     
     // Tentar logout no Supabase (pode falhar com 403, mas já limpamos local)
     try {
@@ -237,13 +284,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const startImpersonate = (clinicId: string, clinicName: string) => {
     const clinicData = { id: clinicId, name: clinicName, slug: '', logoUrl: null };
-    sessionStorage.setItem('impersonateClinic', JSON.stringify(clinicData));
+    localStorage.setItem('impersonateClinic', JSON.stringify(clinicData));
     setIsImpersonating(true);
     setImpersonatedClinic(clinicData);
   };
 
   const stopImpersonate = () => {
-    sessionStorage.removeItem('impersonateClinic');
+    localStorage.removeItem('impersonateClinic');
     setIsImpersonating(false);
     setImpersonatedClinic(null);
   };

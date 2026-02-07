@@ -103,7 +103,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     description: 'Acesso ao faturamento, pagamentos e lançamentos. Não responde mensagens.',
   },
   Visualizador: {
-    menu: ['dashboard', 'inbox', 'settings'],
+    menu: ['dashboard', 'inbox', 'connect'],
     actions: [],
     data: 'no_billing',
     description: 'Apenas leitura. Visualiza sem interagir.',

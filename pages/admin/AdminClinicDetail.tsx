@@ -1387,16 +1387,47 @@ const AdminClinicDetail: React.FC = () => {
         details: { clinic_name: clinic.name },
       });
 
-      // Salvar dados do impersonate no sessionStorage
-      sessionStorage.setItem('impersonateClinic', JSON.stringify({
+      // Chrome: Salvar dados no localStorage (funciona entre abas)
+      const clinicData = {
         id: clinic.id,
         name: clinic.name,
         slug: clinic.slug || '',
         logoUrl: null,
-      }));
+      };
+      localStorage.setItem('impersonateClinic', JSON.stringify(clinicData));
+
+      // Safari: Gerar token como fallback (funciona via URL)
+      let url = '/dashboard';
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/impersonate-start`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                clinic_id: clinic.id,
+                clinic_name: clinic.name,
+                clinic_slug: clinic.slug || '',
+              }),
+            }
+          );
+
+          if (response.ok) {
+            const { token } = await response.json();
+            url = `/dashboard?impersonate=${token}`;
+          }
+        }
+      } catch (tokenError) {
+        console.log('Token fallback não disponível, usando localStorage');
+      }
 
       // Abrir nova aba para o dashboard (mantém /admin aberto)
-      window.open('/dashboard', '_blank');
+      window.open(url, '_blank');
       
       // Resetar estado após abrir a aba
       setImpersonating(false);
@@ -2058,13 +2089,13 @@ const AdminClinicDetail: React.FC = () => {
         </Link>
         
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
             <div className="w-12 h-12 sm:w-16 sm:h-16 bg-slate-100 rounded-xl flex items-center justify-center shrink-0">
               <Building2 className="w-6 h-6 sm:w-8 sm:h-8 text-slate-600" />
             </div>
-            <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-800 truncate">{clinic.name}</h1>
-              <p className="text-sm text-slate-500 truncate">{clinic.slug}</p>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg sm:text-2xl font-bold text-slate-800 truncate max-w-full">{clinic.name}</h1>
+              <p className="text-xs sm:text-sm text-slate-500 truncate max-w-full">{clinic.slug}</p>
             </div>
           </div>
           
@@ -4280,8 +4311,8 @@ const AdminClinicDetail: React.FC = () => {
               <p className="text-xs sm:text-sm text-slate-500 mt-1">Performance de vendas por atendente</p>
             </div>
             
-            {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto">
+            {/* Desktop Table (lg+) */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50">
                   <tr>
@@ -4394,8 +4425,8 @@ const AdminClinicDetail: React.FC = () => {
               </table>
             </div>
 
-            {/* Mobile Cards */}
-            <div className="md:hidden divide-y divide-slate-100">
+            {/* Mobile/Tablet Cards */}
+            <div className="lg:hidden divide-y divide-slate-100">
               {billingStats.byAttendant.length === 0 ? (
                 <div className="py-8 text-center text-slate-500">
                   Nenhum dado de faturamento disponível
@@ -4936,8 +4967,8 @@ const AdminClinicDetail: React.FC = () => {
                 <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-4">Por Comercial</h3>
                   
-                  {/* Desktop Table */}
-                  <div className="hidden md:block overflow-x-auto">
+                  {/* Desktop Table (lg+) */}
+                  <div className="hidden lg:block overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-slate-200">
@@ -4970,8 +5001,8 @@ const AdminClinicDetail: React.FC = () => {
                     </table>
                   </div>
 
-                  {/* Mobile Cards */}
-                  <div className="md:hidden divide-y divide-slate-100 -mx-4">
+                  {/* Mobile/Tablet Cards */}
+                  <div className="lg:hidden divide-y divide-slate-100 -mx-4">
                     {receiptsData.byAttendant.map(att => (
                       <div key={att.id} className="p-4">
                         <p className="font-medium text-slate-800 mb-2">{att.name}</p>
@@ -5010,8 +5041,8 @@ const AdminClinicDetail: React.FC = () => {
                 <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-4">Detalhamento</h3>
                   
-                  {/* Desktop Table */}
-                  <div className="hidden md:block overflow-x-auto">
+                  {/* Desktop Table (lg+) */}
+                  <div className="hidden lg:block overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-slate-200">
@@ -5077,8 +5108,8 @@ const AdminClinicDetail: React.FC = () => {
                     </table>
                   </div>
 
-                  {/* Mobile Cards */}
-                  <div className="md:hidden divide-y divide-slate-100 -mx-4">
+                  {/* Mobile/Tablet Cards */}
+                  <div className="lg:hidden divide-y divide-slate-100 -mx-4">
                     {receiptsData.details.map(sale => (
                       <div key={sale.id} className="p-4">
                         <div className="flex items-start justify-between gap-2 mb-2">

@@ -34,6 +34,21 @@ const PIPELINE_STAGES = [
   { value: 'Perdido', label: 'Perdido', color: '#ef4444', hint: 'Não fechou / desistiu do atendimento' },
 ];
 
+const formatDateOnly = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length !== 3) return dateStr;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+};
+
+const getLocalDateString = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const { user, isAdmin } = useAuth();
   const location = useLocation();
@@ -129,7 +144,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     payment_method: string | null;
   }>>([])
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0], payment_method: '' });
+  const [paymentForm, setPaymentForm] = useState({ value: '', description: '', payment_date: getLocalDateString(), payment_method: '' });
   const [savingPayment, setSavingPayment] = useState(false);
   
   // Estados para lançamentos diretos da clínica (sem comercial)
@@ -142,7 +157,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     payment_method: string | null;
   }>>([]);
   const [showClinicReceiptModal, setShowClinicReceiptModal] = useState(false);
-  const [clinicReceiptForm, setClinicReceiptForm] = useState({ value: '', description: '', receipt_date: new Date().toISOString().split('T')[0], payment_method: '' });
+  const [clinicReceiptForm, setClinicReceiptForm] = useState({ value: '', description: '', receipt_date: getLocalDateString(), payment_method: '' });
   const [savingClinicReceipt, setSavingClinicReceipt] = useState(false);
   
   // Estados para tarefas
@@ -961,7 +976,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       clinic_id: clinicId,
       value: value,
       description: 'Valor da conversão',
-      payment_date: new Date().toISOString().split('T')[0],
+      payment_date: getLocalDateString(),
       created_by: user?.id,
     });
     
@@ -1626,7 +1641,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         const totalValue = parseFloat(paymentForm.value.replace(',', '.'));
         await sendFacebookConversionEvent(selectedChatId, totalValue, 'Convertido');
         
-        setPaymentForm({ value: '', description: '', payment_date: new Date().toISOString().split('T')[0], payment_method: '' });
+        setPaymentForm({ value: '', description: '', payment_date: getLocalDateString(), payment_method: '' });
         setShowPaymentModal(false);
         await fetchPayments(selectedChatId);
       }
@@ -1714,7 +1729,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         // Enviar evento Purchase para Meta (Lançamento da Clínica = procedimento realizado)
         await sendFacebookConversionEvent(selectedChatId, totalValue, 'Convertido');
         
-        setClinicReceiptForm({ value: '', description: '', receipt_date: new Date().toISOString().split('T')[0], payment_method: '' });
+        setClinicReceiptForm({ value: '', description: '', receipt_date: getLocalDateString(), payment_method: '' });
         setShowClinicReceiptModal(false);
         await fetchClinicReceipts(selectedChatId);
       }
@@ -3818,7 +3833,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4" style={{ backgroundImage: 'radial-gradient(#cbd5e1 0.5px, transparent 0.5px)', backgroundSize: '15px 15px' }}>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 space-y-4" style={{ backgroundImage: 'radial-gradient(#cbd5e1 0.5px, transparent 0.5px)', backgroundSize: '15px 15px' }}>
               {/* Botão carregar mais mensagens */}
               {hasMoreMessages[selectedChat.id] && (
                 <div className="flex justify-center mb-4">
@@ -3905,7 +3920,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   ref={(el) => { messageRefs.current[m.id] = el; }}
                   className={`flex ${!m.is_from_client ? 'justify-end' : 'justify-start'} w-full group transition-all duration-300`}
                 >
-                  <div className={`max-w-[75%] p-3 rounded-2xl shadow-sm relative ${
+                  <div className={`max-w-[75%] p-3 rounded-2xl shadow-sm relative break-words overflow-hidden ${
                     !m.is_from_client 
                       ? 'bg-cyan-600 text-white rounded-tr-none' 
                       : 'bg-white text-slate-800 rounded-tl-none'
@@ -3963,13 +3978,13 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         rel="noopener noreferrer"
                         className={`flex items-center gap-2 p-2 rounded-lg mb-2 ${!m.is_from_client ? 'bg-cyan-500' : 'bg-slate-100'}`}
                       >
-                        <span className="material-symbols-outlined">description</span>
-                        <span className="text-sm underline">{m.content}</span>
+                        <span className="material-symbols-outlined shrink-0">description</span>
+                        <span className="text-sm underline truncate">{m.content}</span>
                       </a>
                     )}
                     {/* Texto da mensagem (exceto para mídia sem legenda) */}
                     {(m.type === 'text' || (m.content && !m.content.startsWith('['))) && (
-                      <p className="text-sm leading-relaxed">{m.content}</p>
+                      <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{m.content}</p>
                     )}
                     {/* Placeholder para mídia sem URL */}
                     {m.type !== 'text' && !m.media_url && (
@@ -4581,85 +4596,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 )}
               </section>
 
-              {/* Modal Nova Origem */}
-              {showAddSourceModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAddSourceModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-xl w-96 overflow-hidden" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                      <h3 className="font-bold text-slate-800">Nova Origem</h3>
-                      <button onClick={() => setShowAddSourceModal(false)} className="text-slate-400 hover:text-slate-600">
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Nome da Origem</label>
-                        <input
-                          type="text"
-                          value={newSourceForm.name}
-                          onChange={(e) => setNewSourceForm(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="Ex: Instagram, Indicação, AV1..."
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Código do Criativo (opcional)</label>
-                        <input
-                          type="text"
-                          value={newSourceForm.code}
-                          onChange={(e) => setNewSourceForm(prev => ({ ...prev, code: e.target.value }))}
-                          placeholder="Ex: AV1, AV2, IG01..."
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Vincular à Dra (cor)</label>
-                        <select
-                          value={newSourceForm.tag_id}
-                          onChange={(e) => setNewSourceForm(prev => ({ ...prev, tag_id: e.target.value }))}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent bg-white"
-                        >
-                          <option value="">Sem vínculo (cor padrão)</option>
-                          {availableTags.map(tag => (
-                            <option key={tag.id} value={tag.id}>
-                              {tag.name}
-                            </option>
-                          ))}
-                        </select>
-                        {newSourceForm.tag_id && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <span 
-                              className="size-4 rounded-full" 
-                              style={{ backgroundColor: availableTags.find(t => t.id === newSourceForm.tag_id)?.color || '#6B7280' }}
-                            ></span>
-                            <span className="text-xs text-slate-500">
-                              A origem terá esta cor
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={handleCreateSource}
-                        disabled={!newSourceForm.name.trim() || savingSource}
-                        className="w-full py-2 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {savingSource ? (
-                          <>
-                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            Salvando...
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined text-[18px]">save</span>
-                            Criar Origem
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {isSectionVisible('etiquetas') && (
               <section style={{ order: getSectionOrder('etiquetas') }}>
                 <div className="flex justify-between items-center mb-4">
@@ -4741,125 +4677,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         </button>
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Modal de Tags */}
-              {showTagsModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTagsModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-xl w-96 max-h-[500px] overflow-hidden" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                      <h3 className="font-bold text-slate-800">{showCreateTag ? 'Nova Etiqueta' : 'Etiquetas'}</h3>
-                      <button onClick={() => setShowTagsModal(false)} className="text-slate-400 hover:text-slate-600">
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
-                    </div>
-                    
-                    {/* Formulário para criar nova etiqueta */}
-                    {showCreateTag ? (
-                      <div className="p-4 space-y-4">
-                        <div>
-                          <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nome da Etiqueta</label>
-                          <input
-                            type="text"
-                            value={newTagName}
-                            onChange={(e) => setNewTagName(e.target.value)}
-                            placeholder="Ex: Dra. Maria"
-                            className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                            autoFocus
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Cor</label>
-                          <div className="grid grid-cols-8 gap-2">
-                            {tagColors.map(color => (
-                              <button
-                                key={color}
-                                onClick={() => setNewTagColor(color)}
-                                className={`size-8 rounded-lg transition-all ${newTagColor === color ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
-                                style={{ backgroundColor: color }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex gap-2 pt-2">
-                          <button
-                            onClick={() => setShowCreateTag(false)}
-                            className="flex-1 h-10 bg-slate-100 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-200 transition-colors"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={handleCreateTag}
-                            disabled={!newTagName.trim() || savingTag}
-                            className="flex-1 h-10 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                          >
-                            {savingTag ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            ) : (
-                              <>
-                                <span className="material-symbols-outlined text-[18px]">add</span>
-                                Criar
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Botão para criar nova etiqueta */}
-                        <div className="p-3 border-b border-slate-100">
-                          <button
-                            onClick={() => setShowCreateTag(true)}
-                            className="w-full px-3 py-2 rounded-lg text-sm font-medium text-cyan-600 bg-cyan-50 hover:bg-cyan-100 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                            Criar Nova Etiqueta
-                          </button>
-                        </div>
-                        
-                        {/* Lista de etiquetas existentes */}
-                        <div className="p-4 max-h-64 overflow-y-auto">
-                          {loadingTags ? (
-                            <div className="text-center py-4">
-                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600 mx-auto"></div>
-                            </div>
-                          ) : availableTags.length === 0 ? (
-                            <p className="text-sm text-slate-500 text-center py-4">Nenhuma etiqueta criada ainda</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {availableTags.map(tag => {
-                                const isAdded = selectedChat.tags.some(t => t.id === tag.id);
-                                return (
-                                  <button
-                                    key={tag.id}
-                                    onClick={() => {
-                                      if (isAdded) {
-                                        handleRemoveTag(tag.id);
-                                      } else {
-                                        handleAddTag(tag.id);
-                                      }
-                                    }}
-                                    className={`w-full px-3 py-2 rounded-lg text-left text-sm flex items-center justify-between transition-colors ${
-                                      isAdded ? 'bg-slate-100' : 'hover:bg-slate-50'
-                                    }`}
-                                  >
-                                    <span className="flex items-center gap-2">
-                                      <span className="size-4 rounded-full" style={{ backgroundColor: tag.color }}></span>
-                                      {tag.name}
-                                    </span>
-                                    {isAdded && (
-                                      <span className="material-symbols-outlined text-cyan-600 text-[18px]">check_circle</span>
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
                   </div>
                 </div>
               )}
@@ -5001,68 +4818,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </section>
               )}
 
-              {/* Modal de Novo Orçamento */}
-              {showQuoteModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowQuoteModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                      <h3 className="font-bold text-slate-800">Novo Orçamento</h3>
-                      <button onClick={() => setShowQuoteModal(false)} className="text-slate-400 hover:text-slate-600">
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Tipo de Serviço</label>
-                        <input
-                          type="text"
-                          value={quoteForm.service_type}
-                          onChange={(e) => setQuoteForm(prev => ({ ...prev, service_type: e.target.value }))}
-                          placeholder="Ex: Consulta, Procedimento..."
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
-                        <input
-                          type="text"
-                          value={quoteForm.value}
-                          onChange={(e) => setQuoteForm(prev => ({ ...prev, value: e.target.value }))}
-                          placeholder="0,00"
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Observações (opcional)</label>
-                        <textarea
-                          value={quoteForm.notes}
-                          onChange={(e) => setQuoteForm(prev => ({ ...prev, notes: e.target.value }))}
-                          placeholder="Detalhes do orçamento..."
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent h-20 resize-none"
-                        />
-                      </div>
-                      <button
-                        onClick={handleSaveQuote}
-                        disabled={!quoteForm.service_type.trim() || !quoteForm.value || savingQuote}
-                        className="w-full py-2 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {savingQuote ? (
-                          <>
-                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            Salvando...
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined text-[18px]">save</span>
-                            Salvar Orçamento
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Seção de Negociações Comerciais */}
               {isSectionVisible('negociacoes') && (
               <section style={{ order: getSectionOrder('negociacoes') }}>
@@ -5112,7 +4867,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] text-slate-400">
-                              {new Date(payment.payment_date).toLocaleDateString('pt-BR')}
+                              {formatDateOnly(payment.payment_date)}
                             </span>
                             {payment.status !== 'cancelled' && (
                               <button
@@ -5162,90 +4917,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </section>
               )}
 
-              {/* Modal de Novo Pagamento */}
-              {showPaymentModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowPaymentModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                      <h3 className="font-bold text-slate-800">Registrar Pagamento</h3>
-                      <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600">
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
-                        <input
-                          type="text"
-                          value={paymentForm.value}
-                          onChange={(e) => setPaymentForm(prev => ({ ...prev, value: e.target.value }))}
-                          placeholder="0,00"
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Data do Pagamento</label>
-                        <input
-                          type="date"
-                          value={paymentForm.payment_date}
-                          onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_date: e.target.value }))}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento</label>
-                        <select
-                          value={paymentForm.payment_method}
-                          onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_method: e.target.value }))}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        >
-                          <option value="">Selecione...</option>
-                          <option value="pix">PIX</option>
-                          <option value="dinheiro">Dinheiro</option>
-                          <option value="cartao_credito">Cartão de Crédito</option>
-                          <option value="cartao_debito">Cartão de Débito</option>
-                          <option value="boleto">Boleto</option>
-                          <option value="link">Link de Pagamento</option>
-                          <option value="transferencia">Transferência</option>
-                          <option value="outro">Outro</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Descrição</label>
-                        <select
-                          value={paymentForm.description}
-                          onChange={(e) => setPaymentForm(prev => ({ ...prev, description: e.target.value }))}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        >
-                          <option value="">Selecione...</option>
-                          <option value="Entrada de Procedimento">Entrada de Procedimento</option>
-                          <option value="Consulta">Consulta</option>
-                          <option value="Procedimento">Procedimento</option>
-                          <option value="Mentoria">Mentoria</option>
-                        </select>
-                      </div>
-                      <button
-                        onClick={handleSavePayment}
-                        disabled={!paymentForm.value || savingPayment}
-                        className="w-full py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {savingPayment ? (
-                          <>
-                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            Salvando...
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined text-[18px]">payments</span>
-                            Registrar Pagamento
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Seção de Lançamentos da Clínica (sem comercial) */}
               {isSectionVisible('lancamentos') && (
               <section style={{ order: getSectionOrder('lancamentos') }}>
@@ -5282,7 +4953,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           </span>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] text-slate-400">
-                              {new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}
+                              {formatDateOnly(receipt.receipt_date)}
                             </span>
                             <button
                               onClick={() => handleDeleteClinicReceipt(receipt.id)}
@@ -5324,88 +4995,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   </div>
                 )}
               </section>
-              )}
-
-              {/* Modal de Novo Lançamento da Clínica */}
-              {showClinicReceiptModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowClinicReceiptModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-teal-50">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-teal-600">account_balance</span>
-                        <h3 className="font-bold text-slate-800">Lançamento Direto</h3>
-                      </div>
-                      <button onClick={() => setShowClinicReceiptModal(false)} className="text-slate-400 hover:text-slate-600">
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
-                        <input
-                          type="text"
-                          value={clinicReceiptForm.value}
-                          onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, value: e.target.value }))}
-                          placeholder="0,00"
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Data do Recebimento</label>
-                        <input
-                          type="date"
-                          value={clinicReceiptForm.receipt_date}
-                          onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, receipt_date: e.target.value }))}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento</label>
-                        <select
-                          value={clinicReceiptForm.payment_method}
-                          onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, payment_method: e.target.value }))}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
-                        >
-                          <option value="">Selecione...</option>
-                          <option value="pix">PIX</option>
-                          <option value="dinheiro">Dinheiro</option>
-                          <option value="cartao_credito">Cartão de Crédito</option>
-                          <option value="cartao_debito">Cartão de Débito</option>
-                          <option value="boleto">Boleto</option>
-                          <option value="transferencia">Transferência</option>
-                          <option value="outro">Outro</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Descrição</label>
-                        <input
-                          type="text"
-                          value={clinicReceiptForm.description}
-                          onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, description: e.target.value }))}
-                          placeholder="Ex: Consulta, Procedimento, Entrada..."
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
-                        />
-                      </div>
-                      <button
-                        onClick={handleSaveClinicReceipt}
-                        disabled={!clinicReceiptForm.value || savingClinicReceipt}
-                        className="w-full py-2 bg-teal-600 text-white text-sm font-bold rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {savingClinicReceipt ? (
-                          <>
-                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            Salvando...
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined text-[18px]">account_balance</span>
-                            Registrar Lançamento
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
               )}
 
               {/* Modal de Valor para Conversão */}
@@ -5503,7 +5092,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                               new Date(task.due_date) < new Date() ? 'text-red-500 font-bold' : 'text-slate-400'
                             }`}>
                               <span className="material-symbols-outlined text-[10px] align-middle mr-0.5">event</span>
-                              {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                              {formatDateOnly(task.due_date)}
                               {!task.completed && new Date(task.due_date) < new Date() && ' (atrasada)'}
                             </p>
                           )}
@@ -5513,67 +5102,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   </div>
                 )}
               </section>
-              )}
-
-              {/* Modal de Nova Tarefa */}
-              {showTaskModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTaskModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                      <h3 className="font-bold text-slate-800">Nova Tarefa</h3>
-                      <button onClick={() => setShowTaskModal(false)} className="text-slate-400 hover:text-slate-600">
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Título</label>
-                        <input
-                          type="text"
-                          value={taskForm.title}
-                          onChange={(e) => setTaskForm(prev => ({ ...prev, title: e.target.value }))}
-                          placeholder="Ex: Ligar para confirmar consulta"
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Data de Vencimento (opcional)</label>
-                        <input
-                          type="date"
-                          value={taskForm.due_date}
-                          onChange={(e) => setTaskForm(prev => ({ ...prev, due_date: e.target.value }))}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Descrição (opcional)</label>
-                        <textarea
-                          value={taskForm.description}
-                          onChange={(e) => setTaskForm(prev => ({ ...prev, description: e.target.value }))}
-                          placeholder="Detalhes da tarefa..."
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent h-16 resize-none"
-                        />
-                      </div>
-                      <button
-                        onClick={handleSaveTask}
-                        disabled={!taskForm.title.trim() || savingTask}
-                        className="w-full py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {savingTask ? (
-                          <>
-                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            Salvando...
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined text-[18px]">task_alt</span>
-                            Criar Tarefa
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
               )}
 
               {/* Seção de Mensagens Agendadas */}
@@ -5625,101 +5153,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   </div>
                 )}
               </section>
-              )}
-
-              {/* Modal de Agendar Mensagem */}
-              {showScheduleModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowScheduleModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                      <h3 className="font-bold text-slate-800">Agendar Follow-up</h3>
-                      <button onClick={() => setShowScheduleModal(false)} className="text-slate-400 hover:text-slate-600">
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Mensagem</label>
-                        <textarea
-                          value={scheduleForm.message}
-                          onChange={(e) => setScheduleForm(prev => ({ ...prev, message: e.target.value }))}
-                          placeholder="Mensagem para enviar..."
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent h-20 resize-none"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-600 mb-1">Data</label>
-                          <input
-                            type="date"
-                            value={scheduleForm.scheduled_date}
-                            onChange={(e) => setScheduleForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
-                            min={new Date().toISOString().split('T')[0]}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-slate-600 mb-1">Hora</label>
-                          <input
-                            type="time"
-                            value={scheduleForm.scheduled_time}
-                            onChange={(e) => setScheduleForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            const date = new Date();
-                            date.setDate(date.getDate() + 1);
-                            setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
-                          }}
-                          className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                        >
-                          1 dia
-                        </button>
-                        <button
-                          onClick={() => {
-                            const date = new Date();
-                            date.setDate(date.getDate() + 3);
-                            setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
-                          }}
-                          className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                        >
-                          3 dias
-                        </button>
-                        <button
-                          onClick={() => {
-                            const date = new Date();
-                            date.setDate(date.getDate() + 7);
-                            setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
-                          }}
-                          className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                        >
-                          7 dias
-                        </button>
-                      </div>
-                      <button
-                        onClick={handleSaveSchedule}
-                        disabled={!scheduleForm.message.trim() || !scheduleForm.scheduled_date || !scheduleForm.scheduled_time || savingSchedule}
-                        className="w-full py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {savingSchedule ? (
-                          <>
-                            <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            Agendando...
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined text-[18px]">schedule_send</span>
-                            Agendar Mensagem
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
               )}
 
               {isSectionVisible('observacoes') && (
@@ -5818,7 +5251,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   <div className="flex justify-center gap-3 mt-4">
                     {smtpConfigured && leadEmail ? (
                       <button 
-                        onClick={() => { setSelectedEmailTemplateId(''); setShowEmailModal(true); setShowLeadPanelDrawer(false); }}
+                        onClick={() => { setSelectedEmailTemplateId(''); setShowEmailModal(true); }}
                         className="size-9 rounded-full border border-purple-100 bg-purple-50 text-purple-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
                         title={`Enviar email para ${leadEmail}`}
                       >
@@ -5841,14 +5274,14 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                       <span className="material-symbols-outlined text-[18px]">call</span>
                     </button>
                     <button 
-                      onClick={() => { openClientModal(); setShowLeadPanelDrawer(false); }}
+                      onClick={() => { openClientModal(); }}
                       className="size-9 rounded-full border border-cyan-100 bg-cyan-50 text-cyan-600 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
                       title={chatLeadId ? 'Editar Cliente' : 'Cadastrar Cliente'}
                     >
                       <span className="material-symbols-outlined text-[18px]">{chatLeadId ? 'edit' : 'person_add'}</span>
                     </button>
                     <button 
-                      onClick={() => { setShowSectionConfigModal(true); setShowLeadPanelDrawer(false); }}
+                      onClick={() => { setShowSectionConfigModal(true); }}
                       className="size-9 rounded-full border border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
                       title="Configurar seções"
                     >
@@ -5864,7 +5297,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Etapa do Pipeline</h3>
                       {canMoveLead && (
                         <button 
-                          onClick={() => { setShowStageDropdown(!showStageDropdown); setShowLeadPanelDrawer(false); }}
+                          onClick={() => { setShowStageDropdown(!showStageDropdown); }}
                           className="text-xs font-bold text-cyan-600 hover:text-cyan-700"
                         >
                           Alterar
@@ -5892,7 +5325,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Responsável</h3>
                       {canSendMessage && (
                         <button 
-                          onClick={() => { setShowForwardModal(true); setShowLeadPanelDrawer(false); }}
+                          onClick={() => { setShowForwardModal(true); }}
                           className="text-xs font-bold text-cyan-600 hover:text-cyan-700"
                         >
                           Encaminhar
@@ -5932,14 +5365,14 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Origem do Lead</h3>
                       <button 
-                        onClick={() => { fetchAvailableTags(); setShowAddSourceModal(true); setShowLeadPanelDrawer(false); }}
+                        onClick={() => { fetchAvailableTags(); setShowAddSourceModal(true); }}
                         className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
                       >
                         <span className="material-symbols-outlined text-[14px]">add</span> Nova
                       </button>
                     </div>
                     <button
-                      onClick={() => { setShowSourceDropdown(!showSourceDropdown); setShowLeadPanelDrawer(false); }}
+                      onClick={() => { setShowSourceDropdown(!showSourceDropdown); }}
                       className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between hover:border-cyan-300 transition-colors"
                     >
                       {selectedSourceId ? (() => {
@@ -5968,7 +5401,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Etiquetas</h3>
                       <button 
-                        onClick={() => { setShowTagsModal(true); setShowLeadPanelDrawer(false); }}
+                        onClick={() => { setShowTagsModal(true); }}
                         className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
                       >
                         <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
@@ -5996,7 +5429,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     <div className="flex justify-between items-center mb-3">
                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Orçamentos</h3>
                       <button 
-                        onClick={() => { setShowQuoteModal(true); setShowLeadPanelDrawer(false); }}
+                        onClick={() => { setShowQuoteModal(true); }}
                         className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
                       >
                         <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
@@ -6039,7 +5472,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     <div className="flex justify-between items-center mb-3">
                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Negociações</h3>
                       <button 
-                        onClick={() => { setShowPaymentModal(true); setShowLeadPanelDrawer(false); }}
+                        onClick={() => { setShowPaymentModal(true); }}
                         className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
                       >
                         <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
@@ -6071,7 +5504,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     <div className="flex justify-between items-center mb-3">
                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tarefas</h3>
                       <button 
-                        onClick={() => { setShowTaskModal(true); setShowLeadPanelDrawer(false); }}
+                        onClick={() => { setShowTaskModal(true); }}
                         className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
                       >
                         <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
@@ -6086,7 +5519,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                             <p className="text-xs text-slate-700">{task.title}</p>
                             {task.due_date && (
                               <p className="text-[10px] text-purple-600 mt-1">
-                                {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                                {formatDateOnly(task.due_date)}
                               </p>
                             )}
                           </div>
@@ -6103,7 +5536,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Lançamentos da Clínica</h3>
                       <button 
-                        onClick={() => { setShowClinicReceiptModal(true); setShowLeadPanelDrawer(false); }}
+                        onClick={() => { setShowClinicReceiptModal(true); }}
                         className="text-xs font-bold text-cyan-600 hover:text-cyan-700 flex items-center gap-1"
                       >
                         <span className="material-symbols-outlined text-[14px]">add</span> Adicionar
@@ -6713,6 +6146,653 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Tags (movido para fora do aside para funcionar em tablet/mobile) */}
+      {showTagsModal && selectedChat && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowTagsModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-96 max-w-[90vw] max-h-[500px] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">{showCreateTag ? 'Nova Etiqueta' : 'Etiquetas'}</h3>
+              <button onClick={() => setShowTagsModal(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            {/* Formulário para criar nova etiqueta */}
+            {showCreateTag ? (
+              <div className="p-4 space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nome da Etiqueta</label>
+                  <input
+                    type="text"
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    placeholder="Ex: Dra. Maria"
+                    className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Cor</label>
+                  <div className="grid grid-cols-8 gap-2">
+                    {tagColors.map(color => (
+                      <button
+                        key={color}
+                        onClick={() => setNewTagColor(color)}
+                        className={`size-8 rounded-lg transition-all ${newTagColor === color ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'}`}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => setShowCreateTag(false)}
+                    className="flex-1 h-10 bg-slate-100 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-200 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCreateTag}
+                    disabled={!newTagName.trim() || savingTag}
+                    className="flex-1 h-10 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    {savingTag ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[18px]">add</span>
+                        Criar
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Botão para criar nova etiqueta */}
+                <div className="p-3 border-b border-slate-100">
+                  <button
+                    onClick={() => setShowCreateTag(true)}
+                    className="w-full px-3 py-2 rounded-lg text-sm font-medium text-cyan-600 bg-cyan-50 hover:bg-cyan-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                    Criar Nova Etiqueta
+                  </button>
+                </div>
+                
+                {/* Lista de etiquetas existentes */}
+                <div className="p-4 max-h-64 overflow-y-auto">
+                  {loadingTags ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600 mx-auto"></div>
+                    </div>
+                  ) : availableTags.length === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-4">Nenhuma etiqueta criada ainda</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {availableTags.map(tag => {
+                        const isAdded = selectedChat.tags.some(t => t.id === tag.id);
+                        return (
+                          <button
+                            key={tag.id}
+                            onClick={() => {
+                              if (isAdded) {
+                                handleRemoveTag(tag.id);
+                              } else {
+                                handleAddTag(tag.id);
+                              }
+                            }}
+                            className={`w-full px-3 py-2 rounded-lg text-left text-sm flex items-center justify-between transition-colors ${
+                              isAdded ? 'bg-slate-100' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="size-4 rounded-full" style={{ backgroundColor: tag.color }}></span>
+                              {tag.name}
+                            </span>
+                            {isAdded && (
+                              <span className="material-symbols-outlined text-cyan-600 text-[18px]">check_circle</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Nova Origem (movido para fora do aside) */}
+      {showAddSourceModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowAddSourceModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-96 max-w-[90vw] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">Nova Origem</h3>
+              <button onClick={() => setShowAddSourceModal(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Nome da Origem</label>
+                <input
+                  type="text"
+                  value={newSourceForm.name}
+                  onChange={(e) => setNewSourceForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Ex: Instagram, Indicação, AV1..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Código do Criativo (opcional)</label>
+                <input
+                  type="text"
+                  value={newSourceForm.code}
+                  onChange={(e) => setNewSourceForm(prev => ({ ...prev, code: e.target.value }))}
+                  placeholder="Ex: AV1, AV2, IG01..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Vincular à Dra (cor)</label>
+                <select
+                  value={newSourceForm.tag_id}
+                  onChange={(e) => setNewSourceForm(prev => ({ ...prev, tag_id: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent bg-white"
+                >
+                  <option value="">Sem vínculo (cor padrão)</option>
+                  {availableTags.map(tag => (
+                    <option key={tag.id} value={tag.id}>{tag.name}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={handleCreateSource}
+                disabled={!newSourceForm.name.trim() || savingSource}
+                className="w-full py-2 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {savingSource ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">save</span>
+                    Criar Origem
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Novo Orçamento (movido para fora do aside) */}
+      {showQuoteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowQuoteModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-80 max-w-[90vw] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">Novo Orçamento</h3>
+              <button onClick={() => setShowQuoteModal(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Tipo de Serviço</label>
+                <input
+                  type="text"
+                  value={quoteForm.service_type}
+                  onChange={(e) => setQuoteForm(prev => ({ ...prev, service_type: e.target.value }))}
+                  placeholder="Ex: Consulta, Procedimento..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
+                <input
+                  type="text"
+                  value={quoteForm.value}
+                  onChange={(e) => setQuoteForm(prev => ({ ...prev, value: e.target.value }))}
+                  placeholder="0,00"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Observações (opcional)</label>
+                <textarea
+                  value={quoteForm.notes}
+                  onChange={(e) => setQuoteForm(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Detalhes do orçamento..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent h-20 resize-none"
+                />
+              </div>
+              <button
+                onClick={handleSaveQuote}
+                disabled={!quoteForm.service_type.trim() || !quoteForm.value || savingQuote}
+                className="w-full py-2 bg-cyan-600 text-white text-sm font-bold rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {savingQuote ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">save</span>
+                    Salvar Orçamento
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Novo Pagamento (movido para fora do aside) */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowPaymentModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-80 max-w-[90vw] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">Registrar Pagamento</h3>
+              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
+                <input
+                  type="text"
+                  value={paymentForm.value}
+                  onChange={(e) => setPaymentForm(prev => ({ ...prev, value: e.target.value }))}
+                  placeholder="0,00"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Data do Pagamento</label>
+                <input
+                  type="date"
+                  value={paymentForm.payment_date}
+                  onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento</label>
+                <select
+                  value={paymentForm.payment_method}
+                  onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_method: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                >
+                  <option value="">Selecione...</option>
+                  <option value="pix">PIX</option>
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="cartao_credito">Cartão de Crédito</option>
+                  <option value="cartao_debito">Cartão de Débito</option>
+                  <option value="boleto">Boleto</option>
+                  <option value="link">Link de Pagamento</option>
+                  <option value="transferencia">Transferência</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Descrição</label>
+                <select
+                  value={paymentForm.description}
+                  onChange={(e) => setPaymentForm(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                >
+                  <option value="">Selecione...</option>
+                  <option value="Entrada de Procedimento">Entrada de Procedimento</option>
+                  <option value="Consulta">Consulta</option>
+                  <option value="Procedimento">Procedimento</option>
+                  <option value="Mentoria">Mentoria</option>
+                </select>
+              </div>
+              <button
+                onClick={handleSavePayment}
+                disabled={!paymentForm.value || savingPayment}
+                className="w-full py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {savingPayment ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">payments</span>
+                    Registrar Pagamento
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Nova Tarefa (movido para fora do aside) */}
+      {showTaskModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowTaskModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-80 max-w-[90vw] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">Nova Tarefa</h3>
+              <button onClick={() => setShowTaskModal(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Título</label>
+                <input
+                  type="text"
+                  value={taskForm.title}
+                  onChange={(e) => setTaskForm(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Ex: Ligar para confirmar consulta"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Data de Vencimento (opcional)</label>
+                <input
+                  type="date"
+                  value={taskForm.due_date}
+                  onChange={(e) => setTaskForm(prev => ({ ...prev, due_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Descrição (opcional)</label>
+                <textarea
+                  value={taskForm.description}
+                  onChange={(e) => setTaskForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Detalhes da tarefa..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent h-16 resize-none"
+                />
+              </div>
+              <button
+                onClick={handleSaveTask}
+                disabled={!taskForm.title.trim() || savingTask}
+                className="w-full py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {savingTask ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">task_alt</span>
+                    Criar Tarefa
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Agendar Follow-up (movido para fora do aside) */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowScheduleModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-80 max-w-[90vw] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">Agendar Follow-up</h3>
+              <button onClick={() => setShowScheduleModal(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Mensagem</label>
+                <textarea
+                  value={scheduleForm.message}
+                  onChange={(e) => setScheduleForm(prev => ({ ...prev, message: e.target.value }))}
+                  placeholder="Mensagem para enviar..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent h-20 resize-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Data</label>
+                  <input
+                    type="date"
+                    value={scheduleForm.scheduled_date}
+                    onChange={(e) => setScheduleForm(prev => ({ ...prev, scheduled_date: e.target.value }))}
+                    min={getLocalDateString()}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">Hora</label>
+                  <input
+                    type="time"
+                    value={scheduleForm.scheduled_time}
+                    onChange={(e) => setScheduleForm(prev => ({ ...prev, scheduled_time: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const date = new Date();
+                    date.setDate(date.getDate() + 1);
+                    setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
+                  }}
+                  className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  1 dia
+                </button>
+                <button
+                  onClick={() => {
+                    const date = new Date();
+                    date.setDate(date.getDate() + 3);
+                    setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
+                  }}
+                  className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  3 dias
+                </button>
+                <button
+                  onClick={() => {
+                    const date = new Date();
+                    date.setDate(date.getDate() + 7);
+                    setScheduleForm(prev => ({ ...prev, scheduled_date: date.toISOString().split('T')[0], scheduled_time: '09:00' }));
+                  }}
+                  className="flex-1 py-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  7 dias
+                </button>
+              </div>
+              <button
+                onClick={handleSaveSchedule}
+                disabled={!scheduleForm.message.trim() || !scheduleForm.scheduled_date || !scheduleForm.scheduled_time || savingSchedule}
+                className="w-full py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {savingSchedule ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Agendando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">schedule_send</span>
+                    Agendar Mensagem
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Novo Lançamento da Clínica (movido para fora do aside) */}
+      {showClinicReceiptModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowClinicReceiptModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-80 max-w-[90vw] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-teal-50">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-teal-600">account_balance</span>
+                <h3 className="font-bold text-slate-800">Lançamento Direto</h3>
+              </div>
+              <button onClick={() => setShowClinicReceiptModal(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
+                <input
+                  type="text"
+                  value={clinicReceiptForm.value}
+                  onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, value: e.target.value }))}
+                  placeholder="0,00"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Data do Recebimento</label>
+                <input
+                  type="date"
+                  value={clinicReceiptForm.receipt_date}
+                  onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, receipt_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento</label>
+                <select
+                  value={clinicReceiptForm.payment_method}
+                  onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, payment_method: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                >
+                  <option value="">Selecione...</option>
+                  <option value="pix">PIX</option>
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="cartao_credito">Cartão de Crédito</option>
+                  <option value="cartao_debito">Cartão de Débito</option>
+                  <option value="boleto">Boleto</option>
+                  <option value="transferencia">Transferência</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Descrição</label>
+                <input
+                  type="text"
+                  value={clinicReceiptForm.description}
+                  onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Ex: Consulta, Procedimento, Entrada..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={handleSaveClinicReceipt}
+                disabled={!clinicReceiptForm.value || savingClinicReceipt}
+                className="w-full py-2 bg-teal-600 text-white text-sm font-bold rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {savingClinicReceipt ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">account_balance</span>
+                    Registrar Lançamento
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dropdown de Etapas do Pipeline (movido para fora do aside) */}
+      {showStageDropdown && selectedChat && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[60]" onClick={() => setShowStageDropdown(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-72 max-w-[90vw] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">Alterar Etapa</h3>
+              <button onClick={() => setShowStageDropdown(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {PIPELINE_STAGES.map(stage => (
+                <button
+                  key={stage.value}
+                  onClick={() => handleChangeStage(stage.value)}
+                  className={`w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-2 border-b border-slate-100 last:border-0 ${
+                    selectedChat.status === stage.value ? 'bg-cyan-50 font-bold' : ''
+                  }`}
+                >
+                  <span className="size-3 rounded-full shrink-0" style={{ backgroundColor: stage.color }}></span>
+                  <span className="flex-1">{stage.label}</span>
+                  {selectedChat.status === stage.value && (
+                    <span className="material-symbols-outlined text-cyan-600 text-[16px]">check</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dropdown de Origem do Lead (movido para fora do aside) */}
+      {showSourceDropdown && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[60]" onClick={() => setShowSourceDropdown(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-72 max-w-[90vw] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-slate-800">Origem do Lead</h3>
+              <button onClick={() => setShowSourceDropdown(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              <button
+                onClick={() => handleUpdateSource(null)}
+                className={`w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-2 border-b border-slate-100 ${
+                  !selectedSourceId ? 'bg-cyan-50 font-bold' : ''
+                }`}
+              >
+                <span className="size-3 rounded-full bg-slate-300"></span>
+                <span className="flex-1">Sem origem definida</span>
+                {!selectedSourceId && (
+                  <span className="material-symbols-outlined text-cyan-600 text-[16px]">check</span>
+                )}
+              </button>
+              {leadSources.map(source => {
+                const sourceColor = getSourceColor(source);
+                return (
+                  <button
+                    key={source.id}
+                    onClick={() => handleUpdateSource(source.id)}
+                    className={`w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-2 border-b border-slate-100 last:border-0 ${
+                      selectedSourceId === source.id ? 'bg-cyan-50 font-bold' : ''
+                    }`}
+                  >
+                    <span className="size-3 rounded-full" style={{ backgroundColor: sourceColor }}></span>
+                    <span className="flex-1">{source.name}</span>
+                    {source.code && <span className="text-[10px] text-slate-400">{source.code}</span>}
+                    {selectedSourceId === source.id && (
+                      <span className="material-symbols-outlined text-cyan-600 text-[16px]">check</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

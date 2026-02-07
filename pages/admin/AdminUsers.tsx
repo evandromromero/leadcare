@@ -247,8 +247,8 @@ const AdminUsers: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
+              {/* Desktop Table (lg+) */}
+              <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50">
@@ -320,8 +320,8 @@ const AdminUsers: React.FC = () => {
                 </table>
               </div>
 
-              {/* Mobile Cards */}
-              <div className="md:hidden divide-y divide-slate-100">
+              {/* Mobile/Tablet Cards */}
+              <div className="lg:hidden divide-y divide-slate-100">
                 {users.map(user => (
                   <div key={user.id} className="p-4">
                     <div className="flex items-start justify-between gap-3">

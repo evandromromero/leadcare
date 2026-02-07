@@ -116,7 +116,7 @@ export default function Integrations() {
       try {
         const { data, error } = await (supabase as any)
           .from('clinics')
-          .select('email_marketing_enabled, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name, smtp_encryption, facebook_page_id, facebook_page_name, facebook_enabled, instagram_business_account_id, instagram_enabled, meta_connected_at, meta_ads_account_id, meta_ads_access_token, cloud_api_enabled, cloud_api_phone_number_id, cloud_api_phone_number, cloud_api_waba_id, cloud_api_connected_at')
+          .select('email_marketing_enabled, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name, smtp_encryption, facebook_page_id, facebook_page_name, facebook_enabled, instagram_business_account_id, instagram_username, instagram_enabled, instagram_connected_at, meta_connected_at, meta_ads_account_id, meta_ads_access_token, cloud_api_enabled, cloud_api_phone_number_id, cloud_api_phone_number, cloud_api_waba_id, cloud_api_connected_at')
           .eq('id', clinicId)
           .single();
         
@@ -390,15 +390,15 @@ export default function Integrations() {
     const phpCallbackUrl = 'https://belitx.com.br/api/meta-callback.php';
     
     if (platform === 'instagram') {
-      // Instagram usa OAuth separado
-      const instagramAppId = '4177299802587376'; // ID do app do Instagram
-      const scope = 'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments';
+      // Instagram Business usa Facebook OAuth com permissões do Instagram
+      // Isso busca a Página do Facebook + Instagram Business Account vinculado
+      const scope = 'pages_show_list,pages_messaging,pages_manage_metadata,instagram_basic,instagram_manage_messages';
       
-      authUrl = `https://www.instagram.com/oauth/authorize?` +
-        `client_id=${instagramAppId}&` +
+      authUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
+        `client_id=${metaAppId}&` +
         `redirect_uri=${encodeURIComponent(phpCallbackUrl)}&` +
         `scope=${scope}&` +
-        `state=${clinicId}&` +
+        `state=${clinicId}_instagram&` +
         `response_type=code`;
     } else {
       // Facebook OAuth
@@ -439,7 +439,7 @@ export default function Integrations() {
   const [connectionMode, setConnectionMode] = useState<'new' | 'coexistence'>('new');
   
   // Config ID para Embedded Signup (criado no Meta for Developers > Login do Facebook para Empresas > Configurações)
-  const WHATSAPP_CONFIG_ID = '879185288339459';
+  const WHATSAPP_CONFIG_ID = '763626706332381';
 
   // Conectar WhatsApp via Embedded Signup (com suporte a Coexistência)
   const handleConnectWhatsApp = () => {

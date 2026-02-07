@@ -92,9 +92,21 @@ Deno.serve(async (req: Request) => {
             continue;
           }
           
-          // Também ignorar se o sender é a página
-          if (senderId === pageId) {
-            console.log("Ignoring message from page (senderId === pageId)");
+          // Também ignorar se o sender é a página ou o instagram_business_account_id
+          if (senderId === pageId || senderId === recipientId) {
+            console.log("Ignoring message from page (senderId === pageId or recipientId)");
+            continue;
+          }
+          
+          // Buscar instagram_business_account_id da clínica para verificar se é echo
+          const { data: clinicIg } = await supabase
+            .from("clinics")
+            .select("instagram_business_account_id")
+            .eq("id", clinic.id)
+            .single();
+          
+          if (clinicIg?.instagram_business_account_id && senderId === clinicIg.instagram_business_account_id) {
+            console.log("Ignoring message from our Instagram account");
             continue;
           }
           

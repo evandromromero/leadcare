@@ -264,8 +264,8 @@ const SupportAgents: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
+              {/* Desktop Table (lg+) */}
+              <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
@@ -338,8 +338,8 @@ const SupportAgents: React.FC = () => {
                 </table>
               </div>
 
-              {/* Mobile Cards */}
-              <div className="md:hidden divide-y divide-slate-100">
+              {/* Mobile/Tablet Cards */}
+              <div className="lg:hidden divide-y divide-slate-100">
                 {agents.map((agent) => (
                   <div key={agent.id} className="p-4">
                     <div className="flex items-start justify-between mb-3">

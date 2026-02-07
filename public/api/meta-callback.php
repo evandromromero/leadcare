@@ -287,17 +287,21 @@ try {
     }
     
     $code = $_GET['code'];
-    $state = $_GET['state'] ?? ''; // clinic_id
+    $state = $_GET['state'] ?? ''; // clinic_id ou clinic_id_instagram
     
-    // Detectar se é Instagram OAuth baseado no referer ou no formato do state
-    // Instagram OAuth vem de instagram.com, Facebook vem de facebook.com
+    // Detectar se é conexão do Instagram pelo state (termina com _instagram)
+    // ou pelo referer (vem de instagram.com)
     $referer = $_SERVER['HTTP_REFERER'] ?? '';
-    $isInstagram = strpos($referer, 'instagram.com') !== false;
+    $isInstagramOAuth = strpos($referer, 'instagram.com') !== false;
+    $isInstagramFromFacebook = strpos($state, '_instagram') !== false;
+    
+    // Extrair clinic_id do state (remover _instagram se existir)
+    $clinicId = str_replace('_instagram', '', $state);
     
     // Determinar redirect_uri
     $redirectUri = FRONTEND_URL . '/api/meta-callback.php';
     
-    if ($isInstagram) {
+    if ($isInstagramOAuth) {
         // ============================================
         // FLUXO INSTAGRAM (Login do Instagram)
         // ============================================
@@ -315,7 +319,7 @@ try {
         $username = $userInfo['username'] ?? '';
         
         // Salvar no banco se tiver clinic_id
-        if (!empty($state)) {
+        if (!empty($clinicId)) {
             $updateData = [
                 'instagram_business_account_id' => $userId,
                 'instagram_username' => $username,
@@ -324,7 +328,7 @@ try {
                 'instagram_connected_at' => date('c')
             ];
             
-            supabaseRequest("clinics?id=eq.{$state}", 'PATCH', $updateData);
+            supabaseRequest("clinics?id=eq.{$clinicId}", 'PATCH', $updateData);
         }
         
         showSuccessPage('Instagram conectado!');
@@ -368,25 +372,53 @@ try {
         }
         
         // Salvar no banco se tiver clinic_id
-        if (!empty($state)) {
+        if (!empty($clinicId)) {
             $firstPage = $pages[0] ?? null;
             $firstInstagram = $instagramAccounts[0] ?? null;
             
-            $updateData = [
-                'facebook_page_id' => $firstPage['id'] ?? null,
-                'facebook_page_name' => $firstPage['name'] ?? null,
-                'facebook_page_access_token' => $firstPage['access_token'] ?? null,
-                'facebook_user_access_token' => $longToken,
-                'instagram_business_account_id' => $firstInstagram['instagram_id'] ?? null,
-                'instagram_enabled' => !empty($firstInstagram),
-                'facebook_enabled' => !empty($firstPage),
-                'meta_connected_at' => date('c')
-            ];
+            // Se veio do fluxo Instagram (via Facebook OAuth), priorizar dados do Instagram
+            if ($isInstagramFromFacebook && !empty($firstInstagram)) {
+                // Buscar username do Instagram
+                $igUsername = '';
+                try {
+                    $igInfoUrl = "https://graph.facebook.com/v18.0/{$firstInstagram['instagram_id']}?fields=username&access_token={$firstInstagram['page_access_token']}";
+                    $igInfoResponse = file_get_contents($igInfoUrl);
+                    $igInfo = json_decode($igInfoResponse, true);
+                    $igUsername = $igInfo['username'] ?? '';
+                } catch (Exception $e) {}
+                
+                $updateData = [
+                    'facebook_page_id' => $firstPage['id'] ?? null,
+                    'facebook_page_name' => $firstPage['name'] ?? null,
+                    'facebook_page_access_token' => $firstPage['access_token'] ?? null,
+                    'facebook_user_access_token' => $longToken,
+                    'instagram_business_account_id' => $firstInstagram['instagram_id'],
+                    'instagram_username' => $igUsername,
+                    'instagram_access_token' => $firstPage['access_token'] ?? null,
+                    'instagram_enabled' => true,
+                    'facebook_enabled' => !empty($firstPage),
+                    'instagram_connected_at' => date('c'),
+                    'meta_connected_at' => date('c')
+                ];
+            } else {
+                // Fluxo Facebook normal
+                $updateData = [
+                    'facebook_page_id' => $firstPage['id'] ?? null,
+                    'facebook_page_name' => $firstPage['name'] ?? null,
+                    'facebook_page_access_token' => $firstPage['access_token'] ?? null,
+                    'facebook_user_access_token' => $longToken,
+                    'instagram_business_account_id' => $firstInstagram['instagram_id'] ?? null,
+                    'instagram_enabled' => !empty($firstInstagram),
+                    'facebook_enabled' => !empty($firstPage),
+                    'meta_connected_at' => date('c')
+                ];
+            }
             
-            supabaseRequest("clinics?id=eq.{$state}", 'PATCH', $updateData);
+            supabaseRequest("clinics?id=eq.{$clinicId}", 'PATCH', $updateData);
         }
         
-        showSuccessPage('Facebook conectado!');
+        $successMsg = $isInstagramFromFacebook ? 'Instagram conectado!' : 'Facebook conectado!';
+        showSuccessPage($successMsg);
     }
     
 } catch (Exception $e) {

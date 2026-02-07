@@ -179,9 +179,23 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
     dynamicNavItems.push({ path: '/support', label: 'Suporte', icon: 'support_agent', page: 'support' as MenuPage });
   }
 
-  const navItems = dynamicNavItems.filter(item => 
-    item.page === 'support' || item.path === '/integrations' || item.path === '/email-marketing' || item.path === '/links' || canAccessPage(user?.role, item.page as MenuPage)
-  );
+  const navItems = dynamicNavItems.filter(item => {
+    // Suporte tem lógica própria
+    if (item.page === 'support') return true;
+    
+    // Integrações - só para quem tem acesso a 'connect' ou 'settings'
+    if (item.path === '/integrations') {
+      return canAccessPage(user?.role, 'connect') || canAccessPage(user?.role, 'settings');
+    }
+    
+    // Email Marketing e Links - só para quem tem acesso a 'settings'
+    if (item.path === '/email-marketing' || item.path === '/links') {
+      return canAccessPage(user?.role, 'settings');
+    }
+    
+    // Demais páginas seguem a permissão normal
+    return canAccessPage(user?.role, item.page as MenuPage);
+  });
 
   const statusColors = {
     connected: 'bg-green-500',
@@ -215,7 +229,7 @@ const Layout: React.FC<LayoutProps> = ({ children, state, setState }) => {
       )}
 
       {/* Mobile Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 md:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 md:hidden flex flex-col ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           {logoLoaded && logoUrl && <img src={logoUrl} alt="Belitx" className="h-8 w-auto" />}
           <button 
