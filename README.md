@@ -2454,6 +2454,95 @@ O webhook detecta códigos nos seguintes formatos:
 
 ---
 
+## Atualizações - 07/02/2026
+
+### Pipeline Customizável - Kanban
+
+#### 1. Etapas Personalizadas
+- Cliente pode criar suas próprias etapas no Kanban via modal "Gerenciar Etapas"
+- **Criar** nova etapa com nome e cor personalizada (14 cores disponíveis)
+- **Editar** nome e cor de qualquer etapa
+- **Excluir** etapas customizadas (ao excluir, pergunta para onde mover os leads)
+
+#### 2. Etapas Obrigatórias Protegidas (is_system = true)
+- **Novo Lead** - dispara evento Contact para Meta Conversions API
+- **Convertido (Ganhos)** - dispara evento Purchase para Meta e Google Ads
+- **Perdido** - usado nas métricas de perda
+- Podem ter o label editado, mas não podem ser excluídas
+
+#### 3. Reordenar Etapas
+- Setas para cima/baixo no modal de gerenciar etapas
+- "Novo Lead" sempre na primeira posição
+- "Perdido" sempre na última posição
+- Demais etapas podem ser reordenadas livremente
+
+#### 4. Isolamento por Clínica
+- Cada clínica tem suas próprias etapas (tabela `pipeline_settings` com `clinic_id`)
+- RLS garante que uma clínica não vê etapas de outra
+- Unique constraint: `clinic_id + status_key`
+
+#### 5. Trigger para Novas Clínicas
+- Trigger `create_default_pipeline_stages` na tabela `clinics`
+- Ao criar nova clínica, 8 etapas padrão são inseridas automaticamente
+
+#### 6. Grupos Removidos do Kanban
+- Filtro `!chat.is_group` adicionado no `filteredChats`
+- Apenas leads individuais aparecem no Kanban
+
+#### 7. Inbox Atualizado
+- Seletor de etapas no Inbox usa `usePipelineStages` (etapas dinâmicas do banco)
+- Acompanha customizações feitas no Kanban
+
+### Tabela pipeline_settings
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | uuid | PK |
+| `clinic_id` | uuid | FK para clinics |
+| `status_key` | text | Chave interna (ex: novo_lead) |
+| `label` | text | Nome exibido (ex: Novo Lead) |
+| `color` | text | Cor hex (ex: #3B82F6) |
+| `position` | int | Ordem no Kanban |
+| `is_system` | bool | Se é etapa obrigatória |
+
+### Arquivos Modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `hooks/usePipelineStages.ts` | Hook CRUD de etapas (criar, editar, excluir, reordenar) |
+| `pages/Kanban.tsx` | Columns dinâmico, modal gerenciar etapas, setas reordenar, filtro grupos |
+| `pages/Inbox.tsx` | PIPELINE_STAGES dinâmico via hook |
+
+---
+
+### Correções de Métricas e Dashboard
+
+#### 1. Bug Receita Comercial para Comercial (view_mode = shared)
+- **Problema**: Comercial com `view_mode = shared` via R$ 0 na Receita Comercial
+- **Causa**: Código filtrava `created_by = user.id` independente do `view_mode`
+- **Correção**: Agora só filtra por `created_by` quando `view_mode = personal`
+- **Arquivo**: `pages/Dashboard.tsx` (linha 375)
+
+#### 2. Receita por Origem - Data do Lançamento
+- **Problema**: Tabela "Leads por Origem" contava receita apenas de chats criados no período
+- **Causa**: Lançamentos de clientes antigos (ex: Robison, R$ 10.000) não apareciam
+- **Correção**: Receita agora é filtrada pela data do lançamento/payment, não pela data do chat
+- **Resultado**: Receita vinculada a todos os chats da origem, filtrada pelo período do lançamento
+- **Arquivo**: `pages/Dashboard.tsx` (função `getFilteredDirectReceipts` + `allSourceChatIds`)
+
+#### 3. Modal Detalhamento Receita Clínica
+- **Novo**: Ao clicar no card "Receita Clínica", abre modal com detalhamento
+- **Conteúdo**: Cards individuais com cliente, valor, data, descrição e origem
+- **Header**: Total e quantidade de lançamentos do mês
+- **Responsivo**: Todas as informações visíveis sem scroll horizontal
+- **Arquivo**: `pages/Dashboard.tsx` (estado `showClinicRevenueDetail` + modal)
+
+### Nota sobre diferença Card vs Tabela
+
+O card "Receita Clínica" (R$ 41.200) mostra **todos** os lançamentos do mês. A tabela "Leads por Origem" mostra receita apenas dos leads que **entraram** no período filtrado. Clientes antigos que fizeram procedimentos no mês aparecem no card mas podem não aparecer na tabela se a origem não teve leads novos no período.
+
+---
+
 ## Desenvolvido por
 
 **Betix** - CRM para Clínicas
