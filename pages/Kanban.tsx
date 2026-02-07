@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
 import { useAuth } from '../hooks/useAuth';
+import { usePipelineStages, PipelineStage } from '../hooks/usePipelineStages';
 import { supabase } from '../lib/supabase';
 import { hasPermission } from '../lib/permissions';
 
@@ -12,38 +13,20 @@ interface KanbanProps {
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
 }
 
-type ChatStatus = 'Novo Lead' | 'Em Atendimento' | 'Follow-up' | 'Agendado' | 'Convertido' | 'Recorrente' | 'Mentoria' | 'Perdido';
-
-// Labels padrão para as colunas do pipeline
-const DEFAULT_LABELS: Record<ChatStatus, string> = {
-  'Novo Lead': 'Novos',
-  'Em Atendimento': 'Atendimento',
-  'Follow-up': 'Follow-up',
-  'Agendado': 'Agendados',
-  'Convertido': 'Ganhos',
-  'Recorrente': 'Recorrentes',
-  'Mentoria': 'Mentoria',
-  'Perdido': 'Perdidos',
-};
-
-// Hints para tooltip de ajuda
-const STAGE_HINTS: Record<ChatStatus, string> = {
-  'Novo Lead': 'Lead que acabou de entrar em contato',
-  'Em Atendimento': 'Em negociação ou atendimento ativo',
-  'Follow-up': 'Aguardando retorno do cliente. Use as etiquetas Follow 1, 2, 3, 4+ para controlar as tentativas de contato.',
-  'Agendado': 'Consulta ou procedimento agendado',
-  'Convertido': 'Fechou negócio / realizou procedimento',
-  'Recorrente': 'Paciente que já é da clínica e retornou',
-  'Mentoria': 'Lead interessado em mentoria/consultoria',
-  'Perdido': 'Não fechou / desistiu do atendimento',
-};
+// Cores disponíveis para etapas customizadas
+const STAGE_COLORS = [
+  '#3B82F6', '#F97316', '#F59E0B', '#8B5CF6', '#10B981',
+  '#0891B2', '#EAB308', '#EF4444', '#EC4899', '#6366F1',
+  '#14B8A6', '#84CC16', '#F43F5E', '#0EA5E9',
+];
 
 const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const clinicId = state.selectedClinic?.id;
   const { chats, loading, updateChatStatus, refetch } = useChats(clinicId, user?.id);
-  const columns: ChatStatus[] = ['Novo Lead', 'Em Atendimento', 'Follow-up', 'Agendado', 'Convertido', 'Recorrente', 'Mentoria', 'Perdido'];
+  const { stages, loading: stagesLoading, createStage, updateStage, deleteStage, reorderStages, fetchStages } = usePipelineStages(clinicId);
+  const columns = stages.map(s => s.status_key);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [quotesMap, setQuotesMap] = useState<Record<string, Array<{ service_type: string; value: number; status: string }>>>({});
   
@@ -56,11 +39,22 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const [newLeadForm, setNewLeadForm] = useState({ name: '', phone: '' });
   const [savingLead, setSavingLead] = useState(false);
   
-  // Estados para labels personalizados do pipeline
-  const [pipelineLabels, setPipelineLabels] = useState<Record<string, string>>(DEFAULT_LABELS);
-  const [showEditLabelsModal, setShowEditLabelsModal] = useState(false);
-  const [editingLabels, setEditingLabels] = useState<Record<string, string>>({});
-  const [savingLabels, setSavingLabels] = useState(false);
+  // Estados para modal de gerenciamento de etapas
+  const [showStagesModal, setShowStagesModal] = useState(false);
+  const [stageForm, setStageForm] = useState({ label: '', color: '#3B82F6' });
+  const [editingStage, setEditingStage] = useState<PipelineStage | null>(null);
+  const [savingStage, setSavingStage] = useState(false);
+  const [showDeleteStageModal, setShowDeleteStageModal] = useState(false);
+  const [stageToDelete, setStageToDelete] = useState<PipelineStage | null>(null);
+  const [moveToStage, setMoveToStage] = useState('');
+
+  // Helpers derivados das stages
+  const pipelineLabels: Record<string, string> = {};
+  const stageColorMap: Record<string, string> = {};
+  stages.forEach(s => {
+    pipelineLabels[s.status_key] = s.label;
+    stageColorMap[s.status_key] = s.color;
+  });
   
   // Estado para modal de informações do cliente
   const [selectedLeadInfo, setSelectedLeadInfo] = useState<any>(null);
@@ -77,7 +71,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const [searchTerm, setSearchTerm] = useState('');
   
   // Estado para aba selecionada no mobile
-  const [mobileSelectedColumn, setMobileSelectedColumn] = useState<ChatStatus>('Novo Lead');
+  const [mobileSelectedColumn, setMobileSelectedColumn] = useState('Novo Lead');
   
   // Estados para envio de email
   const [smtpConfigured, setSmtpConfigured] = useState(false);
@@ -130,31 +124,12 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     refetch();
   }, []);
 
-  // Buscar labels personalizados do pipeline
+  // MobileSelectedColumn: garantir que seja uma coluna válida
   useEffect(() => {
-    const fetchPipelineLabels = async () => {
-      if (!clinicId) return;
-      
-      try {
-        const { data } = await supabase
-          .from('pipeline_settings' as any)
-          .select('status_key, label')
-          .eq('clinic_id', clinicId);
-        
-        if (data && data.length > 0) {
-          const customLabels: Record<string, string> = { ...DEFAULT_LABELS };
-          (data as any[]).forEach(item => {
-            customLabels[item.status_key] = item.label;
-          });
-          setPipelineLabels(customLabels);
-        }
-      } catch (err) {
-        console.error('Error fetching pipeline labels:', err);
-      }
-    };
-    
-    fetchPipelineLabels();
-  }, [clinicId]);
+    if (columns.length > 0 && !columns.includes(mobileSelectedColumn)) {
+      setMobileSelectedColumn(columns[0]);
+    }
+  }, [columns]);
 
   // Buscar configuração SMTP e templates de email
   useEffect(() => {
@@ -385,30 +360,62 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     }
   };
 
-  // Salvar labels personalizados
-  const handleSaveLabels = async () => {
-    if (!clinicId) return;
+  // Mover etapa para cima ou para baixo
+  const handleMoveStage = async (stageId: string, direction: 'up' | 'down') => {
+    const idx = stages.findIndex(s => s.id === stageId);
+    if (idx < 0) return;
     
-    setSavingLabels(true);
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= stages.length) return;
+    
+    // Não permitir mover Novo Lead para baixo da posição 0
+    if (stages[idx].status_key === 'Novo Lead' && direction === 'down') return;
+    // Não permitir mover Perdido para cima da última posição
+    if (stages[idx].status_key === 'Perdido' && direction === 'up') return;
+    // Não permitir mover algo para a posição do Novo Lead (posição 0)
+    if (stages[targetIdx].status_key === 'Novo Lead' && direction === 'up') return;
+    // Não permitir mover algo para a posição do Perdido (última)
+    if (stages[targetIdx].status_key === 'Perdido' && direction === 'down') return;
+    
+    const newOrder = [...stages];
+    [newOrder[idx], newOrder[targetIdx]] = [newOrder[targetIdx], newOrder[idx]];
+    await reorderStages(newOrder);
+  };
+
+  // Salvar etapa (criar ou editar)
+  const handleSaveStage = async () => {
+    if (!stageForm.label.trim()) return;
+    
+    setSavingStage(true);
     try {
-      // Upsert para cada label
-      for (const [statusKey, label] of Object.entries(editingLabels)) {
-        await supabase
-          .from('pipeline_settings' as any)
-          .upsert({
-            clinic_id: clinicId,
-            status_key: statusKey,
-            label: label,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'clinic_id,status_key' });
+      if (editingStage) {
+        await updateStage(editingStage.id, stageForm.label, stageForm.color);
+      } else {
+        await createStage(stageForm.label, stageForm.color);
       }
-      
-      setPipelineLabels(editingLabels);
-      setShowEditLabelsModal(false);
+      setStageForm({ label: '', color: '#3B82F6' });
+      setEditingStage(null);
     } catch (err) {
-      console.error('Error saving pipeline labels:', err);
+      console.error('Error saving stage:', err);
     } finally {
-      setSavingLabels(false);
+      setSavingStage(false);
+    }
+  };
+
+  // Confirmar exclusão de etapa
+  const handleConfirmDeleteStage = async () => {
+    if (!stageToDelete || !moveToStage) return;
+    
+    setSavingStage(true);
+    try {
+      await deleteStage(stageToDelete.id, moveToStage);
+      setShowDeleteStageModal(false);
+      setStageToDelete(null);
+      setMoveToStage('');
+    } catch (err) {
+      console.error('Error deleting stage:', err);
+    } finally {
+      setSavingStage(false);
     }
   };
 
@@ -437,18 +444,23 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     fetchQuotes();
   }, [clinicId, chats]);
 
-  const columnConfig: Record<ChatStatus, { color: string }> = {
-    'Novo Lead': { color: 'blue' },
-    'Em Atendimento': { color: 'orange' },
-    'Follow-up': { color: 'amber' },
-    'Agendado': { color: 'purple' },
-    'Convertido': { color: 'green' },
-    'Recorrente': { color: 'cyan' },
-    'Mentoria': { color: 'yellow' },
-    'Perdido': { color: 'red' },
+  // Helper: converter hex para classe Tailwind aproximada
+  const hexToTailwind = (hex: string): string => {
+    const map: Record<string, string> = {
+      '#3B82F6': 'blue', '#F97316': 'orange', '#F59E0B': 'amber', '#8B5CF6': 'purple',
+      '#10B981': 'green', '#0891B2': 'cyan', '#EAB308': 'yellow', '#EF4444': 'red',
+      '#EC4899': 'pink', '#6366F1': 'indigo', '#14B8A6': 'teal', '#84CC16': 'lime',
+      '#F43F5E': 'rose', '#0EA5E9': 'sky',
+    };
+    return map[hex] || 'slate';
   };
 
-  const moveLead = async (id: string, newStage: ChatStatus) => {
+  const columnConfig: Record<string, { color: string }> = {};
+  stages.forEach(s => {
+    columnConfig[s.status_key] = { color: hexToTailwind(s.color) };
+  });
+
+  const moveLead = async (id: string, newStage: string) => {
     await updateChatStatus(id, newStage);
   };
 
@@ -522,7 +534,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   };
 
   // Chats filtrados por período, busca e etiqueta
-  const filteredChats = chats.filter(chat => filterByPeriod(chat) && filterBySearch(chat) && filterByTag(chat));
+  const filteredChats = chats.filter(chat => !chat.is_group && filterByPeriod(chat) && filterBySearch(chat) && filterByTag(chat));
 
   // Buscar informações completas do cliente
   const handleShowLeadInfo = async (lead: any) => {
@@ -574,7 +586,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const onDrop = (e: React.DragEvent, newStage: ChatStatus) => {
+  const onDrop = (e: React.DragEvent, newStage: string) => {
     if (!canMoveLead) return;
     e.preventDefault();
     const id = e.dataTransfer.getData('text/plain');
@@ -621,12 +633,9 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
         <div className="flex items-center gap-2 md:gap-3">
            {canEditPipelineLabels && (
            <button 
-              onClick={() => {
-                setEditingLabels({ ...pipelineLabels });
-                setShowEditLabelsModal(true);
-              }}
+              onClick={() => setShowStagesModal(true)}
               className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              title="Editar nomes das etapas"
+              title="Gerenciar etapas do pipeline"
            >
               <span className="material-symbols-outlined text-[20px]">settings</span>
            </button>
@@ -980,7 +989,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                       {canMoveLead && (
                         <select
                           value={lead.status}
-                          onChange={(e) => updateChatStatus(lead.id, e.target.value as ChatStatus)}
+                          onChange={(e) => updateChatStatus(lead.id, e.target.value)}
                           className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 font-medium"
                         >
                           {columns.map(col => (
@@ -1050,7 +1059,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                   </span>
                   <span 
                     className="material-symbols-outlined text-slate-300 text-[12px] md:text-[14px] cursor-help hover:text-slate-400 hidden md:inline" 
-                    title={STAGE_HINTS[column]}
+                    title={pipelineLabels[column] || column}
                   >
                     info
                   </span>
@@ -1210,7 +1219,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                             value={lead.status}
                             onChange={(e) => {
                               e.stopPropagation();
-                              updateChatStatus(lead.id, e.target.value as ChatStatus);
+                              updateChatStatus(lead.id, e.target.value);
                             }}
                             onClick={(e) => e.stopPropagation()}
                             className="text-[10px] md:text-xs bg-slate-50 border border-slate-200 rounded-lg px-1.5 md:px-2 py-0.5 md:py-1 text-slate-600 font-medium cursor-pointer hover:border-cyan-400 focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500"
@@ -1231,46 +1240,163 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
         })}
       </div>
 
-      {/* Modal Editar Labels do Pipeline */}
-      {showEditLabelsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditLabelsModal(false)}>
-          <div className="bg-white rounded-xl md:rounded-2xl shadow-xl w-full max-w-sm md:max-w-md overflow-hidden max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-4 md:p-5 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="font-bold text-base md:text-lg text-slate-800">Editar Etapas do Pipeline</h3>
-              <button onClick={() => setShowEditLabelsModal(false)} className="text-slate-400 hover:text-slate-600">
+      {/* Modal Gerenciar Etapas do Pipeline */}
+      {showStagesModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => { setShowStagesModal(false); setEditingStage(null); setStageForm({ label: '', color: '#3B82F6' }); }}>
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-xl w-full max-w-sm md:max-w-lg overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-4 md:p-5 border-b border-slate-100 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-base md:text-lg text-slate-800">Gerenciar Etapas</h3>
+              <button onClick={() => { setShowStagesModal(false); setEditingStage(null); setStageForm({ label: '', color: '#3B82F6' }); }} className="text-slate-400 hover:text-slate-600">
                 <span className="material-symbols-outlined text-[20px] md:text-[24px]">close</span>
               </button>
             </div>
-            <div className="p-4 md:p-5 space-y-3 md:space-y-4">
-              {columns.map(column => (
-                <div key={column}>
-                  <label className="block text-[10px] md:text-xs font-bold text-slate-500 mb-1 md:mb-1.5">{column}</label>
-                  <input
-                    type="text"
-                    value={editingLabels[column] || ''}
-                    onChange={(e) => setEditingLabels(prev => ({ ...prev, [column]: e.target.value }))}
-                    placeholder={DEFAULT_LABELS[column]}
-                    className="w-full px-3 md:px-4 py-2 md:py-2.5 border border-slate-200 rounded-lg md:rounded-xl text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+            
+            <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-3">
+              {/* Lista de etapas existentes */}
+              {stages.map((stage, idx) => {
+                const isFirst = idx === 0;
+                const isLast = idx === stages.length - 1;
+                const canMoveUp = !isFirst && stage.status_key !== 'Novo Lead' && stages[idx - 1]?.status_key !== 'Novo Lead';
+                const canMoveDown = !isLast && stage.status_key !== 'Perdido' && stages[idx + 1]?.status_key !== 'Perdido';
+                
+                return (
+                  <div key={stage.id} className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    {/* Setas de reordenação */}
+                    <div className="flex flex-col gap-0.5 shrink-0">
+                      <button
+                        onClick={() => handleMoveStage(stage.id, 'up')}
+                        disabled={!canMoveUp}
+                        className={`p-0.5 rounded transition-colors ${canMoveUp ? 'text-slate-400 hover:text-cyan-600 hover:bg-cyan-50' : 'text-slate-200 cursor-not-allowed'}`}
+                        title="Mover para cima"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">keyboard_arrow_up</span>
+                      </button>
+                      <button
+                        onClick={() => handleMoveStage(stage.id, 'down')}
+                        disabled={!canMoveDown}
+                        className={`p-0.5 rounded transition-colors ${canMoveDown ? 'text-slate-400 hover:text-cyan-600 hover:bg-cyan-50' : 'text-slate-200 cursor-not-allowed'}`}
+                        title="Mover para baixo"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">keyboard_arrow_down</span>
+                      </button>
+                    </div>
+                    <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: stage.color }}></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-700 truncate">{stage.label}</p>
+                      <p className="text-[10px] text-slate-400">{stage.status_key}{stage.is_system ? ' (obrigatória)' : ''}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => {
+                          setEditingStage(stage);
+                          setStageForm({ label: stage.label, color: stage.color });
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-cyan-50 text-slate-400 hover:text-cyan-600 transition-colors"
+                        title="Editar"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                      </button>
+                      {!stage.is_system && (
+                        <button
+                          onClick={() => {
+                            setStageToDelete(stage);
+                            setMoveToStage(stages.find(s => s.status_key === 'Novo Lead')?.status_key || stages[0].status_key);
+                            setShowDeleteStageModal(true);
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
+                          title="Excluir"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Formulário criar/editar etapa */}
+            <div className="p-4 md:p-5 border-t border-slate-100 shrink-0">
+              <p className="text-xs font-bold text-slate-500 mb-2">{editingStage ? 'Editar Etapa' : 'Nova Etapa'}</p>
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={stageForm.label}
+                  onChange={(e) => setStageForm(prev => ({ ...prev, label: e.target.value }))}
+                  placeholder="Nome da etapa"
+                  className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {STAGE_COLORS.map(color => (
+                  <button
+                    key={color}
+                    onClick={() => setStageForm(prev => ({ ...prev, color }))}
+                    className={`w-7 h-7 rounded-full border-2 transition-all ${stageForm.color === color ? 'border-slate-800 scale-110' : 'border-transparent hover:scale-105'}`}
+                    style={{ backgroundColor: color }}
                   />
-                </div>
-              ))}
-              <button
-                onClick={handleSaveLabels}
-                disabled={savingLabels}
-                className="w-full py-2.5 md:py-3 bg-cyan-600 text-white text-xs md:text-sm font-bold rounded-lg md:rounded-xl hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {savingLabels ? (
-                  <>
-                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-[16px] md:text-[18px]">save</span>
-                    Salvar Alterações
-                  </>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                {editingStage && (
+                  <button
+                    onClick={() => { setEditingStage(null); setStageForm({ label: '', color: '#3B82F6' }); }}
+                    className="px-4 py-2 text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 text-xs font-bold"
+                  >
+                    Cancelar
+                  </button>
                 )}
-              </button>
+                <button
+                  onClick={handleSaveStage}
+                  disabled={!stageForm.label.trim() || savingStage}
+                  className="flex-1 py-2 bg-cyan-600 text-white text-xs font-bold rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {savingStage ? (
+                    <><div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Salvando...</>
+                  ) : (
+                    <><span className="material-symbols-outlined text-[16px]">{editingStage ? 'save' : 'add'}</span> {editingStage ? 'Salvar' : 'Criar Etapa'}</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Exclusão de Etapa */}
+      {showDeleteStageModal && stageToDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowDeleteStageModal(false)}></div>
+          <div className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="material-symbols-outlined text-red-600">delete</span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Excluir etapa</h3>
+              <p className="text-slate-500 text-sm mb-4">
+                A etapa <strong>"{stageToDelete.label}"</strong> será excluída. Para onde mover os leads desta etapa?
+              </p>
+              <select
+                value={moveToStage}
+                onChange={(e) => setMoveToStage(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm mb-4 focus:ring-2 focus:ring-red-500"
+              >
+                {stages.filter(s => s.id !== stageToDelete.id).map(s => (
+                  <option key={s.id} value={s.status_key}>{s.label}</option>
+                ))}
+              </select>
+              <div className="flex gap-3">
+                <button onClick={() => setShowDeleteStageModal(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50">
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleConfirmDeleteStage} 
+                  disabled={savingStage}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                >
+                  {savingStage ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

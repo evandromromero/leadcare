@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { hasPermission } from '../lib/permissions';
 import { canSendMessage as checkRateLimit, recordMessageSent, waitForRateLimit } from '../lib/rateLimiter';
 import { SectionConfigModal, useSectionConfig, SectionKey, SECTION_KEYS, SECTION_LABELS } from '../components/InboxDetailsSections';
+import { usePipelineStages } from '../hooks/usePipelineStages';
 
 const DEFAULT_QUICK_REPLIES = [
   { id: '1', text: 'Olá! Como posso ajudar você hoje?' },
@@ -23,16 +24,6 @@ interface InboxProps {
 type FilterType = 'todos' | 'nao_lidos' | 'aguardando' | 'followup' | 'grupos';
 type ChannelType = 'whatsapp' | 'instagram' | 'facebook';
 
-const PIPELINE_STAGES = [
-  { value: 'Novo Lead', label: 'Novo Lead', color: '#0891b2', hint: 'Lead que acabou de entrar em contato' },
-  { value: 'Em Atendimento', label: 'Em Atendimento', color: '#f59e0b', hint: 'Em negociação ou atendimento ativo' },
-  { value: 'Follow-up', label: 'Follow-up', color: '#f59e0b', hint: 'Aguardando retorno do cliente. Use as etiquetas Follow 1, 2, 3, 4+ para controlar as tentativas.' },
-  { value: 'Agendado', label: 'Agendado', color: '#8b5cf6', hint: 'Consulta ou procedimento agendado' },
-  { value: 'Convertido', label: 'Convertido', color: '#10b981', hint: 'Fechou negócio / realizou procedimento' },
-  { value: 'Recorrente', label: 'Recorrente', color: '#0e7490', hint: 'Paciente que já é da clínica e retornou' },
-  { value: 'Mentoria', label: 'Mentoria', color: '#ca8a04', hint: 'Lead interessado em mentoria/consultoria' },
-  { value: 'Perdido', label: 'Perdido', color: '#ef4444', hint: 'Não fechou / desistiu do atendimento' },
-];
 
 const formatDateOnly = (dateStr: string): string => {
   if (!dateStr) return '';
@@ -55,6 +46,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const navigate = useNavigate();
   const clinicId = state.selectedClinic?.id;
   const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages, togglePinChat, addOptimisticMessage, updateOptimisticMessage } = useChats(clinicId, user?.id);
+  const { stages } = usePipelineStages(clinicId);
+  const PIPELINE_STAGES = stages.map(s => ({ value: s.status_key, label: s.label, color: s.color, hint: s.label }));
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({});
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);

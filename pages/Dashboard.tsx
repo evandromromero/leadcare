@@ -173,6 +173,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     monthly: number;
   } | null>(null);
   
+  // Estado para modal de detalhamento da receita clínica
+  const [showClinicRevenueDetail, setShowClinicRevenueDetail] = useState(false);
+  const [clinicRevenueDetails, setClinicRevenueDetails] = useState<Array<{
+    id: string;
+    total_value: number;
+    receipt_date: string;
+    description: string;
+    client_name: string;
+    origem: string;
+    origem_color: string;
+  }>>([]);
+  
   // Estado para lista detalhada de vendas do comercial
   const [mySalesDetails, setMySalesDetails] = useState<Array<{
     id: string;
@@ -296,6 +308,71 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     }
   };
   
+  // Buscar detalhamento da receita clínica do mês
+  const fetchClinicRevenueDetails = async () => {
+    if (!clinicId) return;
+    
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    
+    const { data } = await supabase
+      .from('clinic_receipts' as any)
+      .select('id, total_value, receipt_date, description, chat_id')
+      .eq('clinic_id', clinicId)
+      .gte('receipt_date', firstDayOfMonth)
+      .lte('receipt_date', lastDayOfMonth)
+      .order('receipt_date', { ascending: false });
+    
+    if (data && data.length > 0) {
+      const chatIds = [...new Set((data as any[]).map(r => r.chat_id).filter(Boolean))];
+      
+      // Buscar nomes dos clientes e origens
+      const { data: chatsInfo } = await (supabase as any)
+        .from('chats')
+        .select('id, client_name, source_id')
+        .in('id', chatIds);
+      
+      const sourceIds = [...new Set((chatsInfo || []).map((c: any) => c.source_id).filter(Boolean))];
+      let sourcesMap: Record<string, { name: string; color: string }> = {};
+      
+      if (sourceIds.length > 0) {
+        const { data: sources } = await supabase
+          .from('lead_sources' as any)
+          .select('id, name, color')
+          .in('id', sourceIds);
+        if (sources) {
+          (sources as any[]).forEach(s => {
+            sourcesMap[s.id] = { name: s.name, color: s.color || '#6B7280' };
+          });
+        }
+      }
+      
+      const chatsMap: Record<string, { client_name: string; source_id: string | null }> = {};
+      (chatsInfo || []).forEach((c: any) => {
+        chatsMap[c.id] = { client_name: c.client_name, source_id: c.source_id };
+      });
+      
+      const details = (data as any[]).map(r => {
+        const chat = chatsMap[r.chat_id] || { client_name: 'Desconhecido', source_id: null };
+        const source = chat.source_id ? sourcesMap[chat.source_id] : null;
+        return {
+          id: r.id,
+          total_value: Number(r.total_value),
+          receipt_date: r.receipt_date,
+          description: r.description || '',
+          client_name: chat.client_name,
+          origem: source?.name || 'Sem origem',
+          origem_color: source?.color || '#6B7280',
+        };
+      });
+      
+      setClinicRevenueDetails(details);
+    }
+    
+    setShowClinicRevenueDetail(true);
+  };
+
   // Filtrar leadSourceStats baseado nas origens selecionadas
   const filteredLeadSourceStats = useMemo(() => {
     if (selectedSources === null) return leadSourceStats;
@@ -366,14 +443,15 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         }
         
         // Buscar faturamento
-        // Para Comercial: buscar apenas payments que ELE CRIOU (created_by)
-        // Para outros: buscar payments dos chats visíveis
+        // Para Comercial em modo pessoal: buscar apenas payments que ELE CRIOU (created_by)
+        // Para Comercial em modo shared ou outros perfis: buscar todos payments da clínica
         const isComercial = userRole === 'Comercial';
+        const isPersonalComercial = isComercial && userViewModeForStats === 'personal';
         
         let paymentsData: any[] | null = null;
         
-        if (isComercial && user?.id) {
-          // Comercial vê apenas o que ele criou (excluindo canceladas)
+        if (isPersonalComercial && user?.id) {
+          // Comercial em modo pessoal: vê apenas o que ele criou (excluindo canceladas)
           const { data } = await supabase
             .from('payments' as any)
             .select('id, value, payment_date, chat_id, created_by, status')
@@ -382,14 +460,12 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             .or('status.is.null,status.eq.active');
           paymentsData = data as any[];
         } else {
-          // Outros perfis: buscar todos payments da clínica e filtrar no frontend
-          // (evita erro 400 quando há muitos chat_ids na URL)
+          // Shared ou outros perfis: buscar todos payments da clínica
           const { data } = await supabase
             .from('payments' as any)
             .select('id, value, payment_date, chat_id, created_by, status')
             .eq('clinic_id', clinicId)
             .or('status.is.null,status.eq.active');
-          // Filtrar apenas payments dos chats visíveis
           paymentsData = (data || []).filter((p: any) => chatIdsForStats.includes(p.chat_id));
         }
         
@@ -570,14 +646,62 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             const filteredChats = getFilteredChats(chats, sourcesPeriodFilter);
             const filteredPayments = getFilteredPayments(paymentsData as any[] || [], sourcesPeriodFilter);
             
-            // Calcular estatísticas por origem usando apenas os chats visíveis
+            // Função para filtrar lançamentos diretos por período
+            const getFilteredDirectReceipts = (allReceipts: any[], period: 'today' | 'yesterday' | 'all' | '7d' | '30d' | 'month') => {
+              if (period === 'all') return allReceipts;
+              
+              const now = new Date();
+              let startDate: Date;
+              let endDate: Date | null = null;
+              
+              switch (period) {
+                case 'today':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                  break;
+                case 'yesterday':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+                  endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                  break;
+                case '7d':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+                  break;
+                case '30d':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
+                  break;
+                case 'month':
+                  startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+                  break;
+                default:
+                  return allReceipts;
+              }
+              
+              if (endDate) {
+                return allReceipts.filter(r => {
+                  const d = new Date(r.receipt_date);
+                  return d >= startDate && d < endDate;
+                });
+              }
+              return allReceipts.filter(r => new Date(r.receipt_date) >= startDate);
+            };
+            
+            const filteredDirectReceipts = getFilteredDirectReceipts(directReceiptsForSources as any[] || [], sourcesPeriodFilter);
+            
+            // Todos os chats da clínica (sem filtro de período) para vincular receita à origem
+            const allClinicChats = chats;
+            
+            // Calcular estatísticas por origem
+            // Leads: filtrados pelo período (data de criação do chat)
+            // Receita: filtrada pela data do lançamento/payment no período
             const stats: LeadSourceStats[] = (sourcesData as any[]).map(source => {
+              // Leads do período (filtrados por data de criação)
               const sourceChats = filteredChats.filter(c => (c as any).source_id === source.id);
               const convertedChats = sourceChats.filter(c => c.status === 'Convertido');
-              const sourceChatIds = sourceChats.map(c => c.id);
               
-              // Valor comercial (payments filtrados por período)
-              const sourcePayments = filteredPayments.filter(p => sourceChatIds.includes(p.chat_id));
+              // Todos os chats desta origem (para vincular receita)
+              const allSourceChatIds = allClinicChats.filter(c => (c as any).source_id === source.id).map(c => c.id);
+              
+              // Valor comercial (payments filtrados por data do payment no período)
+              const sourcePayments = filteredPayments.filter(p => allSourceChatIds.includes(p.chat_id));
               const revenue = sourcePayments.reduce((sum, p) => sum + Number(p.value), 0);
               
               // Receita clínica (clinic_receipts vinculados aos payments desta origem)
@@ -586,9 +710,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                 .filter(r => sourcePaymentIds.includes(r.payment_id))
                 .reduce((sum, r) => sum + Number(r.total_value), 0);
               
-              // Receita direta (lançamentos sem payment_id, vinculados aos chats desta origem)
-              const directRevenueFromSource = (directReceiptsForSources as any[] || [])
-                .filter(r => sourceChatIds.includes(r.chat_id))
+              // Receita direta (lançamentos sem payment_id, filtrados por data do lançamento)
+              const directRevenueFromSource = filteredDirectReceipts
+                .filter(r => allSourceChatIds.includes(r.chat_id))
                 .reduce((sum, r) => sum + Number(r.total_value), 0);
               
               const clinicRevenue = clinicRevenueFromPayments + directRevenueFromSource;
@@ -1955,7 +2079,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           </div>
 
           {/* Receita Clínica do Mês */}
-          <div className="bg-gradient-to-br from-teal-500 to-teal-600 p-3 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white">
+          <div onClick={fetchClinicRevenueDetails} className="bg-gradient-to-br from-teal-500 to-teal-600 p-3 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all">
             <div className="flex justify-between items-start mb-2 sm:mb-3">
               <div className="min-w-0 flex-1">
                 <p className="text-teal-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider truncate">Receita Clínica</p>
@@ -4518,6 +4642,71 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     Deletar
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Detalhamento Receita Clínica */}
+      {showClinicRevenueDetail && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowClinicRevenueDetail(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-5 bg-gradient-to-r from-teal-500 to-teal-600 text-white flex justify-between items-center shrink-0">
+              <div>
+                <h3 className="font-bold text-lg">Receita Clínica</h3>
+                <p className="text-teal-100 text-xs mt-0.5">
+                  {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} - {clinicRevenueDetails.length} lançamento{clinicRevenueDetails.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-black">
+                  R$ {clinicRevenueDetails.reduce((sum, r) => sum + r.total_value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {clinicRevenueDetails.length === 0 ? (
+                <div className="text-center py-10 text-slate-400">
+                  <span className="material-symbols-outlined text-4xl mb-2">receipt_long</span>
+                  <p className="text-sm">Nenhum lançamento no mês</p>
+                </div>
+              ) : (
+                clinicRevenueDetails.map(r => (
+                  <div key={r.id} className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                    <div className="flex justify-between items-start mb-1.5">
+                      <p className="text-sm font-bold text-slate-800">{r.client_name}</p>
+                      <p className="text-sm font-black text-emerald-600 shrink-0 ml-3">
+                        R$ {r.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">calendar_today</span>
+                        {new Date(r.receipt_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </span>
+                      {r.description && (
+                        <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[13px]">description</span>
+                          {r.description}
+                        </span>
+                      )}
+                      <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.origem_color }}></span>
+                        {r.origem}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-200 shrink-0">
+              <button
+                onClick={() => setShowClinicRevenueDetail(false)}
+                className="w-full px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
+              >
+                Fechar
               </button>
             </div>
           </div>
