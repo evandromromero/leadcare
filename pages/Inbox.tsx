@@ -3863,7 +3863,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   ref={(el) => { messageRefs.current[m.id] = el; }}
                   className={`flex ${!m.is_from_client ? 'justify-end' : 'justify-start'} w-full group transition-all duration-300`}
                 >
-                  <div className={`max-w-[75%] p-3 rounded-2xl shadow-sm relative break-words overflow-hidden ${
+                  <div className="max-w-[75%] relative">
+                  <div className={`p-3 rounded-2xl shadow-sm break-words overflow-hidden ${
                     !m.is_from_client 
                       ? 'bg-cyan-600 text-white rounded-tr-none' 
                       : 'bg-white text-slate-800 rounded-tl-none'
@@ -3969,9 +3970,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                         </span>
                       )}
                     </div>
+                  </div>
                     {/* Botões de ação - aparecem no hover */}
                     {canSendMessage && (
-                      <div className={`absolute ${m.is_from_client ? '-right-20' : '-left-28'} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 flex gap-1 transition-all`}>
+                      <div className={`absolute ${m.is_from_client ? 'left-0' : 'right-0'} -top-3 opacity-0 group-hover:opacity-100 flex gap-1 transition-all z-10`}>
                         <button
                           onClick={() => setReplyingTo({
                             id: m.id,

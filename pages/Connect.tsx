@@ -87,7 +87,16 @@ const Connect: React.FC<ConnectProps> = ({ state, setState }) => {
     fetchUserSettings();
   }, [user?.id, instances, selectedInstance, selectInstance]);
 
-  const canShowNewConnectionButton = isAdmin || (userSettings.canCreateInstance && !userSettings.hasPersonalInstance);
+  // Só mostra botão 'Nova Conexão' se não tem nenhuma instância ainda
+  const hasAnyInstance = instances.length > 0;
+  const canShowNewConnectionButton = !hasAnyInstance && (isAdmin || (userSettings.canCreateInstance && !userSettings.hasPersonalInstance));
+
+  // Auto-selecionar instância desconectada se só tem uma e nenhuma está selecionada
+  useEffect(() => {
+    if (!selectedInstance && instances.length === 1) {
+      selectInstance(instances[0].id);
+    }
+  }, [instances, selectedInstance, selectInstance]);
 
   useEffect(() => {
     if (!clinicId && !state.currentUser) {
