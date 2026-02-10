@@ -80,6 +80,19 @@ export default function LinkConversations() {
   const [historyData, setHistoryData] = useState<ClickInteraction[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   
+  // Modal de conversa (somente leitura)
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{
+    id: string;
+    content: string | null;
+    is_from_client: boolean;
+    created_at: string;
+    media_url: string | null;
+    type: string | null;
+  }>>([]);
+  const [chatLeadName, setChatLeadName] = useState('');
+  const [loadingChat, setLoadingChat] = useState(false);
+
   // Estado para cards expansíveis no mobile
   const [expandedConvId, setExpandedConvId] = useState<string | null>(null);
 
@@ -195,25 +208,13 @@ export default function LinkConversations() {
     // Para cada chat, buscar informações adicionais
     const conversationsWithDetails = await Promise.all(
       chatsData.map(async (chat: any) => {
-        // Buscar cliques do link para este chat (por chat_id OU phone_number)
-        const { data: clicksByChat } = await (supabase as any)
+        // Buscar cliques do link para este chat
+        const { data: clicksData } = await (supabase as any)
           .from('link_clicks')
           .select('id, utm_source, utm_medium, utm_campaign, clicked_at')
           .eq('link_id', linkId)
           .eq('chat_id', chat.id)
           .order('clicked_at', { ascending: true });
-        
-        // Se não encontrou por chat_id, tentar por phone_number (fallback)
-        let clicksData = clicksByChat;
-        if ((!clicksData || clicksData.length === 0) && chat.phone_number) {
-          const { data: clicksByPhone } = await (supabase as any)
-            .from('link_clicks')
-            .select('id, utm_source, utm_medium, utm_campaign, clicked_at')
-            .eq('link_id', linkId)
-            .ilike('phone_number', `%${chat.phone_number.replace(/\D/g, '').slice(-8)}%`)
-            .order('clicked_at', { ascending: true });
-          clicksData = clicksByPhone;
-        }
 
         const clickCount = clicksData?.length || 0;
         const firstClick = clicksData?.[0];
@@ -254,7 +255,7 @@ export default function LinkConversations() {
               .gte('created_at', clientMsg.created_at)
               .order('created_at', { ascending: true })
               .limit(1)
-              .single();
+              .maybeSingle();
             
             firstResponseAfterLastClick = response;
             
@@ -334,6 +335,31 @@ export default function LinkConversations() {
     return `${Math.floor(seconds / 86400)}d`;
   };
 
+  // Buscar mensagens de um chat (somente leitura)
+  const fetchChatMessages = async (chatId: string, clientName: string) => {
+    setLoadingChat(true);
+    setChatLeadName(clientName || 'Lead');
+    setShowChatModal(true);
+    setChatMessages([]);
+    
+    try {
+      const { data } = await (supabase as any)
+        .from('messages')
+        .select('id, content, is_from_client, created_at, media_url, type')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+      
+      if (data) {
+        setChatMessages(data);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar mensagens:', e);
+    }
+    
+    setLoadingChat(false);
+  };
+
   // Buscar histórico de interações (cliques) de um contato
   const fetchContactHistory = async (chatId: string, clientName: string) => {
     setHistoryModal({ open: true, chatId, clientName });
@@ -385,7 +411,7 @@ export default function LinkConversations() {
               .gte('created_at', firstMsg.created_at)
               .order('created_at', { ascending: true })
               .limit(1)
-              .single();
+              .maybeSingle();
             
             if (firstResponse) {
               const msgTime = new Date(firstMsg.created_at).getTime();
@@ -736,6 +762,13 @@ export default function LinkConversations() {
                         {/* Ações */}
                         <div className="flex gap-2 pt-2 border-t border-slate-100">
                           <button
+                            onClick={(e) => { e.stopPropagation(); fetchChatMessages(conv.id, conv.client_name); }}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-cyan-600 text-white rounded-lg text-xs font-medium"
+                          >
+                            <span className="material-symbols-outlined text-sm">forum</span>
+                            Ler
+                          </button>
+                          <button
                             onClick={(e) => { e.stopPropagation(); navigate(`/inbox?chat=${conv.id}`); }}
                             className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-green-100 text-green-600 rounded-lg text-xs font-medium"
                           >
@@ -832,6 +865,13 @@ export default function LinkConversations() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => fetchChatMessages(conv.id, conv.client_name)}
+                            className="p-1.5 hover:bg-cyan-50 rounded text-cyan-600"
+                            title="Ver conversa"
+                          >
+                            <span className="material-symbols-outlined text-lg">forum</span>
+                          </button>
                           <button
                             onClick={() => navigate(`/inbox?chat=${conv.id}`)}
                             className="p-1.5 hover:bg-green-50 rounded text-green-600"
@@ -1002,6 +1042,98 @@ export default function LinkConversations() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de conversa (somente leitura) */}
+      {showChatModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowChatModal(false)}></div>
+          <div className="relative bg-white w-full max-w-lg rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-cyan-600 to-teal-600 flex-shrink-0">
+              <button 
+                onClick={() => setShowChatModal(false)}
+                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-white/80 hover:text-white"
+              >
+                <span className="material-symbols-outlined text-xl sm:text-2xl">close</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-lg sm:text-xl">forum</span>
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-sm sm:text-base">{chatLeadName}</h3>
+                  <p className="text-cyan-100 text-[10px] sm:text-xs">{chatMessages.length} mensagens</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-3 bg-slate-50 min-h-[200px] max-h-[60vh]">
+              {loadingChat ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600"></div>
+                </div>
+              ) : chatMessages.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-sm">
+                  Nenhuma mensagem encontrada
+                </div>
+              ) : (
+                chatMessages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.is_from_client ? 'justify-start' : 'justify-end'}`}>
+                    <div className={`max-w-[80%] rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 ${
+                      msg.is_from_client 
+                        ? 'bg-white border border-slate-200 rounded-tl-sm' 
+                        : 'bg-cyan-600 text-white rounded-tr-sm'
+                    }`}>
+                      {msg.media_url && (
+                        <div className="mb-1.5">
+                          {msg.type === 'image' ? (
+                            <img src={msg.media_url} alt="" className="max-w-full rounded-lg max-h-48 object-cover" />
+                          ) : msg.type === 'audio' || msg.type === 'ptt' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">mic</span>
+                              <span className="text-[10px] sm:text-xs opacity-70">Áudio</span>
+                            </div>
+                          ) : msg.type === 'video' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">videocam</span>
+                              <span className="text-[10px] sm:text-xs opacity-70">Vídeo</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">attach_file</span>
+                              <span className="text-[10px] sm:text-xs opacity-70">Arquivo</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {msg.content && (
+                        <p className={`text-xs sm:text-sm whitespace-pre-wrap break-words ${
+                          msg.is_from_client ? 'text-slate-800' : 'text-white'
+                        }`}>
+                          {msg.content}
+                        </p>
+                      )}
+                      <p className={`text-[9px] sm:text-[10px] mt-1 ${
+                        msg.is_from_client ? 'text-slate-400' : 'text-cyan-100'
+                      }`}>
+                        {new Date(msg.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <div className="p-3 sm:p-4 border-t border-slate-200 bg-white flex-shrink-0">
+              <button
+                onClick={() => setShowChatModal(false)}
+                className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-100 text-slate-700 rounded-lg sm:rounded-xl font-medium hover:bg-slate-200 transition-colors text-xs sm:text-sm"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>

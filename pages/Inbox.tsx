@@ -166,10 +166,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const [taskForm, setTaskForm] = useState({ title: '', description: '', due_date: '' });
   const [savingTask, setSavingTask] = useState(false);
   
-  // Estados para modal de valor na conversão
-  const [showConversionValueModal, setShowConversionValueModal] = useState(false);
-  const [conversionValue, setConversionValue] = useState('');
-  const [pendingConversionChatId, setPendingConversionChatId] = useState<string | null>(null);
+  // Estados para modal de valor na conversão (desativado - evento Meta agora dispara ao lançar valor)
+  // const [showConversionValueModal, setShowConversionValueModal] = useState(false);
+  // const [conversionValue, setConversionValue] = useState('');
+  // const [pendingConversionChatId, setPendingConversionChatId] = useState<string | null>(null);
   
   // Estados para mensagens agendadas
   const [scheduledMessages, setScheduledMessages] = useState<Array<{
@@ -922,71 +922,22 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   };
 
   // Alterar etapa do funil
+  // Evento Meta NÃO é disparado aqui - é disparado ao lançar valor (payment ou clinic_receipt)
   const handleChangeStage = async (newStatus: string) => {
     if (!selectedChatId) return;
     
-    // Se está mudando para "Convertido", verificar se tem valor
-    if (newStatus === 'Convertido') {
-      // Verificar se tem orçamento aprovado ou pagamentos
-      const totalQuotes = quotes.filter(q => q.status === 'approved').reduce((sum, q) => sum + q.value, 0);
-      const totalPayments = payments.reduce((sum, p) => sum + p.value, 0);
-      const totalValue = totalQuotes || totalPayments;
-      
-      if (totalValue > 0) {
-        // Tem valor, enviar evento e mudar status
-        await updateChatStatus(selectedChatId, newStatus);
-        await sendFacebookConversionEvent(selectedChatId, totalValue, newStatus);
-        setShowStageDropdown(false);
-      } else {
-        // Não tem valor, abrir modal para pedir
-        setPendingConversionChatId(selectedChatId);
-        setConversionValue('');
-        setShowConversionValueModal(true);
-        setShowStageDropdown(false);
-      }
-      return;
+    await updateChatStatus(selectedChatId, newStatus);
+    
+    // Enviar evento Meta para etapas intermediárias (se configurado), exceto Convertido
+    // Para Convertido, o evento já é disparado ao salvar payment ou clinic_receipt
+    if (newStatus !== 'Convertido') {
+      await sendFacebookConversionEvent(selectedChatId, 0, newStatus);
     }
     
-    await updateChatStatus(selectedChatId, newStatus);
-    // Enviar evento Meta para outras etapas (se configurado)
-    await sendFacebookConversionEvent(selectedChatId, 0, newStatus);
     setShowStageDropdown(false);
   };
 
-  // Confirmar conversão com valor informado
-  const handleConfirmConversion = async () => {
-    if (!pendingConversionChatId || !conversionValue) return;
-    
-    const value = parseFloat(conversionValue.replace(',', '.'));
-    if (isNaN(value) || value <= 0) {
-      alert('Informe um valor válido');
-      return;
-    }
-    
-    // Salvar como pagamento
-    await supabase.from('payments' as any).insert({
-      chat_id: pendingConversionChatId,
-      clinic_id: clinicId,
-      value: value,
-      description: 'Valor da conversão',
-      payment_date: getLocalDateString(),
-      created_by: user?.id,
-    });
-    
-    // Mudar status e enviar evento
-    await updateChatStatus(pendingConversionChatId, 'Convertido');
-    await sendFacebookConversionEvent(pendingConversionChatId, value, 'Convertido');
-    
-    // Recarregar pagamentos
-    if (selectedChatId === pendingConversionChatId) {
-      await fetchPayments(pendingConversionChatId);
-    }
-    
-    // Fechar modal
-    setShowConversionValueModal(false);
-    setPendingConversionChatId(null);
-    setConversionValue('');
-  };
+  // handleConfirmConversion removido - evento Meta agora é disparado ao lançar payment ou clinic_receipt
 
   // Buscar responsável atual do chat e status de bloqueio
   const fetchChatAssignment = async (chatId: string) => {
@@ -1663,14 +1614,13 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   };
 
-  // Buscar lançamentos diretos da clínica (sem comercial)
+  // Buscar TODOS os lançamentos da clínica (diretos e vinculados a payments)
   const fetchClinicReceipts = async (chatId: string) => {
     try {
       const { data, error } = await supabase
         .from('clinic_receipts' as any)
-        .select('id, total_value, description, receipt_date, created_at, receipt_payments(payment_method)')
+        .select('id, total_value, description, receipt_date, created_at, payment_id, status, receipt_payments(payment_method)')
         .eq('chat_id', chatId)
-        .is('payment_id', null)
         .order('receipt_date', { ascending: false });
       
       if (!error && data) {
@@ -2305,9 +2255,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       lockChat(selectedChatId);
       fetchChatAssignment(selectedChatId);
       
-      // Buscar foto de perfil do WhatsApp se não tiver
+      // Buscar/atualizar foto de perfil do WhatsApp (hook cuida do cache de 7 dias)
       const chat = chats.find(c => c.id === selectedChatId);
-      if (chat && !chat.avatar_url && chat.phone_number) {
+      if (chat && chat.phone_number) {
         fetchAndUpdateAvatar(selectedChatId, chat.phone_number);
       }
     }
@@ -4910,7 +4860,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </section>
               )}
 
-              {/* Seção de Lançamentos da Clínica (sem comercial) */}
+              {/* Seção de Lançamentos da Clínica (todos os recebimentos) */}
               {isSectionVisible('lancamentos') && (
               <section style={{ order: getSectionOrder('lancamentos') }}>
                 <div className="flex justify-between items-center mb-4">
@@ -4919,7 +4869,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     <div className="relative group/tip">
                       <span className="material-symbols-outlined text-[12px] text-slate-400 cursor-help hover:text-cyan-600">info</span>
                       <div className="absolute left-0 top-full mt-1 w-56 p-2 bg-cyan-600 text-white text-[11px] rounded-lg opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-[9999] shadow-lg leading-relaxed">
-                        Recebimentos diretos da clínica, sem vínculo com venda comercial
+                        Todos os recebimentos da clínica para este cliente (diretos e vinculados a negociações)
                       </div>
                     </div>
                   </div>
@@ -4932,33 +4882,40 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
                 
                 {clinicReceipts.length === 0 ? (
-                  <p className="text-xs text-slate-400">Nenhum lançamento direto</p>
+                  <p className="text-xs text-slate-400">Nenhum lançamento</p>
                 ) : (
                   <div className="space-y-2">
                     {clinicReceipts.map(receipt => (
                       <div 
                         key={receipt.id} 
-                        className="p-3 rounded-xl border bg-teal-50 border-teal-200"
+                        className={`p-3 rounded-xl border ${receipt.payment_id ? 'bg-emerald-50 border-emerald-200' : 'bg-teal-50 border-teal-200'}`}
                       >
                         <div className="flex justify-between items-start mb-1">
-                          <span className="text-sm font-black text-teal-700">
-                            R$ {receipt.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-sm font-black ${receipt.payment_id ? 'text-emerald-700' : 'text-teal-700'}`}>
+                              R$ {receipt.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                            {receipt.payment_id && (
+                              <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600">VIA COMERCIAL</span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] text-slate-400">
                               {formatDateOnly(receipt.receipt_date)}
                             </span>
-                            <button
-                              onClick={() => handleDeleteClinicReceipt(receipt.id)}
-                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                              title="Excluir"
-                            >
-                              <span className="material-symbols-outlined text-[14px]">delete</span>
-                            </button>
+                            {!receipt.payment_id && (
+                              <button
+                                onClick={() => handleDeleteClinicReceipt(receipt.id)}
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                title="Excluir"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">delete</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                         {receipt.payment_method && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${receipt.payment_id ? 'bg-emerald-100 text-emerald-700' : 'bg-teal-100 text-teal-700'}`}>
                             {receipt.payment_method === 'pix' ? 'PIX' :
                              receipt.payment_method === 'dinheiro' ? 'Dinheiro' :
                              receipt.payment_method === 'cartao_credito' ? 'Cartão Crédito' :
@@ -4990,46 +4947,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </section>
               )}
 
-              {/* Modal de Valor para Conversão */}
-              {showConversionValueModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowConversionValueModal(false)}>
-                  <div className="bg-white rounded-2xl shadow-xl w-80 overflow-hidden" onClick={e => e.stopPropagation()}>
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-emerald-50">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-emerald-600">paid</span>
-                        <h3 className="font-bold text-slate-800">Valor da Conversão</h3>
-                      </div>
-                      <button onClick={() => setShowConversionValueModal(false)} className="text-slate-400 hover:text-slate-600">
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      <p className="text-sm text-slate-600">
-                        Informe o valor da venda para registrar a conversão:
-                      </p>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Valor (R$)</label>
-                        <input
-                          type="text"
-                          value={conversionValue}
-                          onChange={(e) => setConversionValue(e.target.value)}
-                          placeholder="0,00"
-                          autoFocus
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-transparent text-lg font-bold"
-                        />
-                      </div>
-                      <button
-                        onClick={handleConfirmConversion}
-                        disabled={!conversionValue}
-                        className="w-full py-2.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                        Confirmar Conversão
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Modal de Valor para Conversão removido - evento Meta agora é disparado ao lançar payment ou clinic_receipt */}
 
               {/* Seção de Tarefas */}
               {isSectionVisible('tarefas') && (
@@ -5536,14 +5454,14 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                       </button>
                     </div>
                     {clinicReceipts.length === 0 ? (
-                      <p className="text-xs text-slate-400">Nenhum lançamento direto</p>
+                      <p className="text-xs text-slate-400">Nenhum lançamento</p>
                     ) : (
                       <div className="space-y-2">
                         {clinicReceipts.slice(0, 2).map(receipt => (
-                          <div key={receipt.id} className="p-2.5 rounded-xl border bg-teal-50 border-teal-200">
+                          <div key={receipt.id} className={`p-2.5 rounded-xl border ${receipt.payment_id ? 'bg-emerald-50 border-emerald-200' : 'bg-teal-50 border-teal-200'}`}>
                             <div className="flex justify-between items-center">
-                              <span className="text-xs text-slate-600">{receipt.payment_method || 'Recebimento'}</span>
-                              <span className="text-sm font-bold text-teal-700">
+                              <span className="text-xs text-slate-600">{receipt.payment_id ? 'Via Comercial' : (receipt.payment_method || 'Recebimento')}</span>
+                              <span className={`text-sm font-bold ${receipt.payment_id ? 'text-emerald-700' : 'text-teal-700'}`}>
                                 R$ {receipt.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </span>
                             </div>

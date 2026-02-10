@@ -259,8 +259,8 @@ serve(async (req) => {
     if (message && !isFromMe && !isGroup) {
       // PRIORIDADE 1: Buscar código na mensagem (padrões conhecidos) - códigos entre () ou []
       const codePatterns = [
-        /\[([A-Z]{1,5}[0-9]{1,4})\]/i,              // [K1], [AV2], [KR1] - código entre colchetes (prioridade)
-        /\(([A-Z]{1,5}[0-9]{1,3})\)/i,              // (AV2), (KR1) - código entre parênteses
+        /\[([A-Z]{1,10}[0-9]{0,4})\]/i,             // [IK], [B], [BIANCA], [AV2], [KR1] - código entre colchetes (1-10 letras + 0-4 números)
+        /\(([A-Z]{1,10}[0-9]{0,4})\)/i,             // (IK), (B), (AV2), (KR1) - código entre parênteses (1-10 letras + 0-4 números)
         /\b(AV[0-9]{1,2})\b/i,                      // AV1, AV2 em qualquer lugar
         /\b(KR[0-9]{1,2})\b/i,                      // KR3, KR5 em qualquer lugar
         /\b(ACV[0-9]{1,2})\b/i,                     // ACV1, ACV3 em qualquer lugar
@@ -619,10 +619,18 @@ serve(async (req) => {
           .eq('id', chat.id)
           .single()
         
-        // Só atualiza se o nome atual for um número de telefone (não foi definido pelo cliente ainda)
+        // Atualiza se o nome atual for: número de telefone, 'Cliente', vazio,
+        // ou contiver o telefone (ex: chat criado pelo atendente com número como nome)
         const currentName = (currentChat as any)?.client_name || ''
-        if (/^\d+$/.test(currentName) || currentName === 'Cliente') {
+        const phoneDigits = phone.replace(/\D/g, '')
+        const isPhoneNumber = /^\d+$/.test(currentName)
+        const isGenericName = currentName === 'Cliente' || currentName === ''
+        const containsPhone = phoneDigits.length >= 8 && currentName.includes(phoneDigits.slice(-8))
+        const nameNeedsUpdate = isPhoneNumber || isGenericName || containsPhone
+        
+        if (nameNeedsUpdate) {
           updateData.client_name = pushName
+          console.log('Atualizando client_name:', currentName, '->', pushName, 'chat:', chat.id)
         }
       }
       

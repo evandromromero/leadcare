@@ -90,7 +90,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
       const { data: chatsData, error: chatsError } = await (supabase as any)
         .from('chats')
         .select(`
-          id, clinic_id, lead_id, client_name, phone_number, avatar_url, status,
+          id, clinic_id, lead_id, client_name, phone_number, avatar_url, avatar_updated_at, status,
           unread_count, last_message, last_message_time, assigned_to, created_at,
           updated_at, instance_id, locked_by, locked_at, last_message_from_client,
           channel, is_pinned, is_group, group_id, source_id,
@@ -852,12 +852,21 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
   const fetchAndUpdateAvatar = async (chatId: string, phoneNumber: string) => {
     if (!whatsappInstance || whatsappInstance.status !== 'connected' || !evolutionSettings) return;
     
-    // Verificar se já tem avatar salvo no Storage (não precisa buscar novamente)
+    // Verificar se precisa atualizar
     const existingChat = chats.find(c => c.id === chatId);
-    if (existingChat?.avatar_url && existingChat.avatar_url.includes('supabase.co/storage')) {
-      return; // Já tem avatar permanente
+    const avatarUrl = existingChat?.avatar_url;
+    const isStorageUrl = avatarUrl && avatarUrl.includes('supabase.co/storage');
+    const avatarUpdatedAt = (existingChat as any)?.avatar_updated_at;
+    
+    if (isStorageUrl && avatarUpdatedAt) {
+      const lastUpdate = new Date(avatarUpdatedAt).getTime();
+      const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      if (lastUpdate > sevenDaysAgo) {
+        return; // Avatar permanente e atualizado recentemente
+      }
     }
     
+    const forceRefresh = isStorageUrl; // Se já tem no storage mas está velho, forçar refresh
     const formattedPhone = phoneNumber.replace(/\D/g, '');
     
     try {
@@ -885,15 +894,17 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
             chatId,
             phoneNumber: formattedPhone,
             avatarUrl: tempAvatarUrl,
+            forceRefresh,
           },
         });
         
         if (saveError) {
           console.error('Error saving avatar to storage:', saveError);
           // Fallback: usar URL temporária
-          await supabase
+          const now = new Date().toISOString();
+          await (supabase as any)
             .from('chats')
-            .update({ avatar_url: tempAvatarUrl, updated_at: new Date().toISOString() })
+            .update({ avatar_url: tempAvatarUrl, avatar_updated_at: now, updated_at: now })
             .eq('id', chatId);
           
           setChats(prev => prev.map(c => 

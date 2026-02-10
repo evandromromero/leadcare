@@ -118,6 +118,19 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const [loadingProductivity, setLoadingProductivity] = useState(false);
   const [productivityPeriod, setProductivityPeriod] = useState<1 | 7 | 15 | 30>(30);
   
+  // Estados para modal de conversa (somente leitura) - Top Anúncios Meta
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{
+    id: string;
+    content: string | null;
+    is_from_client: boolean;
+    created_at: string;
+    media_url: string | null;
+    type: string | null;
+  }>>([]);
+  const [chatLeadName, setChatLeadName] = useState('');
+  const [loadingChat, setLoadingChat] = useState(false);
+
   // Estados para Top Anúncios Meta (Click to WhatsApp)
   const [topMetaAds, setTopMetaAds] = useState<Array<{ ad_title: string; ad_source_id: string; source_code: string; client_name: string }>>([]);
   
@@ -320,6 +333,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
       .from('clinic_receipts' as any)
       .select('id, total_value, receipt_date, description, chat_id')
       .eq('clinic_id', clinicId)
+      .or('status.is.null,status.eq.active')
       .gte('receipt_date', firstDayOfMonth)
       .lte('receipt_date', lastDayOfMonth)
       .order('receipt_date', { ascending: false });
@@ -525,6 +539,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               .from('clinic_receipts' as any)
               .select('id, payment_id, total_value')
               .eq('clinic_id', clinicId)
+              .or('status.is.null,status.eq.active')
               .in('payment_id', activePaymentIds);
             receiptsData = data;
           }
@@ -534,6 +549,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             .from('clinic_receipts' as any)
             .select('id, chat_id, total_value, receipt_date')
             .eq('clinic_id', clinicId)
+            .or('status.is.null,status.eq.active')
             .is('payment_id', null);
           
           // Buscar cliques de links para identificar atividade recente (remarketing)
@@ -761,6 +777,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             const { data: myReceipts } = await supabase
               .from('clinic_receipts' as any)
               .select('total_value, payment_id')
+              .or('status.is.null,status.eq.active')
               .in('payment_id', myPaymentIds);
             
             const totalRecebido = (myReceipts as any[] || []).reduce((sum, r) => sum + Number(r.total_value), 0);
@@ -811,7 +828,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         const { data: allClinicReceiptsData } = await supabase
           .from('clinic_receipts' as any)
           .select('id, total_value, receipt_date, payment_id')
-          .eq('clinic_id', clinicId);
+          .eq('clinic_id', clinicId)
+          .or('status.is.null,status.eq.active');
         
         if (allClinicReceiptsData && allClinicReceiptsData.length > 0) {
           const now = new Date();
@@ -1227,6 +1245,31 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     fetchMetaAccounts();
   }, [clinicId]);
 
+  // Buscar mensagens de um chat (somente leitura)
+  const fetchChatMessages = async (chatId: string, clientName: string) => {
+    setLoadingChat(true);
+    setChatLeadName(clientName || 'Lead');
+    setShowChatModal(true);
+    setChatMessages([]);
+    
+    try {
+      const { data } = await (supabase as any)
+        .from('messages')
+        .select('id, content, is_from_client, created_at, media_url, type')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+      
+      if (data) {
+        setChatMessages(data);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar mensagens:', e);
+    }
+    
+    setLoadingChat(false);
+  };
+
   // Buscar dados de campanhas quando mudar para aba de conta Meta
   useEffect(() => {
     const fetchCampaignStats = async () => {
@@ -1256,7 +1299,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         
         let chatsQuery = supabase
           .from('chats')
-          .select('id, created_at, source_id, ad_title, ad_source_id, ad_source_type, ad_source_url, client_name, phone_number, meta_campaign_name, meta_adset_name, meta_ad_name, meta_account_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term, lead_sources!chats_source_id_fkey(code)')
+          .select('id, created_at, source_id, ad_title, ad_source_id, ad_source_type, ad_source_url, client_name, phone_number, meta_campaign_name, meta_adset_name, meta_ad_name, meta_account_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term, lead_sources!chats_source_id_fkey(name, code)')
           .eq('clinic_id', clinicId)
           .eq('is_group', false)
           .gte('created_at', startDate.toISOString());
@@ -1334,14 +1377,34 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             };
           }));
           
-          // 3. Leads por plataforma
-          const fromMeta = chatsArr.filter(c => c.ad_title || c.ad_source_id).length;
-          const fromCampaign = chatsArr.filter(c => c.source_id && !c.ad_title).length;
-          const organic = chatsArr.length - fromMeta - fromCampaign;
+          // 3. Leads por plataforma (classificação inteligente)
+          // Regex para detectar códigos de campanha Meta Ads
+          const metaCampaignRegex = /^(AV|KR|ACV|AL|ALV|AVG|T|A)\d+$/i;
+          // Helper para classificar cada chat
+          const classifyChat = (c: any): 'meta' | 'instagram' | 'link' | 'source' | 'organic' => {
+            if (c.ad_source_id) return 'meta';
+            if (c.source_id && c.lead_sources) {
+              const sourceName = (c.lead_sources.name || '').toLowerCase();
+              const sourceCode = (c.lead_sources.code || '').toUpperCase();
+              const sourceNameUpper = (c.lead_sources.name || '').toUpperCase();
+              if (sourceName.includes('instagram')) return 'instagram';
+              if (sourceCode && metaCampaignRegex.test(sourceCode)) return 'meta';
+              if (!sourceCode && metaCampaignRegex.test(sourceNameUpper)) return 'meta';
+            }
+            if (c.ad_title) return 'meta';
+            if (c.source_id) return 'source';
+            return 'organic';
+          };
+          
+          const fromMeta = chatsArr.filter(c => classifyChat(c) === 'meta').length;
+          const fromInstagram = chatsArr.filter(c => classifyChat(c) === 'instagram').length;
+          const fromSource = chatsArr.filter(c => classifyChat(c) === 'source').length;
+          const organic = chatsArr.filter(c => classifyChat(c) === 'organic').length;
           
           const leadsByPlatform = [
             { name: 'Meta Ads', value: fromMeta, color: '#E1306C' },
-            { name: 'Campanhas (código)', value: fromCampaign, color: '#6366f1' },
+            { name: 'Instagram', value: fromInstagram, color: '#C026D3' },
+            { name: 'Outras Origens', value: fromSource, color: '#6366f1' },
             { name: 'Orgânico', value: organic, color: '#94a3b8' },
           ].filter(p => p.value > 0);
           
@@ -3081,7 +3144,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             ) : campaignStats ? (
               <>
                 {/* Cards de resumo */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
                   <div className="bg-gradient-to-br from-pink-500 to-rose-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white relative group">
                     <div className="flex justify-between items-start mb-1 sm:mb-2">
                       <div>
@@ -3094,8 +3157,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                         <div className="relative hidden sm:block">
                           <span className="material-symbols-outlined text-white/60 text-base cursor-help hover:text-white transition-colors">info</span>
                           <div className="absolute right-0 top-6 w-64 bg-slate-900 text-white text-xs p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                            <p className="font-semibold mb-1">Meta Ads (Click to WhatsApp)</p>
-                            <p className="text-slate-300">Leads capturados através de anúncios Click to WhatsApp do Meta Ads.</p>
+                            <p className="font-semibold mb-1">Meta Ads</p>
+                            <p className="text-slate-300">Leads de anúncios Meta (Click to WhatsApp + campanhas AV, KR, ACV, etc.)</p>
                           </div>
                         </div>
                         <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl">
@@ -3103,23 +3166,47 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                         </div>
                       </div>
                     </div>
-                    <p className="text-pink-100 text-[9px] sm:text-xs hidden sm:block">Leads de Click to WhatsApp</p>
+                    <p className="text-pink-100 text-[9px] sm:text-xs hidden sm:block">Anúncios + campanhas</p>
                   </div>
 
-                  <div className="bg-gradient-to-br from-indigo-500 to-violet-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white relative group">
+                  <div className="bg-gradient-to-br from-fuchsia-500 to-purple-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white relative group">
                     <div className="flex justify-between items-start mb-1 sm:mb-2">
                       <div>
-                        <p className="text-indigo-100 text-[9px] sm:text-xs font-medium uppercase tracking-wider truncate">Código</p>
+                        <p className="text-fuchsia-100 text-[9px] sm:text-xs font-medium uppercase tracking-wider">Instagram</p>
                         <p className="text-xl sm:text-3xl font-black mt-0.5 sm:mt-1">
-                          {campaignStats.leadsByPlatform.find(p => p.name === 'Campanhas (código)')?.value || 0}
+                          {campaignStats.leadsByPlatform.find(p => p.name === 'Instagram')?.value || 0}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 sm:gap-2">
                         <div className="relative hidden sm:block">
                           <span className="material-symbols-outlined text-white/60 text-base cursor-help hover:text-white transition-colors">info</span>
                           <div className="absolute right-0 top-6 w-64 bg-slate-900 text-white text-xs p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                            <p className="font-semibold mb-1">Campanhas com Código</p>
-                            <p className="text-slate-300">Leads que enviaram um código de campanha na primeira mensagem.</p>
+                            <p className="font-semibold mb-1">Instagram</p>
+                            <p className="text-slate-300">Leads que vieram do Instagram (link no bio/stories).</p>
+                          </div>
+                        </div>
+                        <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl">
+                          <span className="material-symbols-outlined text-base sm:text-xl">photo_camera</span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-fuchsia-100 text-[9px] sm:text-xs hidden sm:block">Links do Instagram</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-indigo-500 to-violet-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white relative group">
+                    <div className="flex justify-between items-start mb-1 sm:mb-2">
+                      <div>
+                        <p className="text-indigo-100 text-[9px] sm:text-xs font-medium uppercase tracking-wider truncate">Outras</p>
+                        <p className="text-xl sm:text-3xl font-black mt-0.5 sm:mt-1">
+                          {campaignStats.leadsByPlatform.find(p => p.name === 'Outras Origens')?.value || 0}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <div className="relative hidden sm:block">
+                          <span className="material-symbols-outlined text-white/60 text-base cursor-help hover:text-white transition-colors">info</span>
+                          <div className="absolute right-0 top-6 w-64 bg-slate-900 text-white text-xs p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                            <p className="font-semibold mb-1">Outras Origens</p>
+                            <p className="text-slate-300">Leads com origem identificada (Indicação, Recorrência, etc.)</p>
                           </div>
                         </div>
                         <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl">
@@ -3127,7 +3214,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                         </div>
                       </div>
                     </div>
-                    <p className="text-indigo-100 text-[9px] sm:text-xs hidden sm:block">Leads com código</p>
+                    <p className="text-indigo-100 text-[9px] sm:text-xs hidden sm:block">Origens diversas</p>
                   </div>
 
                   <div className="bg-gradient-to-br from-slate-500 to-slate-600 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-white relative group">
@@ -3235,9 +3322,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                             >
                               {ad.client_name || 'Cliente'}
                             </a>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                              {ad.source_code || '-'}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => fetchChatMessages(ad.chat_id, ad.client_name || 'Lead')}
+                                className="p-1 hover:bg-cyan-50 rounded text-cyan-600"
+                                title="Ver conversa"
+                              >
+                                <span className="material-symbols-outlined text-sm">forum</span>
+                              </button>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                                {ad.source_code || '-'}
+                              </span>
+                            </div>
                           </div>
                           <p className="text-[10px] text-slate-600 truncate">{ad.ad_name || ad.ad_title}</p>
                           <p className="text-[10px] text-slate-400">{ad.created_at ? new Date(ad.created_at).toLocaleDateString('pt-BR') : '-'}</p>
@@ -3255,6 +3351,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                             <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Anúncio</th>
                             <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Campanha</th>
                             <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Data</th>
+                            <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Ações</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -3293,6 +3390,15 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                 <span className="text-sm text-slate-600">
                                   {ad.created_at ? new Date(ad.created_at).toLocaleDateString('pt-BR') : '-'}
                                 </span>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <button
+                                  onClick={() => fetchChatMessages(ad.chat_id, ad.client_name || 'Lead')}
+                                  className="p-1.5 hover:bg-cyan-50 rounded text-cyan-600"
+                                  title="Ver conversa"
+                                >
+                                  <span className="material-symbols-outlined text-lg">forum</span>
+                                </button>
                               </td>
                             </tr>
                           ))}
@@ -4705,6 +4811,101 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               <button
                 onClick={() => setShowClinicRevenueDetail(false)}
                 className="w-full px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de conversa (somente leitura) */}
+      {showChatModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowChatModal(false)}></div>
+          <div className="relative bg-white w-full max-w-lg rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-cyan-600 to-teal-600 flex-shrink-0">
+              <button 
+                onClick={() => setShowChatModal(false)}
+                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-white/80 hover:text-white"
+              >
+                <span className="material-symbols-outlined text-xl sm:text-2xl">close</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-lg sm:text-xl">forum</span>
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-sm sm:text-base">{chatLeadName}</h3>
+                  <p className="text-cyan-100 text-[10px] sm:text-xs">{chatMessages.length} mensagens</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Mensagens */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-3 bg-slate-50 min-h-[200px] max-h-[60vh]">
+              {loadingChat ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600"></div>
+                </div>
+              ) : chatMessages.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-sm">
+                  Nenhuma mensagem encontrada
+                </div>
+              ) : (
+                chatMessages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.is_from_client ? 'justify-start' : 'justify-end'}`}>
+                    <div className={`max-w-[80%] rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 ${
+                      msg.is_from_client 
+                        ? 'bg-white border border-slate-200 rounded-tl-sm' 
+                        : 'bg-cyan-600 text-white rounded-tr-sm'
+                    }`}>
+                      {msg.media_url && (
+                        <div className="mb-1.5">
+                          {msg.type === 'image' ? (
+                            <img src={msg.media_url} alt="" className="max-w-full rounded-lg max-h-48 object-cover" />
+                          ) : msg.type === 'audio' || msg.type === 'ptt' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">mic</span>
+                              <span className="text-[10px] sm:text-xs opacity-70">Áudio</span>
+                            </div>
+                          ) : msg.type === 'video' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">videocam</span>
+                              <span className="text-[10px] sm:text-xs opacity-70">Vídeo</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">attach_file</span>
+                              <span className="text-[10px] sm:text-xs opacity-70">Arquivo</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {msg.content && (
+                        <p className={`text-xs sm:text-sm whitespace-pre-wrap break-words ${
+                          msg.is_from_client ? 'text-slate-800' : 'text-white'
+                        }`}>
+                          {msg.content}
+                        </p>
+                      )}
+                      <p className={`text-[9px] sm:text-[10px] mt-1 ${
+                        msg.is_from_client ? 'text-slate-400' : 'text-cyan-100'
+                      }`}>
+                        {new Date(msg.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="p-3 sm:p-4 border-t border-slate-200 bg-white flex-shrink-0">
+              <button
+                onClick={() => setShowChatModal(false)}
+                className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-100 text-slate-700 rounded-lg sm:rounded-xl font-medium hover:bg-slate-200 transition-colors text-xs sm:text-sm"
               >
                 Fechar
               </button>

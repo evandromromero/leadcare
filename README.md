@@ -2543,6 +2543,92 @@ O card "Receita Clínica" (R$ 41.200) mostra **todos** os lançamentos do mês. 
 
 ---
 
+## Atualizações - 08/02/2026
+
+### Confirmação de Recebimento do Comercial
+
+#### 1. Campos no Banco
+- `payments.received_at` (timestamp) — data da confirmação
+- `payments.received_method` (text) — forma de pagamento real (pix, dinheiro, cartão, etc.)
+- `payments.received_by` (uuid) — quem confirmou
+
+#### 2. Modal de Confirmação
+- Botão **"Confirmar Recebimento"** ao lado do valor comercial
+- Modal com seleção de forma de pagamento e data
+- Botão **"Desfazer"** (X) para reverter confirmação
+
+#### 3. Visual
+- Badge **"Confirmado • Cartão Crédito"** (verde) quando confirmado
+- Badge **"Aguardando confirmação"** (amarelo) quando pendente
+- Borda verde no card quando confirmado
+
+### Cancelamento Flexível de Pagamentos e Recebimentos
+
+#### 1. Cancelar Pagamento Comercial
+- Botão no menu de ações (⋮)
+- Modal **"Cancelar Pagamento"** com duas opções quando tem lançamentos vinculados:
+  - **Cancelar só o Comercial** — desvincula receipts (ficam como diretos)
+  - **Cancelar Tudo** — marca payment + receipts como `cancelled`
+- Confirmação simples quando não tem lançamentos vinculados
+
+#### 2. Cancelar Recebimento Direto da Clínica
+- Botão de cancelar (lixeira) em cada lançamento direto
+- Modal **"Cancelar Recebimento"** com confirmação
+- Marca como `cancelled` (não apaga) — mantém histórico
+
+#### 3. Campo `status` em `clinic_receipts`
+- Coluna `status` (text, default `active`) adicionada via migration
+- Valores: `active` ou `cancelled`
+
+#### 4. Visual de Cancelados
+- Borda vermelha, opacidade reduzida
+- Valor riscado em vermelho
+- Badge **"CANCELADO"** / **"Cancelado"**
+- Botões de editar/excluir escondidos para cancelados
+- Cancelados **não contam** nas métricas (Comercial, Receita, ROI, Ticket)
+
+#### 5. Filtro de Cancelados nas Queries
+- Dashboard: todas as queries de `clinic_receipts` filtram `.or('status.is.null,status.eq.active')`
+- Inbox: busca campo `status` para diferenciar visualmente
+- Receipts: métricas excluem cancelados
+
+### Geração de Recibos para Impressão
+
+#### 1. Menu de Ações (⋮) nos Pagamentos
+- **Recibo Comercial** — dados do pagamento comercial
+- **Recibo Clínica** — dados dos lançamentos da clínica (aparece se tiver)
+- **Recibo Completo** — comercial + clínica juntos (aparece se tiver)
+- **Cancelar Pagamento** — abre modal de cancelamento
+
+#### 2. Botão Recibo nos Lançamentos Diretos
+- Ícone de impressora ao lado do valor
+- Gera recibo individual do lançamento
+
+#### 3. Formato do Recibo
+- Popup HTML formatado (400px) com `window.print()`
+- Cabeçalho: logo, nome, endereço, telefone/email da clínica
+- Corpo: cliente, descrição, data, forma de pagamento, valor
+- Rodapé: data/hora de emissão
+- Botão **"Imprimir / Salvar PDF"** (some na impressão)
+- Cores: amarelo para comercial, verde para clínica
+
+### Arquivos Modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `pages/Receipts.tsx` | Confirmação recebimento, cancelamento flexível, menu ações, geração recibos, visual cancelados |
+| `pages/Dashboard.tsx` | Filtro `.or('status.is.null,status.eq.active')` em 5 queries de clinic_receipts |
+| `pages/Inbox.tsx` | Campo `status` adicionado ao select de clinic_receipts |
+
+### Migrations Aplicadas
+
+| Migration | Descrição |
+|-----------|-----------|
+| `add_received_fields_to_payments` | Campos `received_at`, `received_method`, `received_by` na tabela payments |
+| `add_status_to_clinic_receipts` | Campo `status` (default 'active') na tabela clinic_receipts |
+
+---
+
 ## Desenvolvido por
 
 **Betix** - CRM para Clínicas

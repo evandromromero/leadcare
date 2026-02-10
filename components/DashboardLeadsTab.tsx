@@ -26,7 +26,7 @@ interface Props {
   clinicId: string;
 }
 
-type OriginType = 'all' | 'meta' | 'link' | 'source' | 'organic';
+type OriginType = 'all' | 'meta' | 'instagram' | 'link' | 'source' | 'organic';
 type PeriodType = 'today' | 'yesterday' | '7d' | '30d' | 'custom';
 
 export default function DashboardLeadsTab({ clinicId }: Props) {
@@ -61,6 +61,19 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
   // Estado para card expandido no mobile
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
   
+  // Estados para modal de conversa (somente leitura)
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{
+    id: string;
+    content: string | null;
+    is_from_client: boolean;
+    created_at: string;
+    media_url: string | null;
+    type: string | null;
+  }>>([]);
+  const [chatLeadName, setChatLeadName] = useState('');
+  const [loadingChat, setLoadingChat] = useState(false);
+
   // Estados para modal de histórico
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyData, setHistoryData] = useState<Array<{
@@ -308,7 +321,7 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
                     .gte('created_at', clientMsg.created_at)
                     .order('created_at', { ascending: true })
                     .limit(1)
-                    .single();
+                    .maybeSingle();
                   
                   if (response) {
                     const clientMsgTime = new Date(clientMsg.created_at).getTime();
@@ -370,9 +383,23 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
     fetchLeads();
   }, [clinicId, period, customDate]);
 
+  // Regex para detectar códigos de campanha Meta Ads
+  const metaCampaignRegex = /^(AV|KR|ACV|AL|ALV|AVG|T|A)\d+$/i;
+
   // Classificar tipo de origem
-  const getOriginType = (lead: LeadItem): 'meta' | 'link' | 'source' | 'organic' => {
+  const getOriginType = (lead: LeadItem): 'meta' | 'instagram' | 'link' | 'source' | 'organic' => {
     if (lead.ad_source_id) return 'meta';
+    if (lead.source_id && lead.lead_sources) {
+      const sourceName = ((lead.lead_sources as any).name || '').toLowerCase();
+      const sourceCode = ((lead.lead_sources as any).code || '').toUpperCase();
+      const sourceNameUpper = ((lead.lead_sources as any).name || '').toUpperCase();
+      // Detectar Instagram (nome contém "instagram")
+      if (sourceName.includes('instagram')) return 'instagram';
+      // Detectar Meta Ads por código de campanha (AV, KR, ACV, AL, ALV, AVG, T, A + número)
+      if (sourceCode && metaCampaignRegex.test(sourceCode)) return 'meta';
+      // Também verificar pelo nome quando code é null (origens criadas pelo webhook)
+      if (!sourceCode && metaCampaignRegex.test(sourceNameUpper)) return 'meta';
+    }
     if (lead.source_id && trackableLinkSourceIds.has(lead.source_id)) return 'link';
     if (lead.source_id) return 'source';
     return 'organic';
@@ -451,6 +478,31 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
     return lead.source_id ? trackableLinkSourceIds.has(lead.source_id) : false;
   };
 
+  // Buscar mensagens de um chat (somente leitura)
+  const fetchChatMessages = async (chatId: string, clientName: string) => {
+    setLoadingChat(true);
+    setChatLeadName(clientName || 'Lead');
+    setShowChatModal(true);
+    setChatMessages([]);
+    
+    try {
+      const { data } = await (supabase as any)
+        .from('messages')
+        .select('id, content, is_from_client, created_at, media_url, type')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true })
+        .limit(100);
+      
+      if (data) {
+        setChatMessages(data);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar mensagens:', e);
+    }
+    
+    setLoadingChat(false);
+  };
+
   // Buscar histórico de contatos (cliques) de um lead
   const fetchContactHistory = async (lead: LeadItem) => {
     if (!lead.source_id || !trackableLinkSourceIds.has(lead.source_id)) return;
@@ -516,7 +568,7 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
             .gte('created_at', clientMsg.created_at)
             .order('created_at', { ascending: true })
             .limit(1)
-            .single();
+            .maybeSingle();
           
           if (response) {
             const clientMsgTime = new Date(clientMsg.created_at).getTime();
@@ -553,13 +605,14 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
     setLoadingHistory(false);
   };
 
-  // Contadores
+  // Contadores (usando getOriginType para classificação consistente)
   const counts = {
     all: leads.length,
-    meta: leads.filter(l => l.ad_source_id).length,
-    link: leads.filter(l => !l.ad_source_id && l.source_id && trackableLinkSourceIds.has(l.source_id)).length,
-    source: leads.filter(l => !l.ad_source_id && l.source_id && !trackableLinkSourceIds.has(l.source_id)).length,
-    organic: leads.filter(l => !l.ad_source_id && !l.source_id).length,
+    meta: leads.filter(l => getOriginType(l) === 'meta').length,
+    instagram: leads.filter(l => getOriginType(l) === 'instagram').length,
+    link: leads.filter(l => getOriginType(l) === 'link').length,
+    source: leads.filter(l => getOriginType(l) === 'source').length,
+    organic: leads.filter(l => getOriginType(l) === 'organic').length,
   };
 
   // Métricas financeiras
@@ -692,7 +745,7 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
       </div>
 
       {/* Cards de contagem por tipo */}
-      <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-3">
         <button
           onClick={() => setOriginFilter('all')}
           className={`p-2 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all relative ${
@@ -721,11 +774,28 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
           <div className="absolute top-1 right-1 sm:top-2 sm:right-2 group hidden sm:block">
             <span className="material-symbols-outlined text-slate-400 text-sm cursor-help">info</span>
             <div className="absolute right-0 top-6 w-52 p-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-              Leads que vieram de anúncios Meta Ads (Click to WhatsApp)
+              Leads de anúncios Meta (Click to WhatsApp + campanhas AV, KR, ACV, etc.)
             </div>
           </div>
           <p className="text-lg sm:text-2xl font-black text-pink-600">{counts.meta}</p>
           <p className="text-[9px] sm:text-xs text-slate-500">Meta</p>
+        </button>
+        <button
+          onClick={() => setOriginFilter('instagram')}
+          className={`p-2 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all relative ${
+            originFilter === 'instagram' 
+              ? 'border-fuchsia-500 bg-fuchsia-50' 
+              : 'border-slate-200 bg-white hover:border-slate-300'
+          }`}
+        >
+          <div className="absolute top-1 right-1 sm:top-2 sm:right-2 group hidden sm:block">
+            <span className="material-symbols-outlined text-slate-400 text-sm cursor-help">info</span>
+            <div className="absolute right-0 top-6 w-52 p-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+              Leads que vieram do Instagram (link no bio/stories)
+            </div>
+          </div>
+          <p className="text-lg sm:text-2xl font-black text-fuchsia-600">{counts.instagram}</p>
+          <p className="text-[9px] sm:text-xs text-slate-500">Insta</p>
         </button>
         <button
           onClick={() => setOriginFilter('link')}
@@ -916,6 +986,7 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span className={`size-2.5 rounded-full flex-shrink-0 ${
                           originType === 'meta' ? 'bg-pink-500' :
+                          originType === 'instagram' ? 'bg-fuchsia-500' :
                           originType === 'link' ? 'bg-blue-500' :
                           originType === 'source' ? 'bg-amber-500' :
                           'bg-slate-400'
@@ -1006,6 +1077,13 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
                         
                         {/* Ações */}
                         <div className="flex gap-2 pt-2 border-t border-slate-100">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); fetchChatMessages(lead.id, lead.client_name || 'Lead'); }}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-cyan-600 text-white rounded-lg text-xs font-medium hover:bg-cyan-700 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-sm">forum</span>
+                            Ler
+                          </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); window.location.href = `/inbox?chat=${lead.id}`; }}
                             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
@@ -1098,11 +1176,13 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
                           <div className="flex flex-col items-center gap-1">
                             <span className={`px-2 py-1 rounded text-xs font-medium ${
                               originType === 'meta' ? 'bg-pink-100 text-pink-700' :
+                              originType === 'instagram' ? 'bg-fuchsia-100 text-fuchsia-700' :
                               originType === 'link' ? 'bg-blue-100 text-blue-700' :
                               originType === 'source' ? 'bg-amber-100 text-amber-700' :
                               'bg-slate-100 text-slate-600'
                             }`}>
-                              {originType === 'meta' ? 'Meta Ads' :
+                              {originType === 'meta' ? 'Meta' :
+                               originType === 'instagram' ? 'Instagram' :
                                originType === 'link' ? 'Link' :
                                originType === 'source' ? 'Origem' :
                                'Orgânico'}
@@ -1180,6 +1260,13 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
                                 )}
                               </button>
                             )}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); fetchChatMessages(lead.id, lead.client_name || 'Lead'); }}
+                              className="p-1.5 hover:bg-cyan-50 rounded text-cyan-600"
+                              title="Ver conversa"
+                            >
+                              <span className="material-symbols-outlined text-lg">forum</span>
+                            </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); window.location.href = `/inbox?chat=${lead.id}`; }}
                               className="p-1.5 hover:bg-green-50 rounded text-green-600"
@@ -1328,6 +1415,7 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
             {/* Header */}
             <div className={`p-3 sm:p-5 flex-shrink-0 ${
               getOriginType(selectedLead) === 'meta' ? 'bg-gradient-to-r from-pink-600 to-rose-600' :
+              getOriginType(selectedLead) === 'instagram' ? 'bg-gradient-to-r from-fuchsia-600 to-purple-600' :
               getOriginType(selectedLead) === 'link' ? 'bg-gradient-to-r from-blue-600 to-indigo-600' :
               getOriginType(selectedLead) === 'source' ? 'bg-gradient-to-r from-amber-500 to-orange-500' :
               'bg-gradient-to-r from-slate-600 to-slate-700'
@@ -1374,11 +1462,13 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
                   <p className="text-[10px] sm:text-xs text-slate-500">Tipo</p>
                   <p className={`font-bold text-xs sm:text-sm ${
                     getOriginType(selectedLead) === 'meta' ? 'text-pink-600' :
+                    getOriginType(selectedLead) === 'instagram' ? 'text-fuchsia-600' :
                     getOriginType(selectedLead) === 'link' ? 'text-blue-600' :
                     getOriginType(selectedLead) === 'source' ? 'text-amber-600' :
                     'text-slate-600'
                   }`}>
-                    {getOriginType(selectedLead) === 'meta' ? 'Meta Ads' :
+                    {getOriginType(selectedLead) === 'meta' ? 'Meta' :
+                     getOriginType(selectedLead) === 'instagram' ? 'Instagram' :
                      getOriginType(selectedLead) === 'link' ? 'Link' :
                      getOriginType(selectedLead) === 'source' ? 'Origem' :
                      'Orgânico'}
@@ -1567,6 +1657,101 @@ export default function DashboardLeadsTab({ clinicId }: Props) {
             <div className="p-3 sm:p-4 border-t border-slate-200">
               <button
                 onClick={() => setShowHistoryModal(false)}
+                className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-100 text-slate-700 rounded-lg sm:rounded-xl font-medium hover:bg-slate-200 transition-colors text-xs sm:text-sm"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de conversa (somente leitura) */}
+      {showChatModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowChatModal(false)}></div>
+          <div className="relative bg-white w-full max-w-lg rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-cyan-600 to-teal-600 flex-shrink-0">
+              <button 
+                onClick={() => setShowChatModal(false)}
+                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-white/80 hover:text-white"
+              >
+                <span className="material-symbols-outlined text-xl sm:text-2xl">close</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-lg sm:text-xl">forum</span>
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-sm sm:text-base">{chatLeadName}</h3>
+                  <p className="text-cyan-100 text-[10px] sm:text-xs">{chatMessages.length} mensagens</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Mensagens */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-3 bg-slate-50 min-h-[200px] max-h-[60vh]">
+              {loadingChat ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600"></div>
+                </div>
+              ) : chatMessages.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-sm">
+                  Nenhuma mensagem encontrada
+                </div>
+              ) : (
+                chatMessages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.is_from_client ? 'justify-start' : 'justify-end'}`}>
+                    <div className={`max-w-[80%] rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 ${
+                      msg.is_from_client 
+                        ? 'bg-white border border-slate-200 rounded-tl-sm' 
+                        : 'bg-cyan-600 text-white rounded-tr-sm'
+                    }`}>
+                      {msg.media_url && (
+                        <div className="mb-1.5">
+                          {msg.type === 'image' ? (
+                            <img src={msg.media_url} alt="" className="max-w-full rounded-lg max-h-48 object-cover" />
+                          ) : msg.type === 'audio' || msg.type === 'ptt' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">mic</span>
+                              <span className="text-[10px] sm:text-xs opacity-70">Áudio</span>
+                            </div>
+                          ) : msg.type === 'video' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">videocam</span>
+                              <span className="text-[10px] sm:text-xs opacity-70">Vídeo</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm">attach_file</span>
+                              <span className="text-[10px] sm:text-xs opacity-70">Arquivo</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {msg.content && (
+                        <p className={`text-xs sm:text-sm whitespace-pre-wrap break-words ${
+                          msg.is_from_client ? 'text-slate-800' : 'text-white'
+                        }`}>
+                          {msg.content}
+                        </p>
+                      )}
+                      <p className={`text-[9px] sm:text-[10px] mt-1 ${
+                        msg.is_from_client ? 'text-slate-400' : 'text-cyan-100'
+                      }`}>
+                        {new Date(msg.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="p-3 sm:p-4 border-t border-slate-200 bg-white flex-shrink-0">
+              <button
+                onClick={() => setShowChatModal(false)}
                 className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-100 text-slate-700 rounded-lg sm:rounded-xl font-medium hover:bg-slate-200 transition-colors text-xs sm:text-sm"
               >
                 Fechar

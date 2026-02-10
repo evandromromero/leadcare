@@ -22,6 +22,35 @@ if (empty($code)) {
     exit;
 }
 
+// Capturar IP real do visitante (tentar múltiplos headers)
+$clientIp = 'unknown';
+$ipHeaders = [
+    'HTTP_CF_CONNECTING_IP',     // Cloudflare
+    'HTTP_TRUE_CLIENT_IP',       // Akamai / Cloudflare Enterprise
+    'HTTP_X_REAL_IP',            // Nginx proxy
+    'HTTP_X_FORWARDED_FOR',      // Proxy padrão (pode ter múltiplos IPs)
+    'HTTP_X_CLIENT_IP',          // Proxy alternativo
+    'HTTP_X_CLUSTER_CLIENT_IP',  // Cluster
+    'REMOTE_ADDR',               // Fallback direto
+];
+
+foreach ($ipHeaders as $header) {
+    if (!empty($_SERVER[$header])) {
+        // X-Forwarded-For pode ter múltiplos IPs: "client, proxy1, proxy2"
+        $ip = explode(',', $_SERVER[$header])[0];
+        $ip = trim($ip);
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            $clientIp = $ip;
+            break;
+        }
+    }
+}
+
+// Se nenhum IP público foi encontrado, usar REMOTE_ADDR como fallback
+if ($clientIp === 'unknown') {
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+}
+
 // Manter query string (UTMs e belitx_fbid)
 $queryString = $_SERVER['QUERY_STRING'] ?? '';
 $fullUrl = 'https://opuepzfqizmamdegdhbs.supabase.co/functions/v1/redirect-to-whatsapp/' . $code;
@@ -36,8 +65,8 @@ $context = stream_context_create([
         'method' => 'GET',
         'header' => [
             'User-Agent: ' . ($_SERVER['HTTP_USER_AGENT'] ?? 'Mozilla/5.0'),
-            'X-Forwarded-For: ' . ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown'),
-            'X-Real-IP: ' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
+            'X-Forwarded-For: ' . $clientIp,
+            'X-Real-IP: ' . $clientIp,
             'Referer: ' . ($_SERVER['HTTP_REFERER'] ?? ''),
         ],
         'timeout' => 10,
