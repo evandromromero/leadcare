@@ -858,15 +858,17 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     const isStorageUrl = avatarUrl && avatarUrl.includes('supabase.co/storage');
     const avatarUpdatedAt = (existingChat as any)?.avatar_updated_at;
     
+    // Se já tem URL permanente do Storage e foi atualizada nos últimos 7 dias, pular
     if (isStorageUrl && avatarUpdatedAt) {
       const lastUpdate = new Date(avatarUpdatedAt).getTime();
       const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
       if (lastUpdate > sevenDaysAgo) {
-        return; // Avatar permanente e atualizado recentemente
+        return;
       }
     }
     
-    const forceRefresh = isStorageUrl; // Se já tem no storage mas está velho, forçar refresh
+    // forceRefresh: se tem URL temporária (pps.whatsapp.net) ou Storage velho
+    const forceRefresh = !isStorageUrl || (isStorageUrl && !!avatarUpdatedAt);
     const formattedPhone = phoneNumber.replace(/\D/g, '');
     
     try {
@@ -877,15 +879,13 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
           'Content-Type': 'application/json',
           'apikey': evolutionSettings.apiKey,
         },
-        body: JSON.stringify({
-          number: formattedPhone,
-        }),
+        body: JSON.stringify({ number: formattedPhone }),
       });
       
       if (!response.ok) return;
       
       const data = await response.json();
-      const tempAvatarUrl = data.profilePictureUrl || data.picture || null;
+      const tempAvatarUrl = data.profilePictureUrl || data.picture || data.profilePicUrl || null;
       
       if (tempAvatarUrl) {
         // Chamar Edge Function para baixar e salvar no Storage
@@ -899,17 +899,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
         });
         
         if (saveError) {
-          console.error('Error saving avatar to storage:', saveError);
-          // Fallback: usar URL temporária
-          const now = new Date().toISOString();
-          await (supabase as any)
-            .from('chats')
-            .update({ avatar_url: tempAvatarUrl, avatar_updated_at: now, updated_at: now })
-            .eq('id', chatId);
-          
-          setChats(prev => prev.map(c => 
-            c.id === chatId ? { ...c, avatar_url: tempAvatarUrl } : c
-          ));
+          console.error('[Avatar] save-avatar error:', saveError);
           return;
         }
         

@@ -186,6 +186,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     monthly: number;
   } | null>(null);
   
+  // Estado para colapsar/expandir seções do Dashboard
+  const [showComercialCards, setShowComercialCards] = useState(false);
+  const [showSalesDetails, setShowSalesDetails] = useState(false);
+  const [showLeadSources, setShowLeadSources] = useState(false);
+  
   // Estado para modal de detalhamento da receita clínica
   const [showClinicRevenueDetail, setShowClinicRevenueDetail] = useState(false);
   const [clinicRevenueDetails, setClinicRevenueDetails] = useState<Array<{
@@ -2262,147 +2267,189 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
         {/* Minhas Vendas e Receita Clínica - Visível apenas para Comercial */}
         {clinicReceiptsData && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-5 rounded-2xl shadow-lg text-white">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <p className="text-amber-100 text-xs font-medium uppercase tracking-wider">Minhas Vendas</p>
-                  <p className="text-2xl font-black mt-1">
-                    R$ {clinicReceiptsData.totalComercial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div className="bg-white/20 p-2 rounded-xl">
-                  <span className="material-symbols-outlined text-xl">sell</span>
-                </div>
+          <div>
+            <button
+              onClick={() => setShowComercialCards(!showComercialCards)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-500 text-xl">sell</span>
+                <span className="font-bold text-sm text-slate-700">Minhas Vendas & Receita</span>
+                <span className="text-xs text-slate-400 font-medium">
+                  R$ {clinicReceiptsData.totalComercial.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} vendido | R$ {clinicReceiptsData.totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 0 })} recebido | ROI {clinicReceiptsData.roi}%
+                </span>
               </div>
-              <p className="text-amber-100 text-xs">Valor total fechado por mim</p>
-            </div>
+              <span className={`material-symbols-outlined text-slate-400 text-xl transition-transform ${showComercialCards ? 'rotate-180' : ''}`}>expand_more</span>
+            </button>
+            {showComercialCards && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
+                <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-5 rounded-2xl shadow-lg text-white">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="text-amber-100 text-xs font-medium uppercase tracking-wider">Minhas Vendas</p>
+                      <p className="text-2xl font-black mt-1">
+                        R$ {clinicReceiptsData.totalComercial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="bg-white/20 p-2 rounded-xl">
+                      <span className="material-symbols-outlined text-xl">sell</span>
+                    </div>
+                  </div>
+                  <p className="text-amber-100 text-xs">Valor total fechado por mim</p>
+                </div>
 
-            <div className="bg-gradient-to-br from-teal-500 to-emerald-600 p-5 rounded-2xl shadow-lg text-white">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <p className="text-teal-100 text-xs font-medium uppercase tracking-wider">Receita Clinica</p>
-                  <p className="text-2xl font-black mt-1">
-                    R$ {clinicReceiptsData.totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
+                <div className="bg-gradient-to-br from-teal-500 to-emerald-600 p-5 rounded-2xl shadow-lg text-white">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="text-teal-100 text-xs font-medium uppercase tracking-wider">Receita Clinica</p>
+                      <p className="text-2xl font-black mt-1">
+                        R$ {clinicReceiptsData.totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="bg-white/20 p-2 rounded-xl">
+                      <span className="material-symbols-outlined text-xl">account_balance</span>
+                    </div>
+                  </div>
+                  <p className="text-teal-100 text-xs">Recebido pela clinica das minhas vendas</p>
                 </div>
-                <div className="bg-white/20 p-2 rounded-xl">
-                  <span className="material-symbols-outlined text-xl">account_balance</span>
-                </div>
-              </div>
-              <p className="text-teal-100 text-xs">Recebido pela clinica das minhas vendas</p>
-            </div>
 
-            <div className="bg-gradient-to-br from-purple-500 to-violet-600 p-5 rounded-2xl shadow-lg text-white">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <p className="text-purple-100 text-xs font-medium uppercase tracking-wider">ROI</p>
-                  <p className="text-2xl font-black mt-1">{clinicReceiptsData.roi}%</p>
-                </div>
-                <div className="bg-white/20 p-2 rounded-xl">
-                  <span className="material-symbols-outlined text-xl">trending_up</span>
+                <div className="bg-gradient-to-br from-purple-500 to-violet-600 p-5 rounded-2xl shadow-lg text-white">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="text-purple-100 text-xs font-medium uppercase tracking-wider">ROI</p>
+                      <p className="text-2xl font-black mt-1">{clinicReceiptsData.roi}%</p>
+                    </div>
+                    <div className="bg-white/20 p-2 rounded-xl">
+                      <span className="material-symbols-outlined text-xl">trending_up</span>
+                    </div>
+                  </div>
+                  <p className="text-purple-100 text-xs">Retorno sobre minhas vendas</p>
                 </div>
               </div>
-              <p className="text-purple-100 text-xs">Retorno sobre minhas vendas</p>
-            </div>
+            )}
           </div>
         )}
 
         {/* Minhas Vendas Detalhadas - Visível apenas para Comercial */}
         {mySalesDetails.length > 0 && (
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Minhas Vendas Detalhadas</h3>
-                <p className="text-sm text-slate-500">Acompanhe o recebimento de cada venda</p>
+          <div>
+            <button
+              onClick={() => setShowSalesDetails(!showSalesDetails)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-cyan-500 text-xl">receipt_long</span>
+                <span className="font-bold text-sm text-slate-700">Minhas Vendas Detalhadas</span>
+                <span className="text-xs text-slate-400 font-medium">
+                  {mySalesDetails.length} venda{mySalesDetails.length !== 1 ? 's' : ''}
+                </span>
               </div>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Cliente</th>
-                    <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Data</th>
-                    <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Origem</th>
-                    <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Comercial</th>
-                    <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Recebido</th>
-                    <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {mySalesDetails.map(sale => (
-                    <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-slate-800">{sale.clientName}</span>
-                      </td>
-                      <td className="py-3 px-4 text-center text-sm text-slate-600">
-                        {new Date(sale.paymentDate).toLocaleDateString('pt-BR')}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span 
-                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                          style={{ backgroundColor: `${sale.sourceColor}20`, color: sale.sourceColor }}
-                        >
-                          {sale.sourceName}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span className="font-bold text-amber-600">
-                          R$ {sale.commercialValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span className={`font-bold ${sale.receivedValue > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {sale.receivedValue > 0 
-                            ? `R$ ${sale.receivedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                            : '-'
-                          }
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {sale.status === 'received' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                            Recebido
-                          </span>
-                        )}
-                        {sale.status === 'partial' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                            <span className="material-symbols-outlined text-[14px]">hourglass_top</span>
-                            Parcial
-                          </span>
-                        )}
-                        {sale.status === 'pending' && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
-                            <span className="material-symbols-outlined text-[14px]">schedule</span>
-                            Pendente
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-slate-200 bg-slate-50">
-                    <td className="py-3 px-4 font-bold text-slate-700" colSpan={3}>Total</td>
-                    <td className="py-3 px-4 text-right font-black text-amber-600">
-                      R$ {mySalesDetails.reduce((sum, s) => sum + s.commercialValue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-3 px-4 text-right font-black text-emerald-600">
-                      R$ {mySalesDetails.reduce((sum, s) => sum + s.receivedValue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-3 px-4"></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+              <span className={`material-symbols-outlined text-slate-400 text-xl transition-transform ${showSalesDetails ? 'rotate-180' : ''}`}>expand_more</span>
+            </button>
+            {showSalesDetails && (
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mt-3">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        <th className="text-left py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Cliente</th>
+                        <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Data</th>
+                        <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Origem</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Comercial</th>
+                        <th className="text-right py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Recebido</th>
+                        <th className="text-center py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {mySalesDetails.map(sale => (
+                        <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-3 px-4">
+                            <span className="font-medium text-slate-800">{sale.clientName}</span>
+                          </td>
+                          <td className="py-3 px-4 text-center text-sm text-slate-600">
+                            {new Date(sale.paymentDate).toLocaleDateString('pt-BR')}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span 
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                              style={{ backgroundColor: `${sale.sourceColor}20`, color: sale.sourceColor }}
+                            >
+                              {sale.sourceName}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className="font-bold text-amber-600">
+                              R$ {sale.commercialValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <span className={`font-bold ${sale.receivedValue > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {sale.receivedValue > 0 
+                                ? `R$ ${sale.receivedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                                : '-'
+                              }
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            {sale.status === 'received' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                Recebido
+                              </span>
+                            )}
+                            {sale.status === 'partial' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                                <span className="material-symbols-outlined text-[14px]">hourglass_top</span>
+                                Parcial
+                              </span>
+                            )}
+                            {sale.status === 'pending' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                                <span className="material-symbols-outlined text-[14px]">schedule</span>
+                                Pendente
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-slate-200 bg-slate-50">
+                        <td className="py-3 px-4 font-bold text-slate-700" colSpan={3}>Total</td>
+                        <td className="py-3 px-4 text-right font-black text-amber-600">
+                          R$ {mySalesDetails.reduce((sum, s) => sum + s.commercialValue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-right font-black text-emerald-600">
+                          R$ {mySalesDetails.reduce((sum, s) => sum + s.receivedValue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* Leads por Origem */}
         {canSeeBilling && (
-          <div className="bg-white p-3 sm:p-4 lg:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm">
+          <div>
+            <button
+              onClick={() => setShowLeadSources(!showLeadSources)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-indigo-500 text-xl">hub</span>
+                <span className="font-bold text-sm text-slate-700">Leads por Origem</span>
+                <span className="text-xs text-slate-400 font-medium">
+                  {filteredLeadSourceStats.length} origem{filteredLeadSourceStats.length !== 1 ? 'ns' : ''} | {filteredLeadSourceStats.reduce((sum, s) => sum + s.total_leads, 0)} leads
+                </span>
+              </div>
+              <span className={`material-symbols-outlined text-slate-400 text-xl transition-transform ${showLeadSources ? 'rotate-180' : ''}`}>expand_more</span>
+            </button>
+          {showLeadSources && (
+          <div className="bg-white p-3 sm:p-4 lg:p-6 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm mt-3">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div>
                 <h3 className="text-sm sm:text-base lg:text-lg font-bold text-slate-900">Leads por Origem</h3>
@@ -2865,6 +2912,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               </div>
             )}
           </div>
+          )}
+          </div>
         )}
 
         {/* Seção de Tarefas */}
@@ -3026,38 +3075,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           </div>
         </div>
 
-        {/* Chart Section Simulation */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
-          <div className="lg:col-span-2 bg-white p-4 sm:p-6 lg:p-8 rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm h-64 sm:h-80 lg:h-96 flex flex-col">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 mb-4 sm:mb-6 lg:mb-8">
-              <div>
-                <h3 className="text-sm sm:text-base lg:text-lg font-bold text-slate-900">Fluxo de Mensagens</h3>
-                <p className="text-xs sm:text-sm text-slate-500">Volume nas últimas 24h</p>
-              </div>
-              <select className="bg-slate-50 border-slate-200 rounded-lg text-xs sm:text-sm font-medium px-2 py-1">
-                <option>Hoje</option>
-                <option>7 dias</option>
-              </select>
-            </div>
-            
-            <div className="flex-1 flex items-end justify-between gap-0.5 sm:gap-1 lg:gap-2 px-1 sm:px-2">
-              {/* Simulated Chart Bars - menos barras no mobile */}
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div 
-                  key={i} 
-                  className="w-full bg-cyan-100 rounded-t-sm hover:bg-cyan-600 transition-colors cursor-pointer"
-                  style={{ height: `${20 + Math.random() * 80}%` }}
-                  title={`${i*2}h: ${Math.floor(Math.random() * 100)} msg`}
-                />
-              ))}
-            </div>
-            <div className="flex justify-between mt-2 sm:mt-4 text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1 sm:px-2">
-              <span>00h</span>
-              <span>12h</span>
-              <span>23h</span>
-            </div>
-          </div>
-
+        {/* Leads Recentes */}
+        <div>
           <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
             <div className="p-3 sm:p-4 lg:p-6 border-b border-slate-100 flex justify-between items-center">
               <h3 className="font-bold text-slate-900 text-sm sm:text-base">Leads Recentes</h3>

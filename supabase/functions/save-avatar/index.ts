@@ -16,7 +16,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const { chatId, phoneNumber, avatarUrl } = await req.json()
+    const { chatId, phoneNumber, avatarUrl, forceRefresh } = await req.json()
 
     if (!chatId || !avatarUrl) {
       return new Response(
@@ -32,8 +32,8 @@ serve(async (req) => {
       .eq('id', chatId)
       .single()
 
-    // Se já tem uma URL do storage, não precisa baixar novamente
-    if (chat?.avatar_url && chat.avatar_url.includes('supabase.co/storage')) {
+    // Se já tem uma URL do storage e não é forceRefresh, retornar cache
+    if (!forceRefresh && chat?.avatar_url && chat.avatar_url.includes('supabase.co/storage')) {
       return new Response(
         JSON.stringify({ success: true, avatarUrl: chat.avatar_url, cached: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -93,11 +93,13 @@ serve(async (req) => {
     const permanentUrl = publicUrlData.publicUrl
 
     // Atualizar o chat com a nova URL permanente
+    const now = new Date().toISOString()
     await supabase
       .from('chats')
       .update({ 
         avatar_url: permanentUrl, 
-        updated_at: new Date().toISOString() 
+        avatar_updated_at: now,
+        updated_at: now 
       })
       .eq('id', chatId)
 
