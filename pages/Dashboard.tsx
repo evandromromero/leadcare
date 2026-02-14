@@ -10,6 +10,7 @@ import { getDataAccess } from '../lib/permissions';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area } from 'recharts';
 import DashboardLeadsTab from '../components/DashboardLeadsTab';
 import DashboardChartsTab from '../components/DashboardChartsTab';
+import CommercialRevenueModal from '../components/CommercialRevenueModal';
 
 interface DashboardProps {
   state: GlobalState;
@@ -49,6 +50,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   // Estados para métricas avançadas
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
+  const [monthlyRevenueConfirmed, setMonthlyRevenueConfirmed] = useState(0);
+  const [monthlyRevenuePending, setMonthlyRevenuePending] = useState(0);
   const [leadSourceStats, setLeadSourceStats] = useState<LeadSourceStats[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
   
@@ -184,6 +187,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const [totalClinicRevenue, setTotalClinicRevenue] = useState<{
     total: number;
     monthly: number;
+    monthlyConfirmed: number;
+    monthlyPending: number;
   } | null>(null);
   
   // Estado para colapsar/expandir seções do Dashboard
@@ -191,6 +196,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
   const [showSalesDetails, setShowSalesDetails] = useState(false);
   const [showLeadSources, setShowLeadSources] = useState(false);
   
+  // Estado para modal de detalhamento da receita comercial
+  const [showCommercialRevenueDetail, setShowCommercialRevenueDetail] = useState(false);
+
   // Estado para modal de detalhamento da receita clínica
   const [showClinicRevenueDetail, setShowClinicRevenueDetail] = useState(false);
   const [clinicRevenueDetails, setClinicRevenueDetails] = useState<Array<{
@@ -201,6 +209,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     client_name: string;
     origem: string;
     origem_color: string;
+    confirmed_at: string | null;
   }>>([]);
   
   // Estado para lista detalhada de vendas do comercial
@@ -336,7 +345,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
     
     const { data } = await supabase
       .from('clinic_receipts' as any)
-      .select('id, total_value, receipt_date, description, chat_id')
+      .select('id, total_value, receipt_date, description, chat_id, confirmed_at')
       .eq('clinic_id', clinicId)
       .or('status.is.null,status.eq.active')
       .gte('receipt_date', firstDayOfMonth)
@@ -383,6 +392,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           client_name: chat.client_name,
           origem: source?.name || 'Sem origem',
           origem_color: source?.color || '#6B7280',
+          confirmed_at: r.confirmed_at || null,
         };
       });
       
@@ -446,6 +456,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         if (chatIdsForStats.length === 0) {
           setTotalRevenue(0);
           setMonthlyRevenue(0);
+          setMonthlyRevenueConfirmed(0);
+          setMonthlyRevenuePending(0);
           setLeadSourceStats([]);
           // Setar dados de meta mesmo sem faturamento
           if (userCanSeeGoal && userMonthlyGoal > 0) {
@@ -473,7 +485,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           // Comercial em modo pessoal: vê apenas o que ele criou (excluindo canceladas)
           const { data } = await supabase
             .from('payments' as any)
-            .select('id, value, payment_date, chat_id, created_by, status')
+            .select('id, value, payment_date, chat_id, created_by, status, received_at')
             .eq('clinic_id', clinicId)
             .eq('created_by', user.id)
             .or('status.is.null,status.eq.active');
@@ -482,7 +494,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           // Shared ou outros perfis: buscar todos payments da clínica
           const { data } = await supabase
             .from('payments' as any)
-            .select('id, value, payment_date, chat_id, created_by, status')
+            .select('id, value, payment_date, chat_id, created_by, status, received_at')
             .eq('clinic_id', clinicId)
             .or('status.is.null,status.eq.active');
           paymentsData = (data || []).filter((p: any) => chatIdsForStats.includes(p.chat_id));
@@ -498,10 +510,15 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           // Faturamento do mês atual
           const now = new Date();
           const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-          const monthly = (paymentsData as any[])
-            .filter(p => new Date(p.payment_date) >= firstDayOfMonth)
-            .reduce((sum, p) => sum + Number(p.value), 0);
+          const monthlyPayments = (paymentsData as any[]).filter(p => new Date(p.payment_date) >= firstDayOfMonth);
+          const monthly = monthlyPayments.reduce((sum, p) => sum + Number(p.value), 0);
           setMonthlyRevenue(monthly);
+          
+          // Separar confirmados vs pendentes
+          const confirmed = monthlyPayments.filter(p => p.received_at).reduce((sum, p) => sum + Number(p.value), 0);
+          const pending = monthlyPayments.filter(p => !p.received_at).reduce((sum, p) => sum + Number(p.value), 0);
+          setMonthlyRevenueConfirmed(confirmed);
+          setMonthlyRevenuePending(pending);
           
           // Calcular faturamento pessoal do mês para meta do atendente
           if (userCanSeeGoal && userMonthlyGoal > 0 && user?.id) {
@@ -523,6 +540,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         } else {
           setTotalRevenue(0);
           setMonthlyRevenue(0);
+          setMonthlyRevenueConfirmed(0);
+          setMonthlyRevenuePending(0);
           setUserGoalData(null);
           setActivePaymentsCount(0);
         }
@@ -832,7 +851,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         // Buscar TODOS os clinic_receipts para calcular receita total da clínica
         const { data: allClinicReceiptsData } = await supabase
           .from('clinic_receipts' as any)
-          .select('id, total_value, receipt_date, payment_id')
+          .select('id, total_value, receipt_date, payment_id, confirmed_at')
           .eq('clinic_id', clinicId)
           .or('status.is.null,status.eq.active');
         
@@ -842,13 +861,18 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           
           // Receita total da clínica (todos os clinic_receipts)
           const totalClinic = (allClinicReceiptsData as any[]).reduce((sum, r) => sum + Number(r.total_value), 0);
-          const monthlyClinic = (allClinicReceiptsData as any[])
-            .filter(r => new Date(r.receipt_date) >= firstDayOfMonth)
-            .reduce((sum, r) => sum + Number(r.total_value), 0);
+          const monthlyClinicReceipts = (allClinicReceiptsData as any[]).filter(r => new Date(r.receipt_date) >= firstDayOfMonth);
+          const monthlyClinic = monthlyClinicReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
+          
+          // Separar confirmados vs pendentes da clínica
+          const monthlyClinicConfirmed = monthlyClinicReceipts.filter(r => r.confirmed_at).reduce((sum, r) => sum + Number(r.total_value), 0);
+          const monthlyClinicPending = monthlyClinicReceipts.filter(r => !r.confirmed_at).reduce((sum, r) => sum + Number(r.total_value), 0);
           
           setTotalClinicRevenue({
             total: totalClinic,
-            monthly: monthlyClinic
+            monthly: monthlyClinic,
+            monthlyConfirmed: monthlyClinicConfirmed,
+            monthlyPending: monthlyClinicPending
           });
           
           // Receita direta (sem comercial - payment_id IS NULL)
@@ -2126,23 +2150,33 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
 
         {/* Faturamento Cards - 4 cards: Comercial, Clínica, Total Mês, Total Geral */}
         {canSeeBilling && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {/* Receita Comercial do Mês */}
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white">
+          <div onClick={() => setShowCommercialRevenueDetail(true)} className="bg-gradient-to-br from-orange-500 to-orange-600 p-3 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all">
             <div className="flex justify-between items-start mb-2 sm:mb-3">
               <div className="min-w-0 flex-1">
                 <p className="text-orange-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider truncate">Receita Comercial</p>
                 <p className="text-lg sm:text-xl lg:text-2xl font-black mt-0.5 sm:mt-1 truncate">
-                  R$ {monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  R$ {monthlyRevenueConfirmed.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </p>
               </div>
               <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl flex-shrink-0 ml-2">
                 <span className="material-symbols-outlined text-base sm:text-lg lg:text-xl">storefront</span>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-orange-100 text-[10px] sm:text-xs">
-              <span className="material-symbols-outlined text-[12px] sm:text-[14px]">calendar_month</span>
-              {new Date().toLocaleDateString('pt-BR', { month: 'short' })}
+            <div className="flex flex-col gap-0.5">
+              {monthlyRevenuePending > 0 && (
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs">
+                  <span className="material-symbols-outlined text-[12px] sm:text-[14px] text-orange-200">schedule</span>
+                  <span className="text-orange-200">R$ {monthlyRevenuePending.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pendente</span>
+                </div>
+              )}
+              {monthlyRevenuePending === 0 && (
+                <div className="flex items-center gap-1 text-orange-100 text-[10px] sm:text-xs">
+                  <span className="material-symbols-outlined text-[12px] sm:text-[14px]">calendar_month</span>
+                  {new Date().toLocaleDateString('pt-BR', { month: 'short' })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -2152,16 +2186,26 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               <div className="min-w-0 flex-1">
                 <p className="text-teal-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider truncate">Receita Clínica</p>
                 <p className="text-lg sm:text-xl lg:text-2xl font-black mt-0.5 sm:mt-1 truncate">
-                  R$ {(totalClinicRevenue?.monthly || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  R$ {(totalClinicRevenue?.monthlyConfirmed || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </p>
               </div>
               <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl flex-shrink-0 ml-2">
                 <span className="material-symbols-outlined text-base sm:text-lg lg:text-xl">medical_services</span>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-teal-100 text-[10px] sm:text-xs">
-              <span className="material-symbols-outlined text-[12px] sm:text-[14px]">calendar_month</span>
-              {new Date().toLocaleDateString('pt-BR', { month: 'short' })}
+            <div className="flex flex-col gap-0.5">
+              {(totalClinicRevenue?.monthlyPending || 0) > 0 && (
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs">
+                  <span className="material-symbols-outlined text-[12px] sm:text-[14px] text-teal-200">schedule</span>
+                  <span className="text-teal-200">R$ {(totalClinicRevenue?.monthlyPending || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pendente</span>
+                </div>
+              )}
+              {(totalClinicRevenue?.monthlyPending || 0) === 0 && (
+                <div className="flex items-center gap-1 text-teal-100 text-[10px] sm:text-xs">
+                  <span className="material-symbols-outlined text-[12px] sm:text-[14px]">calendar_month</span>
+                  {new Date().toLocaleDateString('pt-BR', { month: 'short' })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -2171,39 +2215,30 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               <div className="min-w-0 flex-1">
                 <p className="text-emerald-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider truncate">Fat. do Mês</p>
                 <p className="text-lg sm:text-xl lg:text-2xl font-black mt-0.5 sm:mt-1 truncate">
-                  R$ {(monthlyRevenue + (totalClinicRevenue?.monthly || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  R$ {(monthlyRevenueConfirmed + (totalClinicRevenue?.monthlyConfirmed || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </p>
               </div>
               <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl flex-shrink-0 ml-2">
                 <span className="material-symbols-outlined text-base sm:text-lg lg:text-xl">trending_up</span>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-emerald-100 text-[10px] sm:text-xs">
-              <span className="material-symbols-outlined text-[12px] sm:text-[14px]">add</span>
-              <span className="hidden sm:inline">Comercial + Clínica</span>
-              <span className="sm:hidden">Total</span>
+            <div className="flex flex-col gap-0.5">
+              {(monthlyRevenuePending + (totalClinicRevenue?.monthlyPending || 0)) > 0 && (
+                <div className="flex items-center gap-1 text-[10px] sm:text-xs">
+                  <span className="material-symbols-outlined text-[12px] sm:text-[14px] text-yellow-200">schedule</span>
+                  <span className="text-yellow-200">R$ {(monthlyRevenuePending + (totalClinicRevenue?.monthlyPending || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pendente</span>
+                </div>
+              )}
+              {(monthlyRevenuePending + (totalClinicRevenue?.monthlyPending || 0)) === 0 && (
+                <div className="flex items-center gap-1 text-emerald-100 text-[10px] sm:text-xs">
+                  <span className="material-symbols-outlined text-[12px] sm:text-[14px]">add</span>
+                  <span className="hidden sm:inline">Comercial + Clínica</span>
+                  <span className="sm:hidden">Total</span>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Faturamento Total */}
-          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 p-3 sm:p-4 lg:p-5 rounded-xl sm:rounded-2xl shadow-lg text-white">
-            <div className="flex justify-between items-start mb-2 sm:mb-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-cyan-100 text-[10px] sm:text-xs font-medium uppercase tracking-wider truncate">Fat. Total</p>
-                <p className="text-lg sm:text-xl lg:text-2xl font-black mt-0.5 sm:mt-1 truncate">
-                  R$ {(totalRevenue + (totalClinicRevenue?.total || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                </p>
-              </div>
-              <div className="bg-white/20 p-1.5 sm:p-2 rounded-lg sm:rounded-xl flex-shrink-0 ml-2">
-                <span className="material-symbols-outlined text-base sm:text-lg lg:text-xl">payments</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 text-cyan-100 text-[10px] sm:text-xs">
-              <span className="material-symbols-outlined text-[12px] sm:text-[14px]">account_balance</span>
-              <span className="hidden sm:inline">Acumulado geral</span>
-              <span className="sm:hidden">Geral</span>
-            </div>
-          </div>
         </div>
         )}
 
@@ -4772,22 +4807,43 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           </div>
         </div>
       )}
+      {/* Modal Detalhamento Receita Comercial */}
+      <CommercialRevenueModal
+        clinicId={clinicId || ''}
+        isOpen={showCommercialRevenueDetail}
+        onClose={() => setShowCommercialRevenueDetail(false)}
+      />
+
       {/* Modal Detalhamento Receita Clínica */}
       {showClinicRevenueDetail && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowClinicRevenueDetail(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="p-5 bg-gradient-to-r from-teal-500 to-teal-600 text-white flex justify-between items-center shrink-0">
-              <div>
-                <h3 className="font-bold text-lg">Receita Clínica</h3>
-                <p className="text-teal-100 text-xs mt-0.5">
-                  {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} - {clinicRevenueDetails.length} lançamento{clinicRevenueDetails.length !== 1 ? 's' : ''}
-                </p>
+            <div className="p-5 bg-gradient-to-r from-teal-500 to-teal-600 text-white shrink-0">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="font-bold text-lg">Receita Clínica</h3>
+                  <p className="text-teal-100 text-xs mt-0.5">
+                    {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} - {clinicRevenueDetails.length} lançamento{clinicRevenueDetails.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-black">
+                    R$ {clinicRevenueDetails.filter(r => r.confirmed_at).reduce((sum, r) => sum + r.total_value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-teal-200 text-[10px]">confirmado</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-2xl font-black">
-                  R$ {clinicRevenueDetails.reduce((sum, r) => sum + r.total_value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
-              </div>
+              {clinicRevenueDetails.some(r => !r.confirmed_at) && (
+                <div className="mt-2 pt-2 border-t border-white/20 flex justify-between items-center">
+                  <span className="text-teal-200 text-xs flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">schedule</span>
+                    {clinicRevenueDetails.filter(r => !r.confirmed_at).length} pendente{clinicRevenueDetails.filter(r => !r.confirmed_at).length !== 1 ? 's' : ''}
+                  </span>
+                  <span className="text-teal-200 text-xs font-bold">
+                    R$ {clinicRevenueDetails.filter(r => !r.confirmed_at).reduce((sum, r) => sum + r.total_value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -4798,10 +4854,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                 </div>
               ) : (
                 clinicRevenueDetails.map(r => (
-                  <div key={r.id} className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                  <div key={r.id} className={`rounded-xl p-3 border ${r.confirmed_at ? 'bg-slate-50 border-slate-200' : 'bg-amber-50 border-amber-200'}`}>
                     <div className="flex justify-between items-start mb-1.5">
-                      <p className="text-sm font-bold text-slate-800">{r.client_name}</p>
-                      <p className="text-sm font-black text-emerald-600 shrink-0 ml-3">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-bold text-slate-800">{r.client_name}</p>
+                        {r.confirmed_at ? (
+                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-700 flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[10px]">check_circle</span>
+                          </span>
+                        ) : (
+                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[10px]">schedule</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-sm font-black shrink-0 ml-3 ${r.confirmed_at ? 'text-emerald-600' : 'text-amber-600'}`}>
                         R$ {r.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </p>
                     </div>

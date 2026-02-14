@@ -135,6 +135,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     created_at: string;
     status: 'active' | 'cancelled';
     payment_method: string | null;
+    received_at: string | null;
   }>>([])
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ value: '', description: '', payment_date: getLocalDateString(), payment_method: '' });
@@ -148,6 +149,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     receipt_date: string;
     created_at: string;
     payment_method: string | null;
+    payment_id: string | null;
+    confirmed_at: string | null;
   }>>([]);
   const [showClinicReceiptModal, setShowClinicReceiptModal] = useState(false);
   const [clinicReceiptForm, setClinicReceiptForm] = useState({ value: '', description: '', receipt_date: getLocalDateString(), payment_method: '' });
@@ -1291,7 +1294,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     try {
       const { data, error } = await supabase
         .from('payments' as any)
-        .select('id, value, description, payment_date, created_at, status, payment_method')
+        .select('id, value, description, payment_date, created_at, status, payment_method, received_at')
         .eq('chat_id', chatId)
         .order('payment_date', { ascending: false });
       
@@ -1339,9 +1342,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
 
   // Cancelar pagamento/negociação
   const handleCancelPayment = async (paymentId: string) => {
-    if (!confirm('Tem certeza que deseja cancelar esta negociação?')) return;
+    if (!confirm('Tem certeza que deseja cancelar esta negociação? Os lançamentos clínicos vinculados também serão cancelados.')) return;
     
     try {
+      // Cancelar clinic_receipts vinculados ao payment
+      await supabase
+        .from('clinic_receipts' as any)
+        .update({ status: 'cancelled' })
+        .eq('payment_id', paymentId);
+      
+      // Cancelar o payment
       const { error } = await supabase
         .from('payments' as any)
         .update({ status: 'cancelled', updated_at: new Date().toISOString() })
@@ -1349,6 +1359,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       
       if (!error && selectedChatId) {
         await fetchPayments(selectedChatId);
+        await fetchClinicReceipts(selectedChatId);
       }
     } catch (err) {
       console.error('Error cancelling payment:', err);
@@ -1360,8 +1371,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     try {
       const { data, error } = await supabase
         .from('clinic_receipts' as any)
-        .select('id, total_value, description, receipt_date, created_at, payment_id, status, receipt_payments(payment_method)')
+        .select('id, total_value, description, receipt_date, created_at, payment_id, status, confirmed_at, receipt_payments(payment_method)')
         .eq('chat_id', chatId)
+        .or('status.is.null,status.eq.active')
         .order('receipt_date', { ascending: false });
       
       if (!error && data) {
@@ -1421,6 +1433,39 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       console.error('Error saving clinic receipt:', err);
     } finally {
       setSavingClinicReceipt(false);
+    }
+  };
+
+  // Confirmar lançamento clínico
+  const handleConfirmClinicReceipt = async (receiptId: string) => {
+    if (!user?.id) return;
+    try {
+      const { error } = await supabase
+        .from('clinic_receipts' as any)
+        .update({ confirmed_at: new Date().toISOString(), confirmed_by: user.id })
+        .eq('id', receiptId);
+      
+      if (!error && selectedChatId) {
+        await fetchClinicReceipts(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error confirming clinic receipt:', err);
+    }
+  };
+
+  // Desfazer confirmação de lançamento clínico
+  const handleUndoConfirmClinicReceipt = async (receiptId: string) => {
+    try {
+      const { error } = await supabase
+        .from('clinic_receipts' as any)
+        .update({ confirmed_at: null, confirmed_by: null })
+        .eq('id', receiptId);
+      
+      if (!error && selectedChatId) {
+        await fetchClinicReceipts(selectedChatId);
+      }
+    } catch (err) {
+      console.error('Error undoing clinic receipt confirmation:', err);
     }
   };
 
@@ -4461,19 +4506,21 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   <p className="text-xs text-slate-400">Nenhum pagamento registrado</p>
                 ) : (
                   <div className="space-y-2">
-                    {payments.map(payment => (
+                    {payments.map(payment => {
+                      const isPaymentConfirmed = !!payment.received_at;
+                      return (
                       <div 
                         key={payment.id} 
                         className={`p-3 rounded-xl border ${
                           payment.status === 'cancelled' 
                             ? 'bg-red-50 border-red-200 opacity-60' 
-                            : 'bg-emerald-50 border-emerald-200'
+                            : isPaymentConfirmed ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'
                         }`}
                       >
                         <div className="flex justify-between items-start mb-1">
                           <div className="flex items-center gap-2">
                             <span className={`text-sm font-black ${
-                              payment.status === 'cancelled' ? 'text-red-600 line-through' : 'text-emerald-700'
+                              payment.status === 'cancelled' ? 'text-red-600 line-through' : isPaymentConfirmed ? 'text-emerald-700' : 'text-amber-700'
                             }`}>
                               R$ {payment.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
@@ -4481,6 +4528,17 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                               <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
                                 CANCELADO
                               </span>
+                            )}
+                            {payment.status !== 'cancelled' && (
+                              isPaymentConfirmed ? (
+                                <span className="flex items-center gap-0.5 text-[9px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">
+                                  <span className="material-symbols-outlined text-[10px]">check_circle</span> CONFIRMADO
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                                  <span className="material-symbols-outlined text-[10px]">schedule</span> PENDENTE
+                                </span>
+                              )
                             )}
                           </div>
                           <div className="flex items-center gap-2">
@@ -4516,10 +4574,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           <p className={`text-[11px] mt-1 ${payment.status === 'cancelled' ? 'text-slate-400' : 'text-slate-600'}`}>{payment.description}</p>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                     
                     {/* Total */}
-                    <div className="pt-2 border-t border-slate-200 mt-3">
+                    <div className="pt-2 border-t border-slate-200 mt-3 space-y-1">
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-bold text-slate-500">Total Faturado:</span>
                         <span className="text-sm font-black text-emerald-600">
@@ -4529,6 +4588,22 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                             .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
+                      {payments.filter(p => p.status !== 'cancelled' && p.received_at).length > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] text-green-600 flex items-center gap-0.5"><span className="material-symbols-outlined text-[10px]">check_circle</span> Confirmado:</span>
+                          <span className="text-[10px] font-bold text-green-600">
+                            R$ {payments.filter(p => p.status !== 'cancelled' && p.received_at).reduce((sum, p) => sum + p.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
+                      {payments.filter(p => p.status !== 'cancelled' && !p.received_at).length > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] text-amber-600 flex items-center gap-0.5"><span className="material-symbols-outlined text-[10px]">schedule</span> Pendente:</span>
+                          <span className="text-[10px] font-bold text-amber-600">
+                            R$ {payments.filter(p => p.status !== 'cancelled' && !p.received_at).reduce((sum, p) => sum + p.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -4560,24 +4635,55 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                   <p className="text-xs text-slate-400">Nenhum lançamento</p>
                 ) : (
                   <div className="space-y-2">
-                    {clinicReceipts.map(receipt => (
+                    {clinicReceipts.map(receipt => {
+                      const isConfirmed = !!receipt.confirmed_at;
+                      return (
                       <div 
                         key={receipt.id} 
-                        className={`p-3 rounded-xl border ${receipt.payment_id ? 'bg-emerald-50 border-emerald-200' : 'bg-teal-50 border-teal-200'}`}
+                        className={`p-3 rounded-xl border ${isConfirmed ? (receipt.payment_id ? 'bg-emerald-50 border-emerald-200' : 'bg-teal-50 border-teal-200') : 'bg-amber-50 border-amber-200'}`}
                       >
                         <div className="flex justify-between items-start mb-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-sm font-black ${receipt.payment_id ? 'text-emerald-700' : 'text-teal-700'}`}>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-sm font-black ${isConfirmed ? (receipt.payment_id ? 'text-emerald-700' : 'text-teal-700') : 'text-amber-700'}`}>
                               R$ {receipt.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
                             {receipt.payment_id && (
                               <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600">VIA COMERCIAL</span>
                             )}
+                            {isConfirmed ? (
+                              <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-700 flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-[10px]">check_circle</span>
+                                CONFIRMADO
+                              </span>
+                            ) : (
+                              <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-[10px]">schedule</span>
+                                PENDENTE
+                              </span>
+                            )}
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
                             <span className="text-[10px] text-slate-400">
                               {formatDateOnly(receipt.receipt_date)}
                             </span>
+                            {!isConfirmed && (
+                              <button
+                                onClick={() => handleConfirmClinicReceipt(receipt.id)}
+                                className="p-1 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded transition-colors"
+                                title="Confirmar recebimento"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                              </button>
+                            )}
+                            {isConfirmed && (
+                              <button
+                                onClick={() => handleUndoConfirmClinicReceipt(receipt.id)}
+                                className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                                title="Desfazer confirmação"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">undo</span>
+                              </button>
+                            )}
                             {!receipt.payment_id && (
                               <button
                                 onClick={() => handleDeleteClinicReceipt(receipt.id)}
@@ -4590,7 +4696,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           </div>
                         </div>
                         {receipt.payment_method && (
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${receipt.payment_id ? 'bg-emerald-100 text-emerald-700' : 'bg-teal-100 text-teal-700'}`}>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isConfirmed ? (receipt.payment_id ? 'bg-emerald-100 text-emerald-700' : 'bg-teal-100 text-teal-700') : 'bg-amber-100 text-amber-700'}`}>
                             {receipt.payment_method === 'pix' ? 'PIX' :
                              receipt.payment_method === 'dinheiro' ? 'Dinheiro' :
                              receipt.payment_method === 'cartao_credito' ? 'Cartão Crédito' :
@@ -4604,10 +4710,11 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                           <p className="text-[11px] mt-1 text-slate-600">{receipt.description}</p>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                     
-                    {/* Total */}
-                    <div className="pt-2 border-t border-slate-200 mt-3">
+                    {/* Totais */}
+                    <div className="pt-2 border-t border-slate-200 mt-3 space-y-1">
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-bold text-slate-500">Total Lançado:</span>
                         <span className="text-sm font-black text-teal-600">
@@ -4616,6 +4723,22 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                             .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
+                      {clinicReceipts.some(r => r.confirmed_at) && clinicReceipts.some(r => !r.confirmed_at) && (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-green-600 flex items-center gap-0.5"><span className="material-symbols-outlined text-[10px]">check_circle</span> Confirmado:</span>
+                            <span className="text-[11px] font-bold text-green-600">
+                              R$ {clinicReceipts.filter(r => r.confirmed_at).reduce((sum, r) => sum + r.total_value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-amber-600 flex items-center gap-0.5"><span className="material-symbols-outlined text-[10px]">schedule</span> Pendente:</span>
+                            <span className="text-[11px] font-bold text-amber-600">
+                              R$ {clinicReceipts.filter(r => !r.confirmed_at).reduce((sum, r) => sum + r.total_value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -5057,10 +5180,17 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     ) : (
                       <div className="space-y-2">
                         {payments.filter(p => p.status !== 'cancelled').slice(0, 3).map(payment => (
-                          <div key={payment.id} className="p-2.5 rounded-xl border bg-emerald-50 border-emerald-200">
+                          <div key={payment.id} className={`p-2.5 rounded-xl border ${payment.received_at ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                             <div className="flex justify-between items-center">
-                              <span className="text-xs text-slate-600">{payment.payment_method || 'Pagamento'}</span>
-                              <span className="text-sm font-bold text-emerald-700">
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs text-slate-600">{payment.payment_method || 'Pagamento'}</span>
+                                {payment.received_at ? (
+                                  <span className="material-symbols-outlined text-[10px] text-green-600">check_circle</span>
+                                ) : (
+                                  <span className="material-symbols-outlined text-[10px] text-amber-600">schedule</span>
+                                )}
+                              </div>
+                              <span className={`text-sm font-bold ${payment.received_at ? 'text-emerald-700' : 'text-amber-700'}`}>
                                 R$ {payment.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </span>
                             </div>
@@ -5121,10 +5251,17 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                     ) : (
                       <div className="space-y-2">
                         {clinicReceipts.slice(0, 2).map(receipt => (
-                          <div key={receipt.id} className={`p-2.5 rounded-xl border ${receipt.payment_id ? 'bg-emerald-50 border-emerald-200' : 'bg-teal-50 border-teal-200'}`}>
+                          <div key={receipt.id} className={`p-2.5 rounded-xl border ${receipt.confirmed_at ? (receipt.payment_id ? 'bg-emerald-50 border-emerald-200' : 'bg-teal-50 border-teal-200') : 'bg-amber-50 border-amber-200'}`}>
                             <div className="flex justify-between items-center">
-                              <span className="text-xs text-slate-600">{receipt.payment_id ? 'Via Comercial' : (receipt.payment_method || 'Recebimento')}</span>
-                              <span className={`text-sm font-bold ${receipt.payment_id ? 'text-emerald-700' : 'text-teal-700'}`}>
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs text-slate-600">{receipt.payment_id ? 'Via Comercial' : (receipt.payment_method || 'Recebimento')}</span>
+                                {receipt.confirmed_at ? (
+                                  <span className="material-symbols-outlined text-[10px] text-green-600">check_circle</span>
+                                ) : (
+                                  <span className="material-symbols-outlined text-[10px] text-amber-600">schedule</span>
+                                )}
+                              </div>
+                              <span className={`text-sm font-bold ${receipt.confirmed_at ? (receipt.payment_id ? 'text-emerald-700' : 'text-teal-700') : 'text-amber-700'}`}>
                                 R$ {receipt.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </span>
                             </div>
@@ -5905,7 +6042,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento</label>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento <span className="text-red-500">*</span></label>
                 <select
                   value={paymentForm.payment_method}
                   onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_method: e.target.value }))}
@@ -5923,7 +6060,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Descrição</label>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Descrição <span className="text-red-500">*</span></label>
                 <select
                   value={paymentForm.description}
                   onChange={(e) => setPaymentForm(prev => ({ ...prev, description: e.target.value }))}
@@ -5938,7 +6075,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </div>
               <button
                 onClick={handleSavePayment}
-                disabled={!paymentForm.value || savingPayment}
+                disabled={!paymentForm.value || !paymentForm.payment_method || !paymentForm.description || savingPayment}
                 className="w-full py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {savingPayment ? (
@@ -6148,7 +6285,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento</label>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento <span className="text-red-500">*</span></label>
                 <select
                   value={clinicReceiptForm.payment_method}
                   onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, payment_method: e.target.value }))}
@@ -6165,7 +6302,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Descrição</label>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Descrição <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   value={clinicReceiptForm.description}
@@ -6176,7 +6313,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
               </div>
               <button
                 onClick={handleSaveClinicReceipt}
-                disabled={!clinicReceiptForm.value || savingClinicReceipt}
+                disabled={!clinicReceiptForm.value || !clinicReceiptForm.payment_method || !clinicReceiptForm.description || savingClinicReceipt}
                 className="w-full py-2 bg-teal-600 text-white text-sm font-bold rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {savingClinicReceipt ? (

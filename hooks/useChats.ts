@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Tables } from '../lib/database.types';
 import { canSendMessage, recordMessageSent, waitForRateLimit } from '../lib/rateLimiter';
@@ -48,7 +48,20 @@ interface UseChatsReturn {
 const MESSAGES_PER_PAGE = 50;
 
 export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
-  const [chats, setChats] = useState<ChatWithMessages[]>([]);
+  const [chats, _setChats] = useState<ChatWithMessages[]>([]);
+  const chatsRef = useRef<ChatWithMessages[]>([]);
+  const activeChatIdRef = useRef<string | null>(null);
+  
+  // Wrapper que mantém ref sincronizado
+  const setChats = (updater: ChatWithMessages[] | ((prev: ChatWithMessages[]) => ChatWithMessages[])) => {
+    _setChats(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (next.length > 0) {
+        chatsRef.current = next;
+      }
+      return next;
+    });
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [whatsappInstance, setWhatsappInstance] = useState<{ instanceName: string; status: string } | null>(null);
@@ -573,159 +586,155 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
     if (!clinicId) return;
 
-    // Realtime via Broadcast (webhook envia quando chega mensagem)
-    const subscription = supabase
+    // Debounce por chatId para evitar chamadas duplicadas
+    const pendingUpdates: Record<string, ReturnType<typeof setTimeout>> = {};
+    
+    const handleRealtimeChatUpdate = (chatId: string, source: string) => {
+      if (pendingUpdates[chatId]) {
+        clearTimeout(pendingUpdates[chatId]);
+      }
+      
+      pendingUpdates[chatId] = setTimeout(async () => {
+        delete pendingUpdates[chatId];
+        
+        try {
+          const { data: newMessage } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('chat_id', chatId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          
+          if (!newMessage) return;
+          
+          _setChats(prev => {
+            if (prev.length === 0) return prev;
+            
+            const chatIndex = prev.findIndex(c => c.id === chatId);
+            if (chatIndex === -1) {
+              fetchChats();
+              return prev;
+            }
+            
+            const existingChat = prev[chatIndex];
+            const msgs = existingChat.messages || [];
+            
+            // Verificar duplicata
+            if (msgs.some(m => m.id === newMessage.id || 
+              (m.id.startsWith('temp_') && m.content === newMessage.content && m.chat_id === newMessage.chat_id)
+            )) return prev;
+            
+            console.log(`[Realtime][${source}] New msg in ${chatId.substring(0, 8)}:`, newMessage.content?.substring(0, 50));
+            
+            const updatedChat = { 
+              ...existingChat, 
+              messages: [...msgs, newMessage],
+              last_message: newMessage.content,
+              last_message_time: newMessage.created_at,
+            };
+            
+            const result = [
+              updatedChat,
+              ...prev.slice(0, chatIndex),
+              ...prev.slice(chatIndex + 1),
+            ].sort((a, b) => {
+              const aPinned = (a as any).is_pinned || false;
+              const bPinned = (b as any).is_pinned || false;
+              if (aPinned && !bPinned) return -1;
+              if (!aPinned && bPinned) return 1;
+              return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime();
+            });
+            
+            chatsRef.current = result;
+            return result;
+          });
+        } catch (err) {
+          console.error(`[Realtime][${source}] Error processing chat ${chatId}:`, err);
+        }
+      }, 500);
+    };
+
+    console.log('[Realtime] Setting up broadcast channel for clinic:', clinicId);
+
+    // Broadcast do webhook (canal principal)
+    const broadcastChannel = supabase
       .channel('leadcare-updates')
-      .on('broadcast', { event: 'new_message' }, async (payload) => {
-        console.log('[Realtime] Broadcast received:', payload);
-        // Só atualiza se for da clínica atual
+      .on('broadcast', { event: 'new_message' }, (payload) => {
         if (payload.payload?.clinic_id === clinicId) {
           const chatId = payload.payload?.chat_id;
           if (chatId) {
-            // Buscar chat atualizado COM a última mensagem
-            const { data: chatData } = await supabase
-              .from('chats')
-              .select('id, unread_count, last_message, last_message_time, status')
-              .eq('id', chatId)
-              .single();
-            
-            // Buscar a última mensagem do chat
-            const { data: newMessage } = await supabase
-              .from('messages')
-              .select('*')
-              .eq('chat_id', chatId)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
-            
-            if (chatData) {
-              setChats(prev => {
-                const chatIndex = prev.findIndex(c => c.id === chatId);
-                
-                // Se chat não existe na lista, fazer refetch completo
-                if (chatIndex === -1) {
-                  console.log('[Realtime] Chat not in list, fetching all chats');
-                  fetchChats();
-                  return prev;
-                }
-                
-                // Atualizar chat com novos dados e adicionar mensagem
-                const existingChat = prev[chatIndex];
-                const existingMessages = existingChat.messages || [];
-                
-                console.log('[Realtime] Processing message:', {
-                  chatId,
-                  newMessageId: newMessage?.id,
-                  newMessageContent: newMessage?.content,
-                  existingMessagesCount: existingMessages.length,
-                  fromClient: payload.payload?.from_client
-                });
-                
-                // Verificar se a mensagem já existe (incluindo mensagens otimistas com temp_)
-                const messageExists = newMessage && existingMessages.some(m => 
-                  m.id === newMessage.id || 
-                  (m.id.startsWith('temp_') && m.content === newMessage.content && m.chat_id === newMessage.chat_id)
-                );
-                
-                // Se mensagem já existe e dados do chat não mudaram, não atualizar
-                if (messageExists && 
-                    existingChat.last_message === chatData.last_message &&
-                    existingChat.unread_count === chatData.unread_count) {
-                  return prev;
-                }
-                
-                const updatedMessages = messageExists 
-                  ? existingMessages 
-                  : newMessage 
-                    ? [...existingMessages, newMessage]
-                    : existingMessages;
-                
-                if (!messageExists && newMessage) {
-                  console.log('[Realtime] Adding new message to chat panel:', newMessage.content);
-                }
-                
-                // Preservar last_message local se for mais recente que o do banco
-                // (evita sobrescrever atualização otimista com dados antigos)
-                const localTime = new Date(existingChat.last_message_time || 0).getTime();
-                const remoteTime = new Date(chatData.last_message_time || 0).getTime();
-                const useLocalLastMessage = localTime >= remoteTime;
-                
-                const updatedChat = { 
-                  ...existingChat, 
-                  ...chatData,
-                  messages: updatedMessages,
-                  // Manter last_message local se for mais recente
-                  last_message: useLocalLastMessage ? existingChat.last_message : chatData.last_message,
-                  last_message_time: useLocalLastMessage ? existingChat.last_message_time : chatData.last_message_time,
-                };
-                
-                // Remover chat da posição atual e reordenar
-                const otherChats = [...prev.slice(0, chatIndex), ...prev.slice(chatIndex + 1)];
-                const allChats = [updatedChat, ...otherChats];
-                
-                // Reordenar: fixados primeiro, depois por last_message_time
-                const sortedList = allChats.sort((a, b) => {
-                  const aPinned = (a as any).is_pinned || false;
-                  const bPinned = (b as any).is_pinned || false;
-                  if (aPinned && !bPinned) return -1;
-                  if (!aPinned && bPinned) return 1;
-                  return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime();
-                });
-                
-                return sortedList;
-              });
-            }
+            console.log('[Realtime][bc] New message for chat:', chatId);
+            handleRealtimeChatUpdate(chatId, 'bc');
           }
         }
       })
       .subscribe((status, err) => {
-        console.log('[Realtime] Broadcast status:', status, err ? `Error: ${err.message}` : '');
+        console.log('[Realtime][bc] Status:', status, err ? `Error: ${err.message}` : '');
       });
 
-    // Nota: postgres_changes removido pois causa erro de binding
-    // O broadcast já é suficiente para atualizar em tempo real
-
-    // Polling de backup a cada 30 segundos (caso broadcast falhe)
-    const pollingInterval = setInterval(() => {
-      supabase
-        .from('chats')
-        .select('id, unread_count, last_message, last_message_time, status')
-        .eq('clinic_id', clinicId)
-        .then(({ data: chatsData }) => {
-          if (!chatsData) return;
-          setChats(prev => {
-            let hasChanges = false;
-            const updated = prev.map(chat => {
-              const newData = chatsData.find(c => c.id === chat.id);
-              if (newData && (
-                chat.unread_count !== newData.unread_count ||
-                chat.last_message !== newData.last_message
-              )) {
-                // Preservar last_message local se for mais recente (evita sobrescrever otimista)
-                const localTime = new Date(chat.last_message_time || 0).getTime();
-                const remoteTime = new Date(newData.last_message_time || 0).getTime();
-                if (localTime >= remoteTime) {
-                  // Dados locais são mais recentes, não atualizar last_message
-                  if (chat.unread_count !== newData.unread_count) {
-                    hasChanges = true;
-                    return { ...chat, unread_count: newData.unread_count };
-                  }
-                  return chat;
-                }
-                hasChanges = true;
-                // Preservar mensagens existentes ao atualizar metadados
-                return { ...chat, ...newData, messages: chat.messages };
-              }
-              return chat;
-            });
-            return hasChanges ? updated : prev;
+    // Polling dentro do mesmo useEffect - busca última mensagem do chat ativo
+    const pollingInterval = setInterval(async () => {
+      const chatId = activeChatIdRef.current;
+      if (!chatId) return;
+      
+      try {
+        const { data: msg } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('chat_id', chatId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (!msg) return;
+        
+        // Verificar e adicionar tudo dentro do updater para garantir state correto
+        _setChats(prev => {
+          if (prev.length === 0) return prev;
+          
+          const chatIndex = prev.findIndex(c => c.id === chatId);
+          if (chatIndex === -1) return prev;
+          
+          const chat = prev[chatIndex];
+          const msgs = chat.messages || [];
+          
+          // Já existe? Pular
+          if (msgs.some(m => m.id === msg.id)) return prev;
+          
+          console.log(`[Realtime][poll] Adding msg to ${chatId.substring(0, 8)}:`, msg.content?.substring(0, 50));
+          
+          const updatedChat = {
+            ...chat,
+            messages: [...msgs, msg],
+            last_message: msg.content,
+            last_message_time: msg.created_at,
+          };
+          
+          const result = [
+            updatedChat,
+            ...prev.slice(0, chatIndex),
+            ...prev.slice(chatIndex + 1),
+          ].sort((a, b) => {
+            const aPinned = (a as any).is_pinned || false;
+            const bPinned = (b as any).is_pinned || false;
+            if (aPinned && !bPinned) return -1;
+            if (!aPinned && bPinned) return 1;
+            return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime();
           });
+          
+          chatsRef.current = result;
+          return result;
         });
-    }, 30000);
+      } catch (err) {
+        console.error('[Realtime][poll] Error:', err);
+      }
+    }, 5000);
 
     return () => {
-      supabase.removeChannel(subscription);
+      supabase.removeChannel(broadcastChannel);
       clearInterval(pollingInterval);
+      Object.values(pendingUpdates).forEach(t => clearTimeout(t));
     };
   }, [clinicId]);
 
@@ -917,6 +926,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
   // Buscar mensagens de um chat com paginação
   const fetchMessages = async (chatId: string, limit: number = MESSAGES_PER_PAGE, before?: string): Promise<{ messages: DbMessage[]; hasMore: boolean }> => {
+    activeChatIdRef.current = chatId;
     console.log('[fetchMessages] Loading messages for chat:', chatId);
     let query = supabase
       .from('messages')

@@ -73,6 +73,7 @@ interface ClinicReceipt {
   description: string | null;
   receipt_date: string;
   status: string | null;
+  confirmed_at: string | null;
   receipt_payments: ReceiptPaymentItem[];
 }
 
@@ -382,6 +383,31 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
       console.error('Error cancelling payment:', err);
     } finally {
       setSavingCancel(false);
+    }
+  };
+
+  const handleConfirmDirectReceipt = async (receiptId: string) => {
+    if (!user) return;
+    try {
+      await supabase
+        .from('clinic_receipts' as any)
+        .update({ confirmed_at: new Date().toISOString(), confirmed_by: user.id })
+        .eq('id', receiptId);
+      await fetchData();
+    } catch (err) {
+      console.error('Error confirming direct receipt:', err);
+    }
+  };
+
+  const handleUndoConfirmDirectReceipt = async (receiptId: string) => {
+    try {
+      await supabase
+        .from('clinic_receipts' as any)
+        .update({ confirmed_at: null, confirmed_by: null })
+        .eq('id', receiptId);
+      await fetchData();
+    } catch (err) {
+      console.error('Error undoing direct receipt confirmation:', err);
     }
   };
 
@@ -1312,13 +1338,21 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                       <div className="space-y-2">
                         {payment.receipts.map((receipt) => {
                           const isCancelled = receipt.status === 'cancelled';
+                          const isReceiptConfirmed = !!receipt.confirmed_at;
                           return (
-                            <div key={receipt.id} className={`rounded-lg border p-2.5 sm:p-3 flex items-start sm:items-center gap-2 sm:gap-4 ${isCancelled ? 'bg-red-50 border-red-200 opacity-60' : 'bg-white border-slate-200'}`}>
+                            <div key={receipt.id} className={`rounded-lg border p-2.5 sm:p-3 flex items-start sm:items-center gap-2 sm:gap-4 ${isCancelled ? 'bg-red-50 border-red-200 opacity-60' : isReceiptConfirmed ? 'bg-white border-slate-200' : 'bg-amber-50 border-amber-200'}`}>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className={`font-semibold text-sm ${isCancelled ? 'text-red-600 line-through' : 'text-emerald-600'}`}>{formatCurrency(Number(receipt.total_value))}</span>
                                   <span className="text-xs text-slate-400">{new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
                                   {isCancelled && <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">CANCELADO</span>}
+                                  {!isCancelled && (
+                                    isReceiptConfirmed ? (
+                                      <span className="flex items-center gap-0.5 text-[9px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded"><CheckCircle className="w-2.5 h-2.5" />CONFIRMADO</span>
+                                    ) : (
+                                      <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded"><Clock className="w-2.5 h-2.5" />PENDENTE</span>
+                                    )
+                                  )}
                                 </div>
                                 {receipt.description && <div className={`text-xs truncate ${isCancelled ? 'text-slate-400' : 'text-slate-500'}`}>{receipt.description}</div>}
                                 <div className="flex flex-wrap gap-1 mt-1">
@@ -1329,10 +1363,20 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                                   ))}
                                 </div>
                               </div>
-                              {canEditReceipt && !isCancelled && (
+                              {!isCancelled && (
                                 <div className="flex items-center gap-0.5 sm:gap-1">
-                                  <button onClick={() => openEditReceiptModal(payment, receipt)} className="p-1 sm:p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded"><Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
-                                  <button onClick={() => handleDeleteReceipt(receipt.id)} className="p-1 sm:p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                                  {!isReceiptConfirmed && canAddReceipt && (
+                                    <button onClick={() => handleConfirmDirectReceipt(receipt.id)} className="p-1 sm:p-1.5 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded" title="Confirmar recebimento"><CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                                  )}
+                                  {isReceiptConfirmed && canAddReceipt && (
+                                    <button onClick={() => handleUndoConfirmDirectReceipt(receipt.id)} className="p-1 sm:p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded" title="Desfazer confirmação"><span className="material-symbols-outlined text-[14px] sm:text-[16px]">undo</span></button>
+                                  )}
+                                  {canEditReceipt && (
+                                    <>
+                                      <button onClick={() => openEditReceiptModal(payment, receipt)} className="p-1 sm:p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded"><Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                                      <button onClick={() => handleDeleteReceipt(receipt.id)} className="p-1 sm:p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></button>
+                                    </>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1354,8 +1398,9 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
             {/* Lançamentos Diretos (sem comercial) */}
             {directReceipts.map((receipt) => {
               const isDirectCancelled = receipt.status === 'cancelled';
+              const isDirectConfirmed = !!receipt.confirmed_at;
               return (
-                <div key={`direct-${receipt.id}`} className={`bg-white rounded-xl shadow-sm border ${isDirectCancelled ? 'border-red-200 opacity-60' : 'border-teal-200'}`}>
+                <div key={`direct-${receipt.id}`} className={`bg-white rounded-xl shadow-sm border ${isDirectCancelled ? 'border-red-200 opacity-60' : isDirectConfirmed ? 'border-teal-200' : 'border-amber-200'}`}>
                   {/* Mobile Layout */}
                   <div className="md:hidden p-3">
                     <div className="flex items-start gap-2 mb-2">
@@ -1367,6 +1412,17 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className={`font-semibold text-sm ${isDirectCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{receipt.chat?.client_name || 'Cliente'}</span>
                           <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${isDirectCancelled ? 'bg-red-100 text-red-600' : 'bg-teal-100 text-teal-700'}`}>{isDirectCancelled ? 'Cancelado' : 'Direto'}</span>
+                          {!isDirectCancelled && (
+                            isDirectConfirmed ? (
+                              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
+                                <CheckCircle className="w-2.5 h-2.5" />Confirmado
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">
+                                <Clock className="w-2.5 h-2.5" />Pendente
+                              </span>
+                            )
+                          )}
                         </div>
                         <div className="text-[10px] text-slate-500 mt-0.5">
                           {new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}
@@ -1387,6 +1443,16 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                       </div>
                       {!isDirectCancelled && (
                         <div className="flex items-center gap-1">
+                          {!isDirectConfirmed && canAddReceipt && (
+                            <button onClick={() => handleConfirmDirectReceipt(receipt.id)} className="p-1 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded" title="Confirmar recebimento">
+                              <CheckCircle className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {isDirectConfirmed && canAddReceipt && (
+                            <button onClick={() => handleUndoConfirmDirectReceipt(receipt.id)} className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded" title="Desfazer confirmação">
+                              <span className="material-symbols-outlined text-[14px]">undo</span>
+                            </button>
+                          )}
                           <button onClick={() => generateDirectReceipt(receipt)} className="p-1 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded" title="Gerar recibo">
                             <Printer className="w-3.5 h-3.5" />
                           </button>
@@ -1409,6 +1475,17 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`font-semibold ${isDirectCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{receipt.chat?.client_name || 'Cliente'}</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isDirectCancelled ? 'bg-red-100 text-red-600' : 'bg-teal-100 text-teal-700'}`}>{isDirectCancelled ? 'Cancelado' : 'Direto'}</span>
+                        {!isDirectCancelled && (
+                          isDirectConfirmed ? (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                              <CheckCircle className="w-3 h-3" />Confirmado
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                              <Clock className="w-3 h-3" />Pendente
+                            </span>
+                          )
+                        )}
                       </div>
                       <div className="text-sm text-slate-500 flex items-center gap-2 flex-wrap">
                         <span>{receipt.description || 'Lançamento direto'}</span>
@@ -1433,6 +1510,16 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                     </div>
                     {!isDirectCancelled && (
                       <div className="flex items-center gap-2">
+                        {!isDirectConfirmed && canAddReceipt && (
+                          <button onClick={() => handleConfirmDirectReceipt(receipt.id)} className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 text-teal-600 text-sm font-medium rounded-lg hover:bg-teal-100">
+                            <CheckCircle className="w-4 h-4" />Confirmar
+                          </button>
+                        )}
+                        {isDirectConfirmed && canAddReceipt && (
+                          <button onClick={() => handleUndoConfirmDirectReceipt(receipt.id)} className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-600 text-sm font-medium rounded-lg hover:bg-amber-100">
+                            <span className="material-symbols-outlined text-[16px]">undo</span>Desfazer
+                          </button>
+                        )}
                         <button onClick={() => generateDirectReceipt(receipt)} className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-100" title="Gerar recibo">
                           <Printer className="w-4 h-4" />Recibo
                         </button>

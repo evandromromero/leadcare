@@ -792,16 +792,29 @@ serve(async (req) => {
     }
 
     // Enviar Broadcast para notificar o cliente em tempo real
-    const channel = supabase.channel('leadcare-updates')
-    await channel.send({
-      type: 'broadcast',
-      event: 'new_message',
-      payload: {
-        clinic_id: instance.clinic_id,
-        chat_id: chat!.id,
-        from_client: !isFromMe
-      }
-    })
+    try {
+      const channel = supabase.channel('leadcare-updates')
+      await new Promise<void>((resolve) => {
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            channel.send({
+              type: 'broadcast',
+              event: 'new_message',
+              payload: {
+                clinic_id: instance.clinic_id,
+                chat_id: chat!.id,
+                from_client: !isFromMe
+              }
+            }).then(() => {
+              supabase.removeChannel(channel)
+              resolve()
+            })
+          }
+        })
+      })
+    } catch (e) {
+      console.error('Broadcast error:', e)
+    }
 
     return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (error) {
