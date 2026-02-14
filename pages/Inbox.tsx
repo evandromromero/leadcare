@@ -6042,11 +6042,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-600">Forma de Pagamento <span className="text-red-500">*</span></label>
+                  {paymentForm.value && !paymentForm.payment_method && (
+                    <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Obrigatório</span>
+                  )}
+                </div>
                 <select
                   value={paymentForm.payment_method}
                   onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_method: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent ${paymentForm.value && !paymentForm.payment_method ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
                 >
                   <option value="">Selecione...</option>
                   <option value="pix">PIX</option>
@@ -6060,11 +6065,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Descrição <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-600">Descrição <span className="text-red-500">*</span></label>
+                  {paymentForm.value && !paymentForm.description && (
+                    <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Obrigatório</span>
+                  )}
+                </div>
                 <select
                   value={paymentForm.description}
                   onChange={(e) => setPaymentForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-cyan-600 focus:border-transparent ${paymentForm.value && !paymentForm.description ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
                 >
                   <option value="">Selecione...</option>
                   <option value="Entrada de Procedimento">Entrada de Procedimento</option>
@@ -6285,11 +6295,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Forma de Pagamento <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-600">Forma de Pagamento <span className="text-red-500">*</span></label>
+                  {clinicReceiptForm.value && !clinicReceiptForm.payment_method && (
+                    <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Obrigatório</span>
+                  )}
+                </div>
                 <select
                   value={clinicReceiptForm.payment_method}
                   onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, payment_method: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent ${clinicReceiptForm.value && !clinicReceiptForm.payment_method ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
                 >
                   <option value="">Selecione...</option>
                   <option value="pix">PIX</option>
@@ -6302,13 +6317,18 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Descrição <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-600">Descrição <span className="text-red-500">*</span></label>
+                  {clinicReceiptForm.value && !clinicReceiptForm.description && (
+                    <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Obrigatório</span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={clinicReceiptForm.description}
                   onChange={(e) => setClinicReceiptForm(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Ex: Consulta, Procedimento, Entrada..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-600 focus:border-transparent ${clinicReceiptForm.value && !clinicReceiptForm.description ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
                 />
               </div>
               <button

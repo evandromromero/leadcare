@@ -122,27 +122,32 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
     setLoading(true);
     
     try {
-      const { data: paymentsData } = await supabase
-        .from('payments' as any)
-        .select('id, value, payment_date, created_by, description, chat:chats(id, client_name, source_id, assigned_to, attendant:users!chats_assigned_to_fkey(id, name)), creator:users!payments_created_by_fkey(id, name)')
-        .eq('clinic_id', clinicId)
-        .or('status.is.null,status.eq.active')
-        .order('payment_date', { ascending: false });
-
-      const { data: receiptsData } = await supabase
-        .from('clinic_receipts' as any)
-        .select('payment_id, total_value, receipt_date, chat_id, description, chat:chats(client_name)')
-        .eq('clinic_id', clinicId);
-
-      const { data: sourcesData } = await supabase
-        .from('lead_sources' as any)
-        .select('id, name, color')
-        .eq('clinic_id', clinicId);
-
-      const { data: usersData } = await supabase
-        .from('users')
-        .select('id, name')
-        .eq('clinic_id', clinicId);
+      // Buscar todas as queries em paralelo
+      const [
+        { data: paymentsData },
+        { data: receiptsData },
+        { data: sourcesData },
+        { data: usersData }
+      ] = await Promise.all([
+        supabase
+          .from('payments' as any)
+          .select('id, value, payment_date, created_by, description, chat:chats(id, client_name, source_id, assigned_to, attendant:users!chats_assigned_to_fkey(id, name)), creator:users!payments_created_by_fkey(id, name)')
+          .eq('clinic_id', clinicId)
+          .or('status.is.null,status.eq.active')
+          .order('payment_date', { ascending: false }),
+        supabase
+          .from('clinic_receipts' as any)
+          .select('payment_id, total_value, receipt_date, chat_id, description, chat:chats(client_name)')
+          .eq('clinic_id', clinicId),
+        supabase
+          .from('lead_sources' as any)
+          .select('id, name, color')
+          .eq('clinic_id', clinicId),
+        supabase
+          .from('users')
+          .select('id, name')
+          .eq('clinic_id', clinicId)
+      ]);
 
       setPayments((paymentsData || []) as unknown as PaymentData[]);
       setReceipts((receiptsData || []) as unknown as ReceiptData[]);

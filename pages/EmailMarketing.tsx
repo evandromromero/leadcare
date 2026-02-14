@@ -152,59 +152,28 @@ export default function EmailMarketing() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch templates
-      const { data: templatesData } = await (supabase as any)
-        .from('email_templates')
-        .select('*')
-        .eq('clinic_id', clinicId)
-        .order('created_at', { ascending: false });
+      // Buscar todas as queries em paralelo
+      const [
+        { data: templatesData },
+        { data: campaignsData },
+        { data: stagesData },
+        { data: sourcesData },
+        { data: clinicData },
+        { data: defaultTemplatesData }
+      ] = await Promise.all([
+        (supabase as any).from('email_templates').select('*').eq('clinic_id', clinicId).order('created_at', { ascending: false }),
+        (supabase as any).from('email_campaigns').select('*, template:email_templates(id, name, subject)').eq('clinic_id', clinicId).order('created_at', { ascending: false }),
+        (supabase as any).from('pipeline_settings').select('*').eq('clinic_id', clinicId).order('position'),
+        (supabase as any).from('lead_sources').select('*').eq('clinic_id', clinicId),
+        (supabase as any).from('clinics').select('email_daily_limit, email_sent_today, email_batch_size').eq('id', clinicId).single(),
+        (supabase as any).from('email_templates_default').select('*').eq('is_active', true).order('sort_order')
+      ]);
       
       setTemplates(templatesData || []);
-
-      // Fetch campaigns with template info
-      const { data: campaignsData } = await (supabase as any)
-        .from('email_campaigns')
-        .select('*, template:email_templates(id, name, subject)')
-        .eq('clinic_id', clinicId)
-        .order('created_at', { ascending: false });
-      
       setCampaigns(campaignsData || []);
-
-      // Fetch pipeline stages
-      const { data: stagesData } = await (supabase as any)
-        .from('pipeline_settings')
-        .select('*')
-        .eq('clinic_id', clinicId)
-        .order('position');
-      
       setStages(stagesData || []);
-
-      // Fetch lead sources
-      const { data: sourcesData } = await (supabase as any)
-        .from('lead_sources')
-        .select('*')
-        .eq('clinic_id', clinicId);
-      
       setSources(sourcesData || []);
-
-      // Fetch email limits
-      const { data: clinicData } = await (supabase as any)
-        .from('clinics')
-        .select('email_daily_limit, email_sent_today, email_batch_size')
-        .eq('id', clinicId)
-        .single();
-      
-      if (clinicData) {
-        setLimits(clinicData);
-      }
-
-      // Fetch default templates
-      const { data: defaultTemplatesData } = await (supabase as any)
-        .from('email_templates_default')
-        .select('*')
-        .eq('is_active', true)
-        .order('sort_order');
-      
+      if (clinicData) setLimits(clinicData);
       setDefaultTemplates(defaultTemplatesData || []);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);

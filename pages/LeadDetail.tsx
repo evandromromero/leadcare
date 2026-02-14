@@ -121,19 +121,44 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
     const fetchData = async () => {
       setLoading(true);
       
-      // Buscar dados do lead/chat
-      const { data: chatData } = await supabase
-        .from('chats')
-        .select(`
-          id, client_name, phone_number, status, created_at,
-          source_id, ad_title, ad_body, ad_source_id, ad_source_type, ad_source_url,
-          meta_account_id, meta_campaign_id, meta_campaign_name, meta_adset_id, meta_adset_name,
-          meta_ad_id, meta_ad_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, gclid,
-          lead_sources!chats_source_id_fkey(code, name, color)
-        `)
-        .eq('id', chatId)
-        .eq('clinic_id', clinicId)
-        .single();
+      // Buscar dados iniciais em paralelo (4 queries independentes)
+      const [
+        { data: chatData },
+        { data: eventsData },
+        { data: paymentsData },
+        { data: clickByChat }
+      ] = await Promise.all([
+        supabase
+          .from('chats')
+          .select(`
+            id, client_name, phone_number, status, created_at,
+            source_id, ad_title, ad_body, ad_source_id, ad_source_type, ad_source_url,
+            meta_account_id, meta_campaign_id, meta_campaign_name, meta_adset_id, meta_adset_name,
+            meta_ad_id, meta_ad_name, utm_source, utm_medium, utm_campaign, utm_content, utm_term, gclid,
+            lead_sources!chats_source_id_fkey(code, name, color)
+          `)
+          .eq('id', chatId)
+          .eq('clinic_id', clinicId)
+          .single(),
+        (supabase as any)
+          .from('meta_conversion_logs')
+          .select('id, event_name, event_time, value, status, error_message, created_at')
+          .eq('chat_id', chatId)
+          .eq('clinic_id', clinicId)
+          .order('event_time', { ascending: false }),
+        (supabase as any)
+          .from('payments')
+          .select('id, value, description, payment_date, payment_method, status, created_at, users:created_by(name)')
+          .eq('chat_id', chatId)
+          .order('created_at', { ascending: false }),
+        (supabase as any)
+          .from('link_clicks')
+          .select('id, clicked_at, browser, os, device_type, device_model, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, ip_address, fbclid, gclid, belitx_fbid, ad_id, site_source, placement, link_id')
+          .eq('chat_id', chatId)
+          .order('clicked_at', { ascending: false })
+          .limit(1)
+          .single()
+      ]);
       
       if (chatData) {
         let leadData = chatData as any;
@@ -160,24 +185,9 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
         setLead(leadData);
       }
       
-      // Buscar eventos Meta enviados para este chat
-      const { data: eventsData } = await (supabase as any)
-        .from('meta_conversion_logs')
-        .select('id, event_name, event_time, value, status, error_message, created_at')
-        .eq('chat_id', chatId)
-        .eq('clinic_id', clinicId)
-        .order('event_time', { ascending: false });
-      
       if (eventsData) {
         setMetaEvents(eventsData as MetaEvent[]);
       }
-      
-      // Buscar pagamentos/negociações do chat com o nome de quem criou
-      const { data: paymentsData } = await (supabase as any)
-        .from('payments')
-        .select('id, value, description, payment_date, payment_method, status, created_at, users:created_by(name)')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: false });
       
       if (paymentsData) {
         setPayments(paymentsData.map((p: any) => ({
@@ -185,15 +195,6 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
           created_by_name: p.users?.name || null
         })) as Payment[]);
       }
-      
-      // ESTRATÉGIA 1: Buscar clique diretamente pelo chat_id (mais preciso)
-      const { data: clickByChat } = await (supabase as any)
-        .from('link_clicks')
-        .select('id, clicked_at, browser, os, device_type, device_model, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referrer, ip_address, fbclid, gclid, belitx_fbid, ad_id, site_source, placement, link_id')
-        .eq('chat_id', chatId)
-        .order('clicked_at', { ascending: false })
-        .limit(1)
-        .single();
       
       if (clickByChat) {
         setLinkClick(clickByChat as LinkClickData);

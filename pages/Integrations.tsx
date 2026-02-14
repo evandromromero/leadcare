@@ -114,17 +114,27 @@ export default function Integrations() {
       
       setLoading(true);
       try {
-        const { data, error } = await (supabase as any)
-          .from('clinics')
-          .select('email_marketing_enabled, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name, smtp_encryption, facebook_page_id, facebook_page_name, facebook_enabled, instagram_business_account_id, instagram_username, instagram_enabled, instagram_connected_at, meta_connected_at, meta_ads_account_id, meta_ads_access_token, cloud_api_enabled, cloud_api_phone_number_id, cloud_api_phone_number, cloud_api_waba_id, cloud_api_connected_at')
-          .eq('id', clinicId)
-          .single();
-        
-        // Buscar App ID do Meta das configurações globais
-        const { data: settingsData } = await (supabase as any)
-          .from('settings')
-          .select('meta_app_id')
-          .single();
+        // Buscar todas as queries em paralelo
+        const [
+          { data, error },
+          { data: settingsData },
+          { data: accountsData }
+        ] = await Promise.all([
+          (supabase as any)
+            .from('clinics')
+            .select('email_marketing_enabled, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from_email, smtp_from_name, smtp_encryption, facebook_page_id, facebook_page_name, facebook_enabled, instagram_business_account_id, instagram_username, instagram_enabled, instagram_connected_at, meta_connected_at, meta_ads_account_id, meta_ads_access_token, cloud_api_enabled, cloud_api_phone_number_id, cloud_api_phone_number, cloud_api_waba_id, cloud_api_connected_at')
+            .eq('id', clinicId)
+            .single(),
+          (supabase as any)
+            .from('settings')
+            .select('meta_app_id')
+            .single(),
+          (supabase as any)
+            .from('clinic_meta_accounts')
+            .select('id, account_id, account_name, is_active, access_token')
+            .eq('clinic_id', clinicId)
+            .order('created_at', { ascending: true })
+        ]);
         
         if (settingsData?.meta_app_id) {
           setMetaAppId(settingsData.meta_app_id);
@@ -132,6 +142,16 @@ export default function Integrations() {
         
         if (error) {
           console.error('Erro ao buscar configurações:', error);
+        }
+        
+        if (accountsData) {
+          setMetaAdsAccounts(accountsData.map((a: any) => ({
+            id: a.id,
+            account_id: a.account_id,
+            account_name: a.account_name || 'Conta sem nome',
+            is_active: a.is_active,
+            has_token: !!a.access_token
+          })));
         }
         
         if (data) {
@@ -162,23 +182,6 @@ export default function Integrations() {
           });
           // Verificar se foi configurado pelo admin (tem dados mas não pode editar)
           setMetaAdsConfiguredByAdmin(!!(data.meta_ads_account_id && data.meta_ads_access_token));
-          
-          // Buscar contas Meta Ads da nova tabela
-          const { data: accountsData } = await (supabase as any)
-            .from('clinic_meta_accounts')
-            .select('id, account_id, account_name, is_active, access_token')
-            .eq('clinic_id', clinicId)
-            .order('created_at', { ascending: true });
-          
-          if (accountsData) {
-            setMetaAdsAccounts(accountsData.map((a: any) => ({
-              id: a.id,
-              account_id: a.account_id,
-              account_name: a.account_name || 'Conta sem nome',
-              is_active: a.is_active,
-              has_token: !!a.access_token
-            })));
-          }
           
           // WhatsApp Cloud API config
           setWhatsappCloudConfig({

@@ -533,59 +533,39 @@ const AdminClinicDetail: React.FC = () => {
 
   const fetchClinicDetails = async () => {
     try {
-      // Buscar clínica
-      const { data: clinicData, error: clinicError } = await supabase
-        .from('clinics')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (clinicError) throw clinicError;
-      setClinic(clinicData);
-
-      // Buscar usuários da clínica
-      const { data: usersData } = await supabase
-        .from('users')
-        .select('id, name, email, role, status, created_at, default_instance_id, monthly_goal, can_see_goal')
-        .eq('clinic_id', id)
-        .order('created_at', { ascending: false });
-
-      setUsers((usersData || []) as unknown as ClinicUser[]);
-
-      // Buscar estatísticas
-      const [usersCount, chatsCount, leadsCount] = await Promise.all([
+      // Buscar todas as queries em paralelo
+      const [
+        { data: clinicData, error: clinicError },
+        { data: usersData },
+        usersCount,
+        chatsCount,
+        leadsCount,
+        { data: instancesData },
+        { data: metaAccountsData }
+      ] = await Promise.all([
+        supabase.from('clinics').select('*').eq('id', id).single(),
+        supabase.from('users').select('id, name, email, role, status, created_at, default_instance_id, monthly_goal, can_see_goal').eq('clinic_id', id).order('created_at', { ascending: false }),
         supabase.from('users').select('*', { count: 'exact', head: true }).eq('clinic_id', id),
         supabase.from('chats').select('*', { count: 'exact', head: true }).eq('clinic_id', id),
         supabase.from('leads').select('*', { count: 'exact', head: true }).eq('clinic_id', id),
+        supabase.from('whatsapp_instances').select('id, instance_name, display_name, status, phone_number, connected_at, is_shared, user_id').eq('clinic_id', id).order('created_at', { ascending: true }),
+        (supabase as any).from('clinic_meta_accounts').select('id, account_id, account_name, access_token, is_active, created_at').eq('clinic_id', id).order('created_at', { ascending: true })
       ]);
 
+      if (clinicError) throw clinicError;
+      setClinic(clinicData);
+      setUsers((usersData || []) as unknown as ClinicUser[]);
       setStats({
         users_count: usersCount.count || 0,
         chats_count: chatsCount.count || 0,
         messages_count: 0,
         leads_count: leadsCount.count || 0,
       });
-
-      // Buscar instâncias WhatsApp
-      const { data: instancesData } = await supabase
-        .from('whatsapp_instances')
-        .select('id, instance_name, display_name, status, phone_number, connected_at, is_shared, user_id')
-        .eq('clinic_id', id)
-        .order('created_at', { ascending: true });
-
       setWhatsappInstances(instancesData || []);
-
-      // Buscar faturamento
-      await fetchBillingStats(usersData || []);
-
-      // Buscar contas Meta Ads
-      const { data: metaAccountsData } = await (supabase as any)
-        .from('clinic_meta_accounts')
-        .select('id, account_id, account_name, access_token, is_active, created_at')
-        .eq('clinic_id', id)
-        .order('created_at', { ascending: true });
-      
       setMetaAdsAccounts(metaAccountsData || []);
+
+      // Buscar faturamento (depende de usersData)
+      await fetchBillingStats((usersData || []) as unknown as ClinicUser[]);
 
     } catch (error) {
       console.error('Error fetching clinic details:', error);
@@ -705,13 +685,15 @@ const AdminClinicDetail: React.FC = () => {
           break;
       }
       
-      // Buscar chats da clínica
-      const { data: chatsData } = await supabase
-        .from('chats')
-        .select('id, status, created_at, source_id')
-        .eq('clinic_id', id);
+      // Buscar chats, pagamentos e origens em paralelo
+      const [{ data: chatsData }, { data: paymentsData }, { data: sourcesData }] = await Promise.all([
+        supabase.from('chats').select('id, status, created_at, source_id').eq('clinic_id', id),
+        supabase.from('payments' as any).select('value, payment_date, chat_id, status').eq('clinic_id', id).or('status.is.null,status.eq.active'),
+        supabase.from('lead_sources' as any).select('id, name, color').eq('clinic_id', id)
+      ]);
       
       const allChats = (chatsData || []) as any[];
+      const allPayments = (paymentsData || []) as any[];
       
       // Filtrar por período
       const periodChats = allChats.filter(c => {
@@ -723,15 +705,6 @@ const AdminClinicDetail: React.FC = () => {
         const created = new Date(c.created_at);
         return created >= prevStartDate && created <= prevEndDate;
       });
-      
-      // Buscar pagamentos (excluindo canceladas)
-      const { data: paymentsData } = await supabase
-        .from('payments' as any)
-        .select('value, payment_date, chat_id, status')
-        .eq('clinic_id', id)
-        .or('status.is.null,status.eq.active');
-      
-      const allPayments = (paymentsData || []) as any[];
       
       // Filtrar pagamentos por período
       const periodPayments = allPayments.filter(p => {
@@ -753,12 +726,6 @@ const AdminClinicDetail: React.FC = () => {
       const previousPeriodRevenue = prevPeriodPayments.reduce((sum, p) => sum + Number(p.value), 0);
       const previousPeriodConversions = prevPeriodChats.filter(c => c.status === 'Convertido').length;
       const previousPeriodLeads = prevPeriodChats.length;
-      
-      // Buscar origens de leads
-      const { data: sourcesData } = await supabase
-        .from('lead_sources' as any)
-        .select('id, name, color')
-        .eq('clinic_id', id);
       
       const leadsBySource = ((sourcesData || []) as any[]).map(source => {
         const sourceChats = periodChats.filter(c => c.source_id === source.id);
@@ -789,23 +756,18 @@ const AdminClinicDetail: React.FC = () => {
       // Métricas de Tempo e Produtividade
       // Limitar análise aos últimos 30 chats para performance
       const recentChats = allChats.slice(0, 30);
-      let allMessages: any[] = [];
       
-      // Buscar mensagens chat por chat (incluindo sent_by para métricas por atendente)
-      for (const chat of recentChats) {
-        const { data: chatMessages } = await supabase
+      // Buscar mensagens de todos os 30 chats em 1 única query (em vez de 30 queries)
+      const recentChatIds = recentChats.map(c => c.id);
+      let messages: any[] = [];
+      if (recentChatIds.length > 0) {
+        const { data: messagesData } = await supabase
           .from('messages')
           .select('chat_id, created_at, is_from_client, sent_by')
-          .eq('chat_id', chat.id)
-          .order('created_at', { ascending: true })
-          .limit(10);
-        
-        if (chatMessages) {
-          allMessages = [...allMessages, ...(chatMessages as any[])];
-        }
+          .in('chat_id', recentChatIds)
+          .order('created_at', { ascending: true });
+        messages = (messagesData as any[]) || [];
       }
-      
-      const messages = allMessages;
       
       // Calcular tempo médio de primeira resposta (geral)
       let totalResponseTime = 0;

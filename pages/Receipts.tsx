@@ -198,54 +198,67 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
     setLoading(true);
     
     try {
-      const { data: paymentsData } = await supabase
-        .from('payments' as any)
-        .select('*, chat:chats(id, client_name, phone_number, source_id), creator:users!payments_created_by_fkey(id, name)')
-        .eq('clinic_id', clinicId)
-        .or('status.is.null,status.eq.active')
-        .order('payment_date', { ascending: false });
+      // Buscar todas as queries iniciais em paralelo
+      const [
+        { data: paymentsData },
+        { data: sourcesData },
+        { data: receiptsData },
+        { data: usersData },
+        { data: clinicData }
+      ] = await Promise.all([
+        supabase
+          .from('payments' as any)
+          .select('*, chat:chats(id, client_name, phone_number, source_id), creator:users!payments_created_by_fkey(id, name)')
+          .eq('clinic_id', clinicId)
+          .or('status.is.null,status.eq.active')
+          .order('payment_date', { ascending: false }),
+        supabase
+          .from('lead_sources' as any)
+          .select('id, name, color')
+          .eq('clinic_id', clinicId),
+        supabase
+          .from('clinic_receipts' as any)
+          .select('*, receipt_payments(*)')
+          .eq('clinic_id', clinicId),
+        supabase
+          .from('users')
+          .select('id, name')
+          .eq('clinic_id', clinicId),
+        supabase
+          .from('clinics' as any)
+          .select('name, phone, email, address, logo_url')
+          .eq('id', clinicId)
+          .single()
+      ]);
 
-      const { data: sourcesData } = await supabase
-        .from('lead_sources' as any)
-        .select('id, name, color')
-        .eq('clinic_id', clinicId);
+      if (clinicData) setClinicInfo(clinicData as any);
 
-      const { data: receiptsData } = await supabase
-        .from('clinic_receipts' as any)
-        .select('*, receipt_payments(*)')
-        .eq('clinic_id', clinicId);
+      // Criar mapa de sources para evitar N+1 queries
+      const sourcesMap = new Map((sourcesData as any[] || []).map(s => [s.id, s]));
+      
+      // Pré-indexar receipts por payment_id
+      const receiptsByPaymentId = new Map<string, any[]>();
+      ((receiptsData || []) as any[]).forEach(r => {
+        if (r.payment_id) {
+          const list = receiptsByPaymentId.get(r.payment_id) || [];
+          list.push(r);
+          receiptsByPaymentId.set(r.payment_id, list);
+        }
+      });
 
-      const { data: usersData } = await supabase
-        .from('users')
-        .select('id, name')
-        .eq('clinic_id', clinicId);
-
-      const paymentsWithDetails: PaymentWithDetails[] = await Promise.all(
-        ((paymentsData || []) as any[]).map(async (payment) => {
-          let source = null;
-          if (payment.chat?.source_id) {
-            const { data: sourceData } = await supabase
-              .from('lead_sources' as any)
-              .select('id, name, color')
-              .eq('id', payment.chat.source_id)
-              .single();
-            source = sourceData;
-          }
-          
-          const paymentReceipts = ((receiptsData || []) as any[]).filter(
-            (r: any) => r.payment_id === payment.id
-          );
-          
-          return { ...payment, source, receipts: paymentReceipts };
-        })
-      );
+      // Montar payments com detalhes usando mapa local (sem queries adicionais)
+      const paymentsWithDetails: PaymentWithDetails[] = ((paymentsData || []) as any[]).map(payment => {
+        const source = payment.chat?.source_id ? sourcesMap.get(payment.chat.source_id) || null : null;
+        const paymentReceipts = receiptsByPaymentId.get(payment.id) || [];
+        return { ...payment, source, receipts: paymentReceipts };
+      });
 
       // Buscar lançamentos diretos (sem payment_id)
       const directReceiptsData = ((receiptsData || []) as any[])
         .filter((r: any) => r.payment_id === null)
         .map((r: any) => ({
           ...r,
-          chat: null // Será preenchido abaixo
+          chat: null
         }));
       
       // Buscar dados dos chats para lançamentos diretos
@@ -256,18 +269,11 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
           .select('id, client_name, phone_number')
           .in('id', chatIds);
         
+        const chatsMap = new Map((chatsData as any[] || []).map(c => [c.id, c]));
         directReceiptsData.forEach(r => {
-          r.chat = (chatsData as any[] || []).find(c => c.id === r.chat_id) || null;
+          r.chat = chatsMap.get(r.chat_id) || null;
         });
       }
-      
-      // Buscar dados da clínica para recibos
-      const { data: clinicData } = await supabase
-        .from('clinics' as any)
-        .select('name, phone, email, address, logo_url')
-        .eq('id', clinicId)
-        .single();
-      if (clinicData) setClinicInfo(clinicData as any);
       
       setDirectReceipts(directReceiptsData);
       setPayments(paymentsWithDetails);

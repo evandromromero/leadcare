@@ -167,11 +167,18 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
       const { startDate, endDate, prevStartDate, prevEndDate } = getDateRange(period);
       const now = new Date();
       
-      // Buscar chats do período
-      const { data: chatsData } = await supabase
-        .from('chats')
-        .select('id, status, created_at, source_id')
-        .eq('clinic_id', clinicId);
+      // Buscar chats, pagamentos, origens e config da clínica em paralelo
+      const [
+        { data: chatsData },
+        { data: paymentsData },
+        { data: sourcesData },
+        { data: clinicData }
+      ] = await Promise.all([
+        supabase.from('chats').select('id, status, created_at, source_id').eq('clinic_id', clinicId),
+        supabase.from('payments' as any).select('id, value, payment_date, chat_id').eq('clinic_id', clinicId).or('status.is.null,status.eq.active'),
+        supabase.from('lead_sources' as any).select('id, name, color').eq('clinic_id', clinicId),
+        (supabase as any).from('clinics').select('monthly_goal, business_hours_start, business_hours_end, business_days, has_lunch_break, lunch_break_start, lunch_break_end').eq('id', clinicId).single()
+      ]);
       
       const chats = chatsData || [];
       
@@ -214,14 +221,8 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
       setLostLeads(lost);
       setLossRate(periodChats.length > 0 ? (lost / periodChats.length) * 100 : 0);
       
-      // Buscar pagamentos
+      // Processar pagamentos (dados já buscados em paralelo)
       if (canSeeBilling) {
-        const { data: paymentsData } = await supabase
-          .from('payments' as any)
-          .select('id, value, payment_date, chat_id')
-          .eq('clinic_id', clinicId)
-          .or('status.is.null,status.eq.active');
-        
         const payments = (paymentsData || []) as any[];
         
         // Faturamento do período
@@ -274,12 +275,7 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
         }
         setDailyData(last30Days);
         
-        // Leads por origem
-        const { data: sourcesData } = await supabase
-          .from('lead_sources' as any)
-          .select('id, name, color')
-          .eq('clinic_id', clinicId);
-        
+        // Leads por origem (dados já buscados em paralelo)
         if (sourcesData && sourcesData.length > 0) {
           const stats: LeadSourceStats[] = (sourcesData as any[]).map(source => {
             const sourceChats = chats.filter(c => c.source_id === source.id);
@@ -304,13 +300,7 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
         }
       }
       
-      // Buscar meta e horário de funcionamento da clínica
-      const { data: clinicData } = await (supabase as any)
-        .from('clinics')
-        .select('monthly_goal, business_hours_start, business_hours_end, business_days, has_lunch_break, lunch_break_start, lunch_break_end')
-        .eq('id', clinicId)
-        .single();
-      
+      // Processar config da clínica (dados já buscados em paralelo)
       if (clinicData) {
         setMonthlyGoal(Number(clinicData.monthly_goal) || 50000);
         setBusinessHoursStart(clinicData.business_hours_start || '08:00');

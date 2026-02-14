@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useChats } from '../hooks/useChats';
@@ -417,27 +417,80 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
       setLoadingStats(true);
       
       try {
-        // Buscar view_mode do usuário para filtrar faturamento
+        // ===== RODADA 1: Queries independentes em paralelo =====
+        const userQuery = user?.id 
+          ? supabase.from('users').select('view_mode, role, monthly_goal, can_see_goal').eq('id', user.id).single()
+          : Promise.resolve({ data: null });
+        
+        const paymentsQuery = supabase
+          .from('payments' as any)
+          .select('id, value, payment_date, chat_id, created_by, status, received_at')
+          .eq('clinic_id', clinicId)
+          .or('status.is.null,status.eq.active');
+        
+        const sourcesQuery = supabase
+          .from('lead_sources' as any)
+          .select('id, name, code, color, tag_id, tag:tags(id, name, color)')
+          .eq('clinic_id', clinicId);
+        
+        const directReceiptsQuery = supabase
+          .from('clinic_receipts' as any)
+          .select('id, chat_id, total_value, receipt_date')
+          .eq('clinic_id', clinicId)
+          .or('status.is.null,status.eq.active')
+          .is('payment_id', null);
+        
+        const linkClicksQuery = (supabase as any)
+          .from('link_clicks')
+          .select('chat_id, clicked_at')
+          .eq('clinic_id', clinicId)
+          .not('chat_id', 'is', null);
+        
+        const allClinicReceiptsQuery = supabase
+          .from('clinic_receipts' as any)
+          .select('id, total_value, receipt_date, payment_id, confirmed_at')
+          .eq('clinic_id', clinicId)
+          .or('status.is.null,status.eq.active');
+        
+        const myPaymentsQuery = user?.id 
+          ? supabase
+              .from('payments' as any)
+              .select('id, value, payment_date, chat_id, status, chat:chats(id, client_name, source_id)')
+              .eq('clinic_id', clinicId)
+              .eq('created_by', user.id)
+              .or('status.is.null,status.eq.active')
+              .order('payment_date', { ascending: false })
+          : Promise.resolve({ data: null });
+        
+        const [
+          { data: userData },
+          { data: allPaymentsRaw },
+          { data: sourcesData },
+          { data: directReceiptsForSources },
+          { data: linkClicksData },
+          { data: allClinicReceiptsData },
+          { data: myPaymentsRaw }
+        ] = await Promise.all([
+          userQuery,
+          paymentsQuery,
+          sourcesQuery,
+          directReceiptsQuery,
+          linkClicksQuery,
+          allClinicReceiptsQuery,
+          myPaymentsQuery
+        ]);
+        
+        // Processar dados do usuário
         let userViewModeForStats = 'shared';
         let userMonthlyGoal = 0;
         let userCanSeeGoal = false;
         let userRole = '';
         
-        if (user?.id) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('view_mode, role, monthly_goal, can_see_goal')
-            .eq('id', user.id)
-            .single();
-          
+        if (userData) {
           userRole = (userData as any)?.role || '';
-          
-          // Admin/SuperAdmin sempre veem tudo
-          if (userData && userRole !== 'Admin' && userRole !== 'SuperAdmin') {
+          if (userRole !== 'Admin' && userRole !== 'SuperAdmin') {
             userViewModeForStats = (userData as any).view_mode || 'personal';
           }
-          
-          // Dados de meta do usuário
           userMonthlyGoal = (userData as any)?.monthly_goal || 0;
           userCanSeeGoal = (userData as any)?.can_see_goal || false;
         }
@@ -445,11 +498,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         // Determinar quais chats usar para faturamento
         let chatIdsForStats: string[] = [];
         if (userViewModeForStats === 'personal' && user?.id) {
-          // Só chats onde o usuário respondeu (assigned_to = user.id)
           const chatsAtendidos = chats.filter(c => c.assigned_to === user.id);
           chatIdsForStats = chatsAtendidos.map(c => c.id);
         } else {
-          // Todos os chats
           chatIdsForStats = chats.map(c => c.id);
         }
         
@@ -459,13 +510,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           setMonthlyRevenueConfirmed(0);
           setMonthlyRevenuePending(0);
           setLeadSourceStats([]);
-          // Setar dados de meta mesmo sem faturamento
           if (userCanSeeGoal && userMonthlyGoal > 0) {
-            setUserGoalData({
-              monthlyGoal: userMonthlyGoal,
-              canSeeGoal: userCanSeeGoal,
-              myMonthlyRevenue: 0
-            });
+            setUserGoalData({ monthlyGoal: userMonthlyGoal, canSeeGoal: userCanSeeGoal, myMonthlyRevenue: 0 });
           } else {
             setUserGoalData(null);
           }
@@ -473,67 +519,41 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           return;
         }
         
-        // Buscar faturamento
-        // Para Comercial em modo pessoal: buscar apenas payments que ELE CRIOU (created_by)
-        // Para Comercial em modo shared ou outros perfis: buscar todos payments da clínica
+        // Filtrar payments conforme perfil do usuário
         const isComercial = userRole === 'Comercial';
         const isPersonalComercial = isComercial && userViewModeForStats === 'personal';
+        const chatIdsSet = new Set(chatIdsForStats);
         
         let paymentsData: any[] | null = null;
-        
         if (isPersonalComercial && user?.id) {
-          // Comercial em modo pessoal: vê apenas o que ele criou (excluindo canceladas)
-          const { data } = await supabase
-            .from('payments' as any)
-            .select('id, value, payment_date, chat_id, created_by, status, received_at')
-            .eq('clinic_id', clinicId)
-            .eq('created_by', user.id)
-            .or('status.is.null,status.eq.active');
-          paymentsData = data as any[];
+          paymentsData = (allPaymentsRaw as any[] || []).filter((p: any) => p.created_by === user.id);
         } else {
-          // Shared ou outros perfis: buscar todos payments da clínica
-          const { data } = await supabase
-            .from('payments' as any)
-            .select('id, value, payment_date, chat_id, created_by, status, received_at')
-            .eq('clinic_id', clinicId)
-            .or('status.is.null,status.eq.active');
-          paymentsData = (data || []).filter((p: any) => chatIdsForStats.includes(p.chat_id));
+          paymentsData = (allPaymentsRaw as any[] || []).filter((p: any) => chatIdsSet.has(p.chat_id));
         }
         
         if (paymentsData) {
-          const total = (paymentsData as any[]).reduce((sum, p) => sum + Number(p.value), 0);
+          const total = paymentsData.reduce((sum, p) => sum + Number(p.value), 0);
           setTotalRevenue(total);
-          
-          // Contar pagamentos ativos (vendas concluídas)
           setActivePaymentsCount(paymentsData.length);
           
-          // Faturamento do mês atual
           const now = new Date();
           const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-          const monthlyPayments = (paymentsData as any[]).filter(p => new Date(p.payment_date) >= firstDayOfMonth);
+          const monthlyPayments = paymentsData.filter(p => new Date(p.payment_date) >= firstDayOfMonth);
           const monthly = monthlyPayments.reduce((sum, p) => sum + Number(p.value), 0);
           setMonthlyRevenue(monthly);
           
-          // Separar confirmados vs pendentes
           const confirmed = monthlyPayments.filter(p => p.received_at).reduce((sum, p) => sum + Number(p.value), 0);
           const pending = monthlyPayments.filter(p => !p.received_at).reduce((sum, p) => sum + Number(p.value), 0);
           setMonthlyRevenueConfirmed(confirmed);
           setMonthlyRevenuePending(pending);
           
-          // Calcular faturamento pessoal do mês para meta do atendente
           if (userCanSeeGoal && userMonthlyGoal > 0 && user?.id) {
-            // Buscar apenas chats do usuário
             const myChats = chats.filter(c => c.assigned_to === user.id);
-            const myChatIds = myChats.map(c => c.id);
-            const myMonthlyRevenue = (paymentsData as any[])
-              .filter(p => myChatIds.includes(p.chat_id) && new Date(p.payment_date) >= firstDayOfMonth)
+            const myChatIds = new Set(myChats.map(c => c.id));
+            const myMonthlyRevenue = paymentsData
+              .filter(p => myChatIds.has(p.chat_id) && new Date(p.payment_date) >= firstDayOfMonth)
               .reduce((sum, p) => sum + Number(p.value), 0);
-            
-            setUserGoalData({
-              monthlyGoal: userMonthlyGoal,
-              canSeeGoal: userCanSeeGoal,
-              myMonthlyRevenue
-            });
+            setUserGoalData({ monthlyGoal: userMonthlyGoal, canSeeGoal: userCanSeeGoal, myMonthlyRevenue });
           } else {
             setUserGoalData(null);
           }
@@ -546,42 +566,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           setActivePaymentsCount(0);
         }
         
-        // Buscar origens de leads apenas se houver chats visíveis
-        if (chatIdsForStats.length > 0) {
-          const { data: sourcesData } = await supabase
-            .from('lead_sources' as any)
-            .select('id, name, code, color, tag_id, tag:tags(id, name, color)')
-            .eq('clinic_id', clinicId);
-          
-          // Buscar clinic_receipts vinculados aos payments ATIVOS para calcular receita clínica
-          // Primeiro, pegar os IDs dos payments ativos
-          const activePaymentIds = (paymentsData || []).map(p => p.id);
-          
-          let receiptsData: any[] | null = null;
-          if (activePaymentIds.length > 0) {
-            const { data } = await supabase
-              .from('clinic_receipts' as any)
-              .select('id, payment_id, total_value')
-              .eq('clinic_id', clinicId)
-              .or('status.is.null,status.eq.active')
-              .in('payment_id', activePaymentIds);
-            receiptsData = data;
-          }
-          
-          // Buscar lançamentos diretos (sem payment_id) com chat_id para vincular à origem
-          const { data: directReceiptsForSources } = await supabase
+        // ===== RODADA 2: Query que depende de payments (receipts vinculados) =====
+        const activePaymentIds = (paymentsData || []).map(p => p.id);
+        let receiptsData: any[] | null = null;
+        if (activePaymentIds.length > 0) {
+          const { data } = await supabase
             .from('clinic_receipts' as any)
-            .select('id, chat_id, total_value, receipt_date')
+            .select('id, payment_id, total_value')
             .eq('clinic_id', clinicId)
             .or('status.is.null,status.eq.active')
-            .is('payment_id', null);
-          
-          // Buscar cliques de links para identificar atividade recente (remarketing)
-          const { data: linkClicksData } = await (supabase as any)
-            .from('link_clicks')
-            .select('chat_id, clicked_at')
-            .eq('clinic_id', clinicId)
-            .not('chat_id', 'is', null);
+            .in('payment_id', activePaymentIds);
+          receiptsData = data;
+        }
+        
+        // ===== Processar origens de leads =====
+        if (chatIdsForStats.length > 0) {
           
           // Criar mapa de último clique por chat_id
           const lastClickByChat: Record<string, Date> = {};
@@ -732,27 +731,44 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             // Calcular estatísticas por origem
             // Leads: filtrados pelo período (data de criação do chat)
             // Receita: filtrada pela data do lançamento/payment no período
+            // Pré-indexar chats por source_id para evitar O(n²)
+            const chatsBySource: Record<string, typeof chats> = {};
+            const allChatIdsBySource: Record<string, Set<string>> = {};
+            for (const c of filteredChats) {
+              const sid = (c as any).source_id;
+              if (sid) {
+                (chatsBySource[sid] ||= []).push(c);
+              }
+            }
+            for (const c of allClinicChats) {
+              const sid = (c as any).source_id;
+              if (sid) {
+                (allChatIdsBySource[sid] ||= new Set()).add(c.id);
+              }
+            }
+            
+            // Pré-indexar receipts por payment_id
+            const receiptsByPaymentId: Record<string, number> = {};
+            for (const r of (receiptsData as any[] || [])) {
+              receiptsByPaymentId[r.payment_id] = (receiptsByPaymentId[r.payment_id] || 0) + Number(r.total_value);
+            }
+            
             const stats: LeadSourceStats[] = (sourcesData as any[]).map(source => {
-              // Leads do período (filtrados por data de criação)
-              const sourceChats = filteredChats.filter(c => (c as any).source_id === source.id);
+              const sourceChats = chatsBySource[source.id] || [];
               const convertedChats = sourceChats.filter(c => c.status === 'Convertido');
               
-              // Todos os chats desta origem (para vincular receita)
-              const allSourceChatIds = allClinicChats.filter(c => (c as any).source_id === source.id).map(c => c.id);
+              const allSourceChatIdsSet = allChatIdsBySource[source.id] || new Set();
               
               // Valor comercial (payments filtrados por data do payment no período)
-              const sourcePayments = filteredPayments.filter(p => allSourceChatIds.includes(p.chat_id));
+              const sourcePayments = filteredPayments.filter(p => allSourceChatIdsSet.has(p.chat_id));
               const revenue = sourcePayments.reduce((sum, p) => sum + Number(p.value), 0);
               
               // Receita clínica (clinic_receipts vinculados aos payments desta origem)
-              const sourcePaymentIds = sourcePayments.map(p => p.id);
-              const clinicRevenueFromPayments = (receiptsData as any[] || [])
-                .filter(r => sourcePaymentIds.includes(r.payment_id))
-                .reduce((sum, r) => sum + Number(r.total_value), 0);
+              const clinicRevenueFromPayments = sourcePayments.reduce((sum, p) => sum + (receiptsByPaymentId[p.id] || 0), 0);
               
               // Receita direta (lançamentos sem payment_id, filtrados por data do lançamento)
               const directRevenueFromSource = filteredDirectReceipts
-                .filter(r => allSourceChatIds.includes(r.chat_id))
+                .filter(r => allSourceChatIdsSet.has(r.chat_id))
                 .reduce((sum, r) => sum + Number(r.total_value), 0);
               
               const clinicRevenue = clinicRevenueFromPayments + directRevenueFromSource;
@@ -781,21 +797,14 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           setLeadSourceStats([]);
         }
         
-        // Buscar dados de receita clínica (lançamentos) para o comercial
-        // Só mostra se o usuário for Comercial e tiver vendas
+        // Processar dados de receita clínica (lançamentos) para o comercial
+        // Usa myPaymentsRaw do Promise.all (já buscado em paralelo)
         if (user?.id && userRole === 'Comercial') {
-          // Buscar payments criados por este comercial com detalhes do chat (excluindo canceladas)
-          const { data: myPayments } = await supabase
-            .from('payments' as any)
-            .select('id, value, payment_date, chat_id, status, chat:chats(id, client_name, source_id)')
-            .eq('clinic_id', clinicId)
-            .eq('created_by', user.id)
-            .or('status.is.null,status.eq.active')
-            .order('payment_date', { ascending: false });
+          const myPayments = myPaymentsRaw as any[];
           
           if (myPayments && myPayments.length > 0) {
-            const myPaymentIds = (myPayments as any[]).map(p => p.id);
-            const totalComercial = (myPayments as any[]).reduce((sum, p) => sum + Number(p.value), 0);
+            const myPaymentIds = myPayments.map(p => p.id);
+            const totalComercial = myPayments.reduce((sum, p) => sum + Number(p.value), 0);
             
             // Buscar receitas vinculadas aos payments deste comercial
             const { data: myReceipts } = await supabase
@@ -809,14 +818,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             
             setClinicReceiptsData({ totalComercial, totalRecebido, roi });
             
-            // Buscar origens para os detalhes
-            const { data: sourcesData } = await supabase
-              .from('lead_sources' as any)
-              .select('id, name, color')
-              .eq('clinic_id', clinicId);
-            
-            // Montar lista detalhada de vendas
-            const salesDetails = (myPayments as any[]).map(p => {
+            // sourcesData já veio do Promise.all
+            const salesDetails = myPayments.map(p => {
               const receiptsForPayment = (myReceipts as any[] || []).filter(r => r.payment_id === p.id);
               const receivedValue = receiptsForPayment.reduce((sum, r) => sum + Number(r.total_value), 0);
               const source = (sourcesData as any[] || []).find(s => s.id === p.chat?.source_id);
@@ -848,14 +851,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           setMySalesDetails([]);
         }
         
-        // Buscar TODOS os clinic_receipts para calcular receita total da clínica
-        const { data: allClinicReceiptsData } = await supabase
-          .from('clinic_receipts' as any)
-          .select('id, total_value, receipt_date, payment_id, confirmed_at')
-          .eq('clinic_id', clinicId)
-          .or('status.is.null,status.eq.active');
-        
-        if (allClinicReceiptsData && allClinicReceiptsData.length > 0) {
+        // Processar receita total da clínica (allClinicReceiptsData já veio do Promise.all)
+        if (allClinicReceiptsData && (allClinicReceiptsData as any[]).length > 0) {
           const now = new Date();
           const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
           
@@ -902,7 +899,11 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
       }
     };
     
-    fetchStats();
+    const debounceTimer = setTimeout(() => {
+      fetchStats();
+    }, 300);
+    
+    return () => clearTimeout(debounceTimer);
   }, [clinicId, chats, loading, sourcesPeriodFilter]);
 
   // Buscar follow-ups agendados
@@ -954,21 +955,21 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         const yesterdayStart = new Date(yesterday.setHours(0, 0, 0, 0)).toISOString();
         const yesterdayEnd = new Date(yesterday.setHours(23, 59, 59, 999)).toISOString();
         
-        // Buscar chats que existiam até ontem (excluindo grupos)
-        const { data: yesterdayChats } = await supabase
-          .from('chats')
-          .select('id, status, is_group, created_at')
-          .eq('clinic_id', clinicId)
-          .eq('is_group', false)
-          .lte('created_at', yesterdayEnd);
-        
-        // Buscar payments até ontem
-        const { data: yesterdayPayments } = await supabase
-          .from('payments' as any)
-          .select('id')
-          .eq('clinic_id', clinicId)
-          .or('status.is.null,status.eq.active')
-          .lte('created_at', yesterdayEnd);
+        // Buscar chats e payments até ontem em paralelo
+        const [{ data: yesterdayChats }, { data: yesterdayPayments }] = await Promise.all([
+          supabase
+            .from('chats')
+            .select('id, status, is_group, created_at')
+            .eq('clinic_id', clinicId)
+            .eq('is_group', false)
+            .lte('created_at', yesterdayEnd),
+          supabase
+            .from('payments' as any)
+            .select('id')
+            .eq('clinic_id', clinicId)
+            .or('status.is.null,status.eq.active')
+            .lte('created_at', yesterdayEnd)
+        ]);
         
         if (yesterdayChats) {
           setYesterdayStats({
@@ -1002,48 +1003,56 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         const yesterdayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
         const yesterdayEndStr = yesterdayEnd.toISOString();
         
-        // Buscar leads criados HOJE com mais detalhes
-        const { data: leadsHoje } = await (supabase as any)
-          .from('chats')
-          .select('id, source_id, ad_source_id, meta_campaign_name, meta_ad_name, lead_sources(id, code, name)')
-          .eq('clinic_id', clinicId)
-          .eq('is_group', false)
-          .gte('created_at', todayStart);
-        
-        // Buscar leads criados ONTEM
-        const { data: leadsOntem } = await (supabase as any)
-          .from('chats')
-          .select('id, source_id, ad_source_id')
-          .eq('clinic_id', clinicId)
-          .eq('is_group', false)
-          .gte('created_at', yesterdayStart)
-          .lte('created_at', yesterdayEndStr);
-        
-        // Buscar links rastreáveis da clínica
-        const { data: trackableLinks } = await (supabase as any)
-          .from('trackable_links')
-          .select('id, code, name, source_id')
-          .eq('clinic_id', clinicId);
+        // Buscar todas as queries de leads em paralelo
+        const [
+          { data: leadsHoje },
+          { data: leadsOntem },
+          { data: trackableLinks },
+          { data: linkConversionsHoje },
+          { data: linkConversionsOntem },
+          { data: recentSourcesData }
+        ] = await Promise.all([
+          (supabase as any)
+            .from('chats')
+            .select('id, source_id, ad_source_id, meta_campaign_name, meta_ad_name, lead_sources(id, code, name)')
+            .eq('clinic_id', clinicId)
+            .eq('is_group', false)
+            .gte('created_at', todayStart),
+          (supabase as any)
+            .from('chats')
+            .select('id, source_id, ad_source_id')
+            .eq('clinic_id', clinicId)
+            .eq('is_group', false)
+            .gte('created_at', yesterdayStart)
+            .lte('created_at', yesterdayEndStr),
+          (supabase as any)
+            .from('trackable_links')
+            .select('id, code, name, source_id')
+            .eq('clinic_id', clinicId),
+          (supabase as any)
+            .from('link_clicks')
+            .select('id, chat_id')
+            .eq('clinic_id', clinicId)
+            .eq('converted_to_lead', true)
+            .gte('converted_at', todayStart),
+          (supabase as any)
+            .from('link_clicks')
+            .select('id, chat_id')
+            .eq('clinic_id', clinicId)
+            .eq('converted_to_lead', true)
+            .gte('converted_at', yesterdayStart)
+            .lte('converted_at', yesterdayEndStr),
+          supabase
+            .from('lead_sources')
+            .select('code, name')
+            .eq('clinic_id', clinicId)
+            .not('code', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(5)
+        ]);
         
         const trackableLinkSourceIds = new Set(trackableLinks?.map((l: any) => l.source_id).filter(Boolean) || []);
         const trackableLinkCodes = new Set(trackableLinks?.map((l: any) => l.code?.toUpperCase()).filter(Boolean) || []);
-        
-        // Buscar conversões de links rastreáveis de HOJE (mesmo que chat já existisse)
-        const { data: linkConversionsHoje } = await (supabase as any)
-          .from('link_clicks')
-          .select('id, chat_id')
-          .eq('clinic_id', clinicId)
-          .eq('converted_to_lead', true)
-          .gte('converted_at', todayStart);
-        
-        // Buscar conversões de links rastreáveis de ONTEM
-        const { data: linkConversionsOntem } = await (supabase as any)
-          .from('link_clicks')
-          .select('id, chat_id')
-          .eq('clinic_id', clinicId)
-          .eq('converted_to_lead', true)
-          .gte('converted_at', yesterdayStart)
-          .lte('converted_at', yesterdayEndStr);
         
         // Classificar leads de hoje
         const leadsHojeArr = leadsHoje || [];
@@ -1105,16 +1114,8 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           .sort((a, b) => b.quantidade - a.quantidade)
           .slice(0, 7);
         
-        // Códigos recentes (últimos 5 sources)
-        const { data: recentSources } = await supabase
-          .from('lead_sources')
-          .select('code, name')
-          .eq('clinic_id', clinicId)
-          .not('code', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(5);
-        
-        const codigos = recentSources?.map((s: any) => s.code || s.name).filter(Boolean) || [];
+        // Códigos recentes (já buscado no Promise.all)
+        const codigos = recentSourcesData?.map((s: any) => s.code || s.name).filter(Boolean) || [];
         
         setLeadsDetails({
           leadsHoje: leadsHojeArr.length,
@@ -1156,14 +1157,27 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
         yesterdayEnd.setHours(23, 59, 59, 999);
         const yesterdayEndStr = yesterdayEnd.toISOString();
         
-        // EM ATENDIMENTO - Buscar detalhes
-        const { data: atendimentoChats } = await supabase
-          .from('chats')
-          .select('id, assigned_to, updated_at')
-          .eq('clinic_id', clinicId)
-          .eq('status', 'Em Atendimento')
-          .eq('is_group', false);
+        // Buscar todas as 3 queries em paralelo
+        const [{ data: atendimentoChats }, { data: vendasData }, { data: allChats }] = await Promise.all([
+          supabase
+            .from('chats')
+            .select('id, assigned_to, updated_at')
+            .eq('clinic_id', clinicId)
+            .eq('status', 'Em Atendimento')
+            .eq('is_group', false),
+          supabase
+            .from('payments' as any)
+            .select('id, value, created_at')
+            .eq('clinic_id', clinicId)
+            .or('status.is.null,status.eq.active'),
+          supabase
+            .from('chats')
+            .select('id, status')
+            .eq('clinic_id', clinicId)
+            .eq('is_group', false)
+        ]);
         
+        // EM ATENDIMENTO
         if (atendimentoChats) {
           const atendentesUnicos = new Set(atendimentoChats.map((c: any) => c.assigned_to).filter(Boolean));
           const iniciadosHoje = atendimentoChats.filter((c: any) => new Date(c.updated_at) >= today).length;
@@ -1172,7 +1186,6 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
             return d >= yesterday && d < today;
           }).length;
           
-          // Calcular média de dias em atendimento
           const now = new Date();
           const totalDias = atendimentoChats.reduce((sum: number, c: any) => {
             const dias = (now.getTime() - new Date(c.updated_at).getTime()) / (1000 * 60 * 60 * 24);
@@ -1188,13 +1201,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           });
         }
         
-        // VENDAS - Buscar detalhes
-        const { data: vendasData } = await supabase
-          .from('payments' as any)
-          .select('id, value, created_at')
-          .eq('clinic_id', clinicId)
-          .or('status.is.null,status.eq.active');
-        
+        // VENDAS
         if (vendasData) {
           const vendas = vendasData as any[];
           const valorTotal = vendas.reduce((sum, v) => sum + parseFloat(v.value || 0), 0);
@@ -1216,13 +1223,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
           });
         }
         
-        // TOTAL CONVERSAS - Buscar detalhes por status
-        const { data: allChats } = await supabase
-          .from('chats')
-          .select('id, status')
-          .eq('clinic_id', clinicId)
-          .eq('is_group', false);
-        
+        // TOTAL CONVERSAS
         if (allChats) {
           const chatsArr = allChats as any[];
           const novos = chatsArr.filter(c => c.status === 'Novo Lead').length;
