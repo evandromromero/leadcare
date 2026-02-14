@@ -29,6 +29,17 @@ serve(async (req) => {
       .single()
 
     if (!instance) {
+      // === HUB: Verificar se a instancia pertence ao Hub ===
+      const { data: hubInstance } = await supabase
+        .from('hub_instances')
+        .select('id, panel_id, instance_name, status')
+        .eq('instance_name', instanceName)
+        .single()
+
+      if (hubInstance) {
+        return await handleHubWebhook(supabase, webhookData, event, hubInstance)
+      }
+
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
@@ -331,9 +342,8 @@ serve(async (req) => {
             console.log('Lead source encontrado:', detectedSourceId)
           } else {
             // Criar novo lead_source automaticamente
-            const sourceName = isFromMetaAd && metaAdInfo?.title 
-              ? `${metaAdInfo.title.substring(0, 30)}` 
-              : detectedCode
+            // Código detectado na mensagem sempre tem prioridade como nome
+            const sourceName = detectedCode
             
             const { data: newSource } = await supabase
               .from('lead_sources')
@@ -822,3 +832,299 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })
+
+// === HUB WEBHOOK HANDLER ===
+async function handleHubWebhook(supabase: any, webhookData: any, event: string, hubInstance: any) {
+  // Connection update para hub
+  if (event === 'connection.update') {
+    const state = webhookData.data?.state
+    if (state === 'open') {
+      const profileName = webhookData.data?.profileName || webhookData.data?.pushName || null
+      const phoneNumber = webhookData.data?.phoneNumber || webhookData.data?.wid?.replace('@s.whatsapp.net', '') || null
+      const updateData: Record<string, unknown> = { status: 'connected', connected_at: new Date().toISOString() }
+      if (profileName) updateData.display_name = profileName
+      if (phoneNumber) updateData.phone_number = phoneNumber
+      await supabase.from('hub_instances').update(updateData).eq('id', hubInstance.id)
+    } else if (state === 'close') {
+      await supabase.from('hub_instances').update({ status: 'disconnected', connected_at: null }).eq('id', hubInstance.id)
+    }
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
+  // QR Code para hub
+  if (event === 'qrcode.updated') {
+    await supabase.from('hub_instances').update({ qr_code: webhookData.data?.qrcode?.base64, status: 'connecting' }).eq('id', hubInstance.id)
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
+  if (event !== 'messages.upsert') {
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
+  const data = webhookData.data
+  const key = data?.key
+  if (!key) {
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  }
+
+  const isFromMe = key.fromMe === true
+  let remoteJid = key.remoteJid || ''
+  if (remoteJid.endsWith('@lid') && key.remoteJidAlt) {
+    remoteJid = key.remoteJidAlt
+  }
+  const phone = remoteJid.replace('@s.whatsapp.net', '').replace('@g.us', '')
+  const pushName = data.pushName || phone
+  const messageObj = data.message
+  const messageType = data.messageType || ''
+  const messageId = key.id
+
+  const base64Media = data.base64 || messageObj?.base64 || webhookData.base64
+  const mediaMimetype = data.mimetype || messageObj?.mimetype || webhookData.mimetype
+
+  let content = ''
+  let msgType = 'text'
+  let tempMediaUrl: string | null = null
+
+  if (messageType === 'conversation') {
+    content = messageObj?.conversation || ''
+  } else if (messageType === 'extendedTextMessage') {
+    content = messageObj?.extendedTextMessage?.text || ''
+  } else if (messageType === 'imageMessage') {
+    content = messageObj?.imageMessage?.caption || ''
+    msgType = 'image'
+    if (base64Media) {
+      tempMediaUrl = `data:${mediaMimetype || 'image/jpeg'};base64,${base64Media}`
+    } else {
+      tempMediaUrl = data.mediaUrl || messageObj?.imageMessage?.url || data.media?.url
+    }
+  } else if (messageType === 'videoMessage') {
+    content = messageObj?.videoMessage?.caption || ''
+    msgType = 'video'
+    if (base64Media) {
+      tempMediaUrl = `data:${mediaMimetype || 'video/mp4'};base64,${base64Media}`
+    } else {
+      tempMediaUrl = data.mediaUrl || messageObj?.videoMessage?.url || data.media?.url
+    }
+  } else if (messageType === 'audioMessage' || messageType === 'pttMessage') {
+    content = '[Audio]'
+    msgType = 'audio'
+    if (base64Media) {
+      tempMediaUrl = `data:${mediaMimetype || 'audio/ogg'};base64,${base64Media}`
+    } else {
+      tempMediaUrl = data.mediaUrl || messageObj?.audioMessage?.url || data.media?.url
+    }
+  } else if (messageType === 'documentMessage') {
+    content = messageObj?.documentMessage?.fileName || '[Documento]'
+    msgType = 'document'
+    const docMimetype = messageObj?.documentMessage?.mimetype || mediaMimetype
+    if (base64Media) {
+      tempMediaUrl = `data:${docMimetype || 'application/octet-stream'};base64,${base64Media}`
+    } else {
+      tempMediaUrl = data.mediaUrl || messageObj?.documentMessage?.url || data.media?.url
+    }
+  } else if (messageType === 'stickerMessage') {
+    content = '[Sticker]'
+    msgType = 'image'
+    if (base64Media) {
+      tempMediaUrl = `data:${mediaMimetype || 'image/webp'};base64,${base64Media}`
+    } else {
+      tempMediaUrl = data.mediaUrl || data.media?.url
+    }
+  } else {
+    content = messageObj?.conversation || messageObj?.extendedTextMessage?.text || `[${messageType}]`
+  }
+
+  console.log('[Hub Webhook] Phone:', phone, 'isFromMe:', isFromMe, 'type:', msgType, 'content:', content?.substring(0, 100))
+
+  // Buscar media via API se necessario
+  if (msgType !== 'text' && !tempMediaUrl && messageId) {
+    try {
+      const { data: settings } = await supabase
+        .from('settings')
+        .select('evolution_api_url, evolution_api_key')
+        .eq('id', 1)
+        .single()
+
+      if (settings?.evolution_api_url && settings?.evolution_api_key) {
+        const mediaResponse = await fetch(
+          `${settings.evolution_api_url}/chat/getBase64FromMediaMessage/${hubInstance.instance_name}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': settings.evolution_api_key },
+            body: JSON.stringify({ message: { key }, convertToMp4: msgType === 'video' })
+          }
+        )
+        if (mediaResponse.ok) {
+          const mediaData = await mediaResponse.json()
+          if (mediaData.base64) {
+            tempMediaUrl = `data:${mediaData.mimetype || 'application/octet-stream'};base64,${mediaData.base64}`
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[Hub Webhook] Error fetching media:', e)
+    }
+  }
+
+  // Detectar info de anuncio Meta
+  const contextInfo = messageObj?.extendedTextMessage?.contextInfo ||
+                      messageObj?.imageMessage?.contextInfo ||
+                      messageObj?.videoMessage?.contextInfo ||
+                      data.contextInfo
+  let adTitle: string | null = null
+  let adBody: string | null = null
+  let adSourceId: string | null = null
+  let adSourceUrl: string | null = null
+  let adSourceType: string | null = null
+  if (contextInfo?.externalAdReply) {
+    adTitle = contextInfo.externalAdReply.title || null
+    adBody = contextInfo.externalAdReply.body || null
+    adSourceId = contextInfo.externalAdReply.sourceId || null
+    adSourceUrl = contextInfo.externalAdReply.sourceUrl || null
+    adSourceType = contextInfo.externalAdReply.sourceType || null
+    console.log('[Hub Webhook] Meta Ad detected:', adTitle)
+  }
+
+  // Buscar ou criar hub_chat
+  const { data: existingChat } = await supabase
+    .from('hub_chats')
+    .select('id, unread_count')
+    .eq('panel_id', hubInstance.panel_id)
+    .eq('remote_phone', phone)
+    .single()
+
+  let hubChat: any = existingChat
+
+  if (!hubChat) {
+    const insertData: Record<string, unknown> = {
+      panel_id: hubInstance.panel_id,
+      instance_id: hubInstance.id,
+      remote_phone: phone,
+      remote_name: pushName || phone,
+      last_message: content || `[${msgType}]`,
+      last_message_at: new Date().toISOString(),
+      unread_count: isFromMe ? 0 : 1,
+      status: 'open',
+      channel: 'whatsapp',
+    }
+    if (adTitle) insertData.ad_title = adTitle
+    if (adBody) insertData.ad_body = adBody
+    if (adSourceId) insertData.ad_source_id = adSourceId
+    if (adSourceUrl) insertData.ad_source_url = adSourceUrl
+    if (adSourceType) insertData.ad_source_type = adSourceType
+
+    const { data: newChat, error: chatErr } = await supabase
+      .from('hub_chats')
+      .insert(insertData)
+      .select('id, unread_count')
+      .single()
+
+    if (chatErr) {
+      console.error('[Hub Webhook] Error creating chat:', chatErr)
+      return new Response(JSON.stringify({ success: false, error: chatErr.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    hubChat = newChat
+    console.log('[Hub Webhook] Created new hub_chat:', hubChat.id)
+  }
+
+  // Upload media
+  let finalMediaUrl: string | null = null
+  if (tempMediaUrl && msgType !== 'text' && hubChat) {
+    try {
+      let ext = 'bin'
+      if (msgType === 'image') ext = 'jpg'
+      else if (msgType === 'video') ext = 'mp4'
+      else if (msgType === 'audio') ext = 'ogg'
+      else if (msgType === 'document') {
+        const fileName = messageObj?.documentMessage?.fileName || ''
+        const fileExt = fileName.split('.').pop()?.toLowerCase()
+        if (fileExt && fileExt.length <= 5) ext = fileExt
+        else {
+          const docMime = messageObj?.documentMessage?.mimetype || ''
+          if (docMime.includes('pdf')) ext = 'pdf'
+          else if (docMime.includes('word')) ext = 'docx'
+          else if (docMime.includes('excel')) ext = 'xlsx'
+        }
+      }
+      const uploadPath = `hub/${hubInstance.panel_id}/${hubChat.id}/${Date.now()}.${ext}`
+
+      if (tempMediaUrl.startsWith('data:')) {
+        const matches = tempMediaUrl.match(/^data:([^;]+);base64,(.+)$/)
+        if (matches) {
+          const mimeType = matches[1]
+          const base64Data = matches[2]
+          const binaryString = atob(base64Data)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          const { error: upErr } = await supabase.storage.from('chat-media').upload(uploadPath, bytes, { contentType: mimeType })
+          if (!upErr) {
+            const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(uploadPath)
+            finalMediaUrl = urlData?.publicUrl || null
+          } else {
+            console.error('[Hub Webhook] Upload error:', upErr)
+          }
+        }
+      } else {
+        const resp = await fetch(tempMediaUrl)
+        if (resp.ok) {
+          const blob = await resp.blob()
+          const { error: upErr } = await supabase.storage.from('chat-media').upload(uploadPath, blob, { contentType: blob.type })
+          if (!upErr) {
+            const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(uploadPath)
+            finalMediaUrl = urlData?.publicUrl || null
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[Hub Webhook] Media upload error:', e)
+    }
+  }
+
+  // Inserir mensagem no hub_messages
+  const lastMsgDisplay = msgType === 'text' ? (content || '[Sem texto]') :
+    msgType === 'image' ? '📷 Imagem' :
+    msgType === 'document' ? '📄 Documento' :
+    msgType === 'audio' ? '🎵 Audio' :
+    msgType === 'video' ? '🎬 Video' : content || '[Midia]'
+
+  const { error: msgErr } = await supabase
+    .from('hub_messages')
+    .insert({
+      chat_id: hubChat.id,
+      direction: isFromMe ? 'outbound' : 'inbound',
+      content: content || null,
+      message_type: msgType,
+      media_url: finalMediaUrl,
+      media_filename: messageObj?.documentMessage?.fileName || null,
+      meta_message_id: messageId || null,
+      status: 'delivered',
+    })
+
+  if (msgErr) {
+    console.error('[Hub Webhook] Error inserting message:', msgErr)
+  }
+
+  // Atualizar hub_chat
+  const chatUpdate: Record<string, unknown> = {
+    last_message: lastMsgDisplay,
+    last_message_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+  if (!isFromMe) {
+    chatUpdate.unread_count = (hubChat.unread_count || 0) + 1
+  }
+  if (pushName && pushName !== phone) {
+    chatUpdate.remote_name = pushName
+  }
+  if (!existingChat && hubInstance.id) {
+    chatUpdate.instance_id = hubInstance.id
+  }
+
+  await supabase.from('hub_chats').update(chatUpdate).eq('id', hubChat.id)
+
+  console.log('[Hub Webhook] Message saved for chat:', hubChat.id, 'direction:', isFromMe ? 'outbound' : 'inbound')
+
+  return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+}
