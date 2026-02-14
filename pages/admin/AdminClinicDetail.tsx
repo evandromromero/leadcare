@@ -23,6 +23,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { ROLE_PERMISSIONS, getRoleDescription, UserRole } from '../../lib/permissions';
+import { parseLocalDate } from '../../lib/dates';
 
 interface MetaConversionLog {
   id: string;
@@ -4037,14 +4038,14 @@ const AdminClinicDetail: React.FC = () => {
                           key={idx}
                           className="flex-1 bg-emerald-500 rounded-t hover:bg-emerald-400 transition-colors cursor-pointer group relative"
                           style={{ height: `${Math.max(height, 2)}%` }}
-                          title={`${new Date(day.date).toLocaleDateString('pt-BR')}: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(day.revenue)}`}
+                          title={`${parseLocalDate(day.date).toLocaleDateString('pt-BR')}: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(day.revenue)}`}
                         >
                         </div>
                       );
                     })}
                   </div>
                   <div className="flex justify-between text-xs text-slate-400 mt-1">
-                    <span>{new Date(metricsData.dailyData[0]?.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+                    <span>{parseLocalDate(metricsData.dailyData[0]?.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
                     <span>Hoje</span>
                   </div>
                 </div>
@@ -4069,7 +4070,7 @@ const AdminClinicDetail: React.FC = () => {
                           key={idx}
                           className="flex-1 bg-cyan-500 rounded-t hover:bg-cyan-400 transition-colors cursor-pointer"
                           style={{ height: `${Math.max(height, 2)}%` }}
-                          title={`${new Date(day.date).toLocaleDateString('pt-BR')}: ${day.leads} leads`}
+                          title={`${parseLocalDate(day.date).toLocaleDateString('pt-BR')}: ${day.leads} leads`}
                         >
                         </div>
                       );
@@ -4097,7 +4098,7 @@ const AdminClinicDetail: React.FC = () => {
                           key={idx}
                           className="flex-1 bg-violet-500 rounded-t hover:bg-violet-400 transition-colors cursor-pointer"
                           style={{ height: `${Math.max(height, 2)}%` }}
-                          title={`${new Date(day.date).toLocaleDateString('pt-BR')}: ${day.conversions} conversões`}
+                          title={`${parseLocalDate(day.date).toLocaleDateString('pt-BR')}: ${day.conversions} conversões`}
                         >
                         </div>
                       );
@@ -5022,7 +5023,7 @@ const AdminClinicDetail: React.FC = () => {
                           <tr key={sale.id} className="hover:bg-slate-50">
                             <td className="py-3 px-4 font-medium text-slate-800">{sale.clientName}</td>
                             <td className="py-3 px-4 text-center text-sm text-slate-600">
-                              {new Date(sale.paymentDate).toLocaleDateString('pt-BR')}
+                              {parseLocalDate(sale.paymentDate).toLocaleDateString('pt-BR')}
                             </td>
                             <td className="py-3 px-4 text-center">
                               <span 
@@ -5077,7 +5078,7 @@ const AdminClinicDetail: React.FC = () => {
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="min-w-0">
                             <p className="font-medium text-slate-800 truncate">{sale.clientName}</p>
-                            <p className="text-xs text-slate-500">{sale.attendantName} • {new Date(sale.paymentDate).toLocaleDateString('pt-BR')}</p>
+                            <p className="text-xs text-slate-500">{sale.attendantName} • {parseLocalDate(sale.paymentDate).toLocaleDateString('pt-BR')}</p>
                           </div>
                           {sale.status === 'received' && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700 shrink-0">
@@ -5984,7 +5985,7 @@ const SubscriptionTab: React.FC<SubscriptionTabProps> = ({ clinicId, clinicName 
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
+    return parseLocalDate(dateString).toLocaleDateString('pt-BR');
   };
 
   const getStatusBadge = (status: string) => {
@@ -6175,7 +6176,7 @@ const SubscriptionTab: React.FC<SubscriptionTabProps> = ({ clinicId, clinicName 
                   <tr key={invoice.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 text-sm text-slate-800">
                       {invoice.reference_month 
-                        ? new Date(invoice.reference_month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+                        ? parseLocalDate(invoice.reference_month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
                         : invoice.description || '-'
                       }
                     </td>

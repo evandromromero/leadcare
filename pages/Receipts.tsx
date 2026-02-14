@@ -30,6 +30,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { GlobalState } from '../types';
 import { hasPermission } from '../lib/permissions';
+import { parseLocalDate } from '../lib/dates';
 
 interface ReceiptsProps {
   state: GlobalState;
@@ -97,6 +98,11 @@ interface Attendant {
 
 type SortField = 'date' | 'client' | 'commercial' | 'received';
 type SortOrder = 'asc' | 'desc';
+type TypeFilter = 'all' | 'commercial' | 'direct';
+
+type UnifiedItem = 
+  | { kind: 'payment'; data: PaymentWithDetails; sortDate: string }
+  | { kind: 'direct'; data: { id: string; chat_id: string; total_value: number; description: string | null; receipt_date: string; created_at: string; status: string | null; confirmed_at?: string | null; chat: { id: string; client_name: string; phone_number: string } | null; receipt_payments: Array<{ payment_method: string; value: number }> }; sortDate: string };
 
 const PAYMENT_METHODS = [
   { value: 'dinheiro', label: 'Dinheiro', icon: Banknote },
@@ -109,6 +115,7 @@ const PAYMENT_METHODS = [
 ];
 
 const ITEMS_PER_PAGE = 20;
+
 
 const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
   const { user } = useAuth();
@@ -152,6 +159,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
   
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   
@@ -445,7 +453,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
     const activeReceipts = payment.receipts.filter(r => r.status !== 'cancelled');
     const now = new Date();
     
-    const formatDate = (d: string) => new Date(d).toLocaleDateString('pt-BR');
+    const formatDate = (d: string) => parseLocalDate(d).toLocaleDateString('pt-BR');
     const formatMoney = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     
     const commercialSection = `
@@ -527,7 +535,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
 
   const generateDirectReceipt = (receipt: typeof directReceipts[0]) => {
     const now = new Date();
-    const formatDate = (d: string) => new Date(d).toLocaleDateString('pt-BR');
+    const formatDate = (d: string) => parseLocalDate(d).toLocaleDateString('pt-BR');
     const formatMoney = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recibo</title>
@@ -874,70 +882,127 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
     }
   };
 
-  const filteredAndSortedPayments = useMemo(() => {
-    let filtered = [...payments];
-    
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(p => 
-        p.chat?.client_name?.toLowerCase().includes(term) ||
-        p.description?.toLowerCase().includes(term) ||
-        p.creator?.name?.toLowerCase().includes(term)
-      );
-    }
-    
+  // Lista unificada: payments comerciais + lançamentos diretos
+  const unifiedItems = useMemo(() => {
+    // Calcular startDate para filtro de data (usado em ambos)
+    let startDate: Date | null = null;
     if (dateFilter !== 'all') {
       const now = new Date();
-      let startDate: Date;
-      
       switch (dateFilter) {
         case '7d': startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break;
         case '30d': startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); break;
         case 'month': startDate = new Date(now.getFullYear(), now.getMonth(), 1); break;
-        default: startDate = new Date(0);
+      }
+    }
+
+    const items: UnifiedItem[] = [];
+
+    // Adicionar payments comerciais (se filtro permite)
+    if (typeFilter !== 'direct') {
+      let filtered = [...payments];
+      
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filtered = filtered.filter(p => 
+          p.chat?.client_name?.toLowerCase().includes(term) ||
+          p.description?.toLowerCase().includes(term) ||
+          p.creator?.name?.toLowerCase().includes(term)
+        );
       }
       
-      filtered = filtered.filter(p => new Date(p.payment_date) >= startDate);
+      if (startDate) {
+        filtered = filtered.filter(p => parseLocalDate(p.payment_date) >= startDate!);
+      }
+      
+      if (sourceFilter !== 'all') {
+        filtered = filtered.filter(p => p.source?.id === sourceFilter);
+      }
+      
+      if (statusFilter === 'pending') {
+        filtered = filtered.filter(p => p.receipts.length === 0);
+      } else if (statusFilter === 'received') {
+        filtered = filtered.filter(p => p.receipts.length > 0);
+      }
+      
+      if (attendantFilter !== 'all') {
+        filtered = filtered.filter(p => p.created_by === attendantFilter);
+      }
+
+      filtered.forEach(p => items.push({ kind: 'payment', data: p, sortDate: p.payment_date }));
     }
-    
-    if (sourceFilter !== 'all') {
-      filtered = filtered.filter(p => p.source?.id === sourceFilter);
+
+    // Adicionar lançamentos diretos (se filtro permite)
+    if (typeFilter !== 'commercial') {
+      let filteredDirect = [...directReceipts];
+
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filteredDirect = filteredDirect.filter(r =>
+          r.chat?.client_name?.toLowerCase().includes(term) ||
+          r.description?.toLowerCase().includes(term)
+        );
+      }
+
+      if (startDate) {
+        filteredDirect = filteredDirect.filter(r => parseLocalDate(r.receipt_date) >= startDate!);
+      }
+
+      if (statusFilter === 'pending') {
+        filteredDirect = filteredDirect.filter(r => !r.confirmed_at);
+      } else if (statusFilter === 'received') {
+        filteredDirect = filteredDirect.filter(r => !!r.confirmed_at);
+      }
+
+      filteredDirect.forEach(r => items.push({ kind: 'direct', data: r, sortDate: r.receipt_date }));
     }
-    
-    if (statusFilter === 'pending') {
-      filtered = filtered.filter(p => p.receipts.length === 0);
-    } else if (statusFilter === 'received') {
-      filtered = filtered.filter(p => p.receipts.length > 0);
-    }
-    
-    if (attendantFilter !== 'all') {
-      filtered = filtered.filter(p => p.created_by === attendantFilter);
-    }
-    
-    filtered.sort((a, b) => {
+
+    // Ordenar lista unificada
+    items.sort((a, b) => {
       let comparison = 0;
       switch (sortField) {
-        case 'date': comparison = new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime(); break;
-        case 'client': comparison = (a.chat?.client_name || '').localeCompare(b.chat?.client_name || ''); break;
-        case 'commercial': comparison = Number(a.value) - Number(b.value); break;
-        case 'received':
-          const aR = a.receipts.reduce((s, r) => s + Number(r.total_value), 0);
-          const bR = b.receipts.reduce((s, r) => s + Number(r.total_value), 0);
-          comparison = aR - bR;
+        case 'date': 
+          comparison = parseLocalDate(a.sortDate).getTime() - parseLocalDate(b.sortDate).getTime(); 
           break;
+        case 'client': {
+          const nameA = a.kind === 'payment' ? (a.data.chat?.client_name || '') : (a.data.chat?.client_name || '');
+          const nameB = b.kind === 'payment' ? (b.data.chat?.client_name || '') : (b.data.chat?.client_name || '');
+          comparison = nameA.localeCompare(nameB);
+          break;
+        }
+        case 'commercial': {
+          const valA = a.kind === 'payment' ? Number(a.data.value) : 0;
+          const valB = b.kind === 'payment' ? Number(b.data.value) : 0;
+          comparison = valA - valB;
+          break;
+        }
+        case 'received': {
+          const recA = a.kind === 'payment' ? a.data.receipts.reduce((s, r) => s + Number(r.total_value), 0) : Number(a.data.total_value);
+          const recB = b.kind === 'payment' ? b.data.receipts.reduce((s, r) => s + Number(r.total_value), 0) : Number(b.data.total_value);
+          comparison = recA - recB;
+          break;
+        }
       }
       return sortOrder === 'asc' ? comparison : -comparison;
     });
-    
-    return filtered;
-  }, [payments, searchTerm, dateFilter, sourceFilter, statusFilter, attendantFilter, sortField, sortOrder]);
 
-  const paginatedPayments = useMemo(() => {
+    return items;
+  }, [payments, directReceipts, searchTerm, dateFilter, sourceFilter, statusFilter, attendantFilter, typeFilter, sortField, sortOrder]);
+
+  // Compat: filteredAndSortedPayments para métricas (só comerciais da lista unificada)
+  const filteredAndSortedPayments = useMemo(() => {
+    return unifiedItems.filter((i): i is UnifiedItem & { kind: 'payment' } => i.kind === 'payment').map(i => i.data);
+  }, [unifiedItems]);
+
+  const filteredDirectReceipts = useMemo(() => {
+    return unifiedItems.filter((i): i is UnifiedItem & { kind: 'direct' } => i.kind === 'direct').map(i => i.data);
+  }, [unifiedItems]);
+
+  const paginatedItems = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredAndSortedPayments.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredAndSortedPayments, currentPage]);
+    return unifiedItems.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [unifiedItems, currentPage]);
 
-  const totalPages = Math.ceil(filteredAndSortedPayments.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(unifiedItems.length / ITEMS_PER_PAGE);
 
   const metrics = useMemo(() => {
     const totalComercial = filteredAndSortedPayments.reduce((sum, p) => sum + Number(p.value), 0);
@@ -946,9 +1011,9 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
     const totalRecebimentosComercial = filteredAndSortedPayments.reduce((sum, p) => sum + activeReceipts(p).length, 0);
     
     // Lançamentos diretos (sem comercial) - só ativos
-    const activeDirectReceipts = directReceipts.filter(r => r.status !== 'cancelled');
-    const totalRecebidoDireto = activeDirectReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
-    const totalRecebimentosDiretos = activeDirectReceipts.length;
+    const activeDirectRcpts = filteredDirectReceipts.filter(r => r.status !== 'cancelled');
+    const totalRecebidoDireto = activeDirectRcpts.reduce((sum, r) => sum + Number(r.total_value), 0);
+    const totalRecebimentosDiretos = activeDirectRcpts.length;
     
     // Totais combinados
     const totalRecebido = totalRecebidoComercial + totalRecebidoDireto;
@@ -970,9 +1035,11 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
       vendasPendentes, 
       roi, 
       ticketMedio, 
-      totalVendas: filteredAndSortedPayments.length 
+      totalVendas: filteredAndSortedPayments.length,
+      totalDiretos: filteredDirectReceipts.length,
+      totalItems: unifiedItems.length
     };
-  }, [filteredAndSortedPayments, directReceipts]);
+  }, [filteredAndSortedPayments, filteredDirectReceipts, unifiedItems]);
 
   const exportToCSV = () => {
     const clinic = state.selectedClinic;
@@ -982,7 +1049,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
     filteredAndSortedPayments.forEach(p => {
       const totalReceived = p.receipts.reduce((sum, r) => sum + Number(r.total_value), 0);
       const methods = p.receipts.flatMap(r => r.receipt_payments?.map(rp => getPaymentMethodLabel(rp.payment_method)) || []).join('+');
-      csv += `${new Date(p.payment_date).toLocaleDateString('pt-BR')};${p.chat?.client_name || '-'};${p.source?.name || '-'};${p.creator?.name || '-'};${Number(p.value).toFixed(2)};${totalReceived.toFixed(2)};${methods || '-'}\n`;
+      csv += `${parseLocalDate(p.payment_date).toLocaleDateString('pt-BR')};${p.chat?.client_name || '-'};${p.source?.name || '-'};${p.creator?.name || '-'};${Number(p.value).toFixed(2)};${totalReceived.toFixed(2)};${methods || '-'}\n`;
     });
     
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -1105,16 +1172,28 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
       </div>
 
       <div className="flex gap-1.5 sm:gap-2 mb-3 sm:mb-4 overflow-x-auto pb-1">
-        <button onClick={() => setStatusFilter('all')} className={`px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${statusFilter === 'all' ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-          Todos ({metrics.totalVendas})
+        <button onClick={() => { setTypeFilter('all'); setCurrentPage(1); }} className={`px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${typeFilter === 'all' ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          Todos ({metrics.totalItems})
+        </button>
+        <button onClick={() => { setTypeFilter('commercial'); setCurrentPage(1); }} className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${typeFilter === 'commercial' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          <DollarSign className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+          <span className="hidden sm:inline">Comercial</span> ({metrics.totalVendas})
+        </button>
+        <button onClick={() => { setTypeFilter('direct'); setCurrentPage(1); }} className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${typeFilter === 'direct' ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+          <span className="hidden sm:inline">Receita Clínica</span> ({metrics.totalDiretos})
+        </button>
+        <div className="w-px h-6 bg-slate-200 self-center mx-1"></div>
+        <button onClick={() => setStatusFilter('all')} className={`px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${statusFilter === 'all' ? 'bg-slate-200 text-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          Status: Todos
         </button>
         <button onClick={() => setStatusFilter('pending')} className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${statusFilter === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
           <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          <span className="hidden sm:inline">Pendentes</span> ({metrics.vendasPendentes})
+          <span className="hidden sm:inline">Pendentes</span>
         </button>
         <button onClick={() => setStatusFilter('received')} className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap ${statusFilter === 'received' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
           <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          <span className="hidden sm:inline">Recebido</span> ({metrics.vendasComRecebimento})
+          <span className="hidden sm:inline">Recebido</span>
         </button>
       </div>
 
@@ -1163,11 +1242,153 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
       </div>
 
       <div className="space-y-2 sm:space-y-3">
-        {paginatedPayments.length === 0 && directReceipts.length === 0 ? (
+        {paginatedItems.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 sm:p-12 text-center text-slate-500 text-sm">Nenhum lançamento encontrado</div>
         ) : (
           <>
-            {paginatedPayments.map((payment) => {
+            {paginatedItems.map((item) => {
+              if (item.kind === 'direct') {
+                const receipt = item.data;
+                const isDirectCancelled = receipt.status === 'cancelled';
+                const isDirectConfirmed = !!receipt.confirmed_at;
+                return (
+                <div key={`direct-${receipt.id}`} className={`bg-white rounded-xl shadow-sm border ${isDirectCancelled ? 'border-red-200 opacity-60' : isDirectConfirmed ? 'border-teal-200' : 'border-amber-200'}`}>
+                  {/* Mobile Layout */}
+                  <div className="md:hidden p-3">
+                    <div className="flex items-start gap-2 mb-2">
+                      <div className={`p-0.5 ${isDirectCancelled ? 'text-red-400' : 'text-teal-400'}`}>
+                        {isDirectCancelled ? <X className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                      </div>
+                      <div className={`w-2 h-2 rounded-full mt-1.5 ${isDirectCancelled ? 'bg-red-400' : 'bg-teal-500'}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`font-semibold text-sm ${isDirectCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{receipt.chat?.client_name || 'Cliente'}</span>
+                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${isDirectCancelled ? 'bg-red-100 text-red-600' : 'bg-teal-100 text-teal-700'}`}>{isDirectCancelled ? 'Cancelado' : 'Direto'}</span>
+                          {!isDirectCancelled && (
+                            isDirectConfirmed ? (
+                              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
+                                <CheckCircle className="w-2.5 h-2.5" />Confirmado
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">
+                                <Clock className="w-2.5 h-2.5" />Pendente
+                              </span>
+                            )
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">
+                          {parseLocalDate(receipt.receipt_date).toLocaleDateString('pt-BR')}
+                          {receipt.receipt_payments?.[0]?.payment_method && ` • ${getPaymentMethodLabel(receipt.receipt_payments[0].payment_method)}`}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pl-6">
+                      <div className="flex gap-3">
+                        <div>
+                          <div className="text-[10px] text-slate-400">Comercial</div>
+                          <div className="font-bold text-slate-300 text-sm">-</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400">Recebido</div>
+                          <div className={`font-bold text-sm ${isDirectCancelled ? 'text-red-600 line-through' : 'text-teal-600'}`}>{formatCurrency(Number(receipt.total_value))}</div>
+                        </div>
+                      </div>
+                      {!isDirectCancelled && (
+                        <div className="flex items-center gap-1">
+                          {!isDirectConfirmed && canAddReceipt && (
+                            <button onClick={() => handleConfirmDirectReceipt(receipt.id)} className="p-1 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded" title="Confirmar recebimento">
+                              <CheckCircle className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {isDirectConfirmed && canAddReceipt && (
+                            <button onClick={() => handleUndoConfirmDirectReceipt(receipt.id)} className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded" title="Desfazer confirmação">
+                              <span className="material-symbols-outlined text-[14px]">undo</span>
+                            </button>
+                          )}
+                          <button onClick={() => generateDirectReceipt(receipt)} className="p-1 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded" title="Gerar recibo">
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+                          {canAddReceipt && (
+                            <button onClick={() => handleCancelDirectReceipt(receipt.id)} className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded" title="Cancelar">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Desktop Layout */}
+                  <div className="hidden md:flex p-4 items-center gap-4">
+                    <div className={`p-1 ${isDirectCancelled ? 'text-red-400' : 'text-teal-400'}`}>
+                      {isDirectCancelled ? <X className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+                    </div>
+                    <div className={`w-2 h-2 rounded-full ${isDirectCancelled ? 'bg-red-400' : 'bg-teal-500'}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`font-semibold ${isDirectCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{receipt.chat?.client_name || 'Cliente'}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isDirectCancelled ? 'bg-red-100 text-red-600' : 'bg-teal-100 text-teal-700'}`}>{isDirectCancelled ? 'Cancelado' : 'Direto'}</span>
+                        {!isDirectCancelled && (
+                          isDirectConfirmed ? (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                              <CheckCircle className="w-3 h-3" />Confirmado
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                              <Clock className="w-3 h-3" />Pendente
+                            </span>
+                          )
+                        )}
+                      </div>
+                      <div className="text-sm text-slate-500 flex items-center gap-2 flex-wrap">
+                        <span>{receipt.description || 'Lançamento direto'}</span>
+                        <span>-</span>
+                        <span>{parseLocalDate(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
+                        {receipt.receipt_payments?.[0]?.payment_method && (
+                          <>
+                            <span>-</span>
+                            <span>{getPaymentMethodLabel(receipt.receipt_payments[0].payment_method)}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-slate-400">Comercial</div>
+                      <div className="font-bold text-slate-300">-</div>
+                    </div>
+                    <div className="w-px h-10 bg-slate-200"></div>
+                    <div className="text-right min-w-[100px]">
+                      <div className="text-xs text-slate-400">Recebido</div>
+                      <div className={`font-bold ${isDirectCancelled ? 'text-red-600 line-through' : 'text-teal-600'}`}>{formatCurrency(Number(receipt.total_value))}</div>
+                    </div>
+                    {!isDirectCancelled && (
+                      <div className="flex items-center gap-2">
+                        {!isDirectConfirmed && canAddReceipt && (
+                          <button onClick={() => handleConfirmDirectReceipt(receipt.id)} className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 text-teal-600 text-sm font-medium rounded-lg hover:bg-teal-100">
+                            <CheckCircle className="w-4 h-4" />Confirmar
+                          </button>
+                        )}
+                        {isDirectConfirmed && canAddReceipt && (
+                          <button onClick={() => handleUndoConfirmDirectReceipt(receipt.id)} className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-600 text-sm font-medium rounded-lg hover:bg-amber-100">
+                            <span className="material-symbols-outlined text-[16px]">undo</span>Desfazer
+                          </button>
+                        )}
+                        <button onClick={() => generateDirectReceipt(receipt)} className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-100" title="Gerar recibo">
+                          <Printer className="w-4 h-4" />Recibo
+                        </button>
+                        {canAddReceipt && (
+                          <button onClick={() => handleCancelDirectReceipt(receipt.id)} className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-500 text-sm font-medium rounded-lg hover:bg-red-100">
+                            <Trash2 className="w-4 h-4" />Cancelar
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                );
+              }
+
+              // kind === 'payment'
+              const payment = item.data;
               const isExpanded = expandedPayments.has(payment.id);
               const activePaymentReceipts = payment.receipts.filter(r => r.status !== 'cancelled');
               const totalReceiptsValue = activePaymentReceipts.reduce((sum, r) => sum + Number(r.total_value), 0);
@@ -1187,7 +1408,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                           {isConfirmed && <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />}
                         </div>
                         <div className="text-[10px] text-slate-500 mt-0.5">
-                          {new Date(payment.payment_date).toLocaleDateString('pt-BR')}
+                          {parseLocalDate(payment.payment_date).toLocaleDateString('pt-BR')}
                           {payment.creator && ` • ${payment.creator.name}`}
                         </div>
                       </div>
@@ -1198,7 +1419,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                           {getPaymentMethodLabel(payment.received_method || '')}
                         </span>
                         <span className="text-[9px] text-slate-400">
-                          {new Date(payment.received_at!).toLocaleDateString('pt-BR')}
+                          {parseLocalDate(payment.received_at!).toLocaleDateString('pt-BR')}
                         </span>
                       </div>
                     )}
@@ -1277,7 +1498,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                       <div className="text-sm text-slate-500 flex items-center gap-2 flex-wrap">
                         <span>{payment.description || 'Sem descrição'}</span>
                         <span>-</span>
-                        <span>{new Date(payment.payment_date).toLocaleDateString('pt-BR')}</span>
+                        <span>{parseLocalDate(payment.payment_date).toLocaleDateString('pt-BR')}</span>
                         {payment.creator && <><span>-</span><span className="flex items-center gap-1"><User className="w-3 h-3" />{payment.creator.name}</span></>}
                       </div>
                     </div>
@@ -1350,7 +1571,7 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className={`font-semibold text-sm ${isCancelled ? 'text-red-600 line-through' : 'text-emerald-600'}`}>{formatCurrency(Number(receipt.total_value))}</span>
-                                  <span className="text-xs text-slate-400">{new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
+                                  <span className="text-xs text-slate-400">{parseLocalDate(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
                                   {isCancelled && <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">CANCELADO</span>}
                                   {!isCancelled && (
                                     isReceiptConfirmed ? (
@@ -1400,153 +1621,13 @@ const Receipts: React.FC<ReceiptsProps> = ({ state }) => {
                 </div>
               );
             })}
-            
-            {/* Lançamentos Diretos (sem comercial) */}
-            {directReceipts.map((receipt) => {
-              const isDirectCancelled = receipt.status === 'cancelled';
-              const isDirectConfirmed = !!receipt.confirmed_at;
-              return (
-                <div key={`direct-${receipt.id}`} className={`bg-white rounded-xl shadow-sm border ${isDirectCancelled ? 'border-red-200 opacity-60' : isDirectConfirmed ? 'border-teal-200' : 'border-amber-200'}`}>
-                  {/* Mobile Layout */}
-                  <div className="md:hidden p-3">
-                    <div className="flex items-start gap-2 mb-2">
-                      <div className={`p-0.5 ${isDirectCancelled ? 'text-red-400' : 'text-teal-400'}`}>
-                        {isDirectCancelled ? <X className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
-                      </div>
-                      <div className={`w-2 h-2 rounded-full mt-1.5 ${isDirectCancelled ? 'bg-red-400' : 'bg-teal-500'}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`font-semibold text-sm ${isDirectCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{receipt.chat?.client_name || 'Cliente'}</span>
-                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${isDirectCancelled ? 'bg-red-100 text-red-600' : 'bg-teal-100 text-teal-700'}`}>{isDirectCancelled ? 'Cancelado' : 'Direto'}</span>
-                          {!isDirectCancelled && (
-                            isDirectConfirmed ? (
-                              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
-                                <CheckCircle className="w-2.5 h-2.5" />Confirmado
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700">
-                                <Clock className="w-2.5 h-2.5" />Pendente
-                              </span>
-                            )
-                          )}
-                        </div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">
-                          {new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}
-                          {receipt.receipt_payments?.[0]?.payment_method && ` • ${getPaymentMethodLabel(receipt.receipt_payments[0].payment_method)}`}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between pl-6">
-                      <div className="flex gap-3">
-                        <div>
-                          <div className="text-[10px] text-slate-400">Comercial</div>
-                          <div className="font-bold text-slate-300 text-sm">-</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-slate-400">Recebido</div>
-                          <div className={`font-bold text-sm ${isDirectCancelled ? 'text-red-600 line-through' : 'text-teal-600'}`}>{formatCurrency(Number(receipt.total_value))}</div>
-                        </div>
-                      </div>
-                      {!isDirectCancelled && (
-                        <div className="flex items-center gap-1">
-                          {!isDirectConfirmed && canAddReceipt && (
-                            <button onClick={() => handleConfirmDirectReceipt(receipt.id)} className="p-1 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded" title="Confirmar recebimento">
-                              <CheckCircle className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {isDirectConfirmed && canAddReceipt && (
-                            <button onClick={() => handleUndoConfirmDirectReceipt(receipt.id)} className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded" title="Desfazer confirmação">
-                              <span className="material-symbols-outlined text-[14px]">undo</span>
-                            </button>
-                          )}
-                          <button onClick={() => generateDirectReceipt(receipt)} className="p-1 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded" title="Gerar recibo">
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-                          {canAddReceipt && (
-                            <button onClick={() => handleCancelDirectReceipt(receipt.id)} className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded" title="Cancelar">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {/* Desktop Layout */}
-                  <div className="hidden md:flex p-4 items-center gap-4">
-                    <div className={`p-1 ${isDirectCancelled ? 'text-red-400' : 'text-teal-400'}`}>
-                      {isDirectCancelled ? <X className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
-                    </div>
-                    <div className={`w-2 h-2 rounded-full ${isDirectCancelled ? 'bg-red-400' : 'bg-teal-500'}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`font-semibold ${isDirectCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{receipt.chat?.client_name || 'Cliente'}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isDirectCancelled ? 'bg-red-100 text-red-600' : 'bg-teal-100 text-teal-700'}`}>{isDirectCancelled ? 'Cancelado' : 'Direto'}</span>
-                        {!isDirectCancelled && (
-                          isDirectConfirmed ? (
-                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                              <CheckCircle className="w-3 h-3" />Confirmado
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                              <Clock className="w-3 h-3" />Pendente
-                            </span>
-                          )
-                        )}
-                      </div>
-                      <div className="text-sm text-slate-500 flex items-center gap-2 flex-wrap">
-                        <span>{receipt.description || 'Lançamento direto'}</span>
-                        <span>-</span>
-                        <span>{new Date(receipt.receipt_date).toLocaleDateString('pt-BR')}</span>
-                        {receipt.receipt_payments?.[0]?.payment_method && (
-                          <>
-                            <span>-</span>
-                            <span>{getPaymentMethodLabel(receipt.receipt_payments[0].payment_method)}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs text-slate-400">Comercial</div>
-                      <div className="font-bold text-slate-300">-</div>
-                    </div>
-                    <div className="w-px h-10 bg-slate-200"></div>
-                    <div className="text-right min-w-[100px]">
-                      <div className="text-xs text-slate-400">Recebido</div>
-                      <div className={`font-bold ${isDirectCancelled ? 'text-red-600 line-through' : 'text-teal-600'}`}>{formatCurrency(Number(receipt.total_value))}</div>
-                    </div>
-                    {!isDirectCancelled && (
-                      <div className="flex items-center gap-2">
-                        {!isDirectConfirmed && canAddReceipt && (
-                          <button onClick={() => handleConfirmDirectReceipt(receipt.id)} className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 text-teal-600 text-sm font-medium rounded-lg hover:bg-teal-100">
-                            <CheckCircle className="w-4 h-4" />Confirmar
-                          </button>
-                        )}
-                        {isDirectConfirmed && canAddReceipt && (
-                          <button onClick={() => handleUndoConfirmDirectReceipt(receipt.id)} className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-600 text-sm font-medium rounded-lg hover:bg-amber-100">
-                            <span className="material-symbols-outlined text-[16px]">undo</span>Desfazer
-                          </button>
-                        )}
-                        <button onClick={() => generateDirectReceipt(receipt)} className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-100" title="Gerar recibo">
-                          <Printer className="w-4 h-4" />Recibo
-                        </button>
-                        {canAddReceipt && (
-                          <button onClick={() => handleCancelDirectReceipt(receipt.id)} className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-500 text-sm font-medium rounded-lg hover:bg-red-100">
-                            <Trash2 className="w-4 h-4" />Cancelar
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
           </>
         )}
       </div>
 
       {totalPages > 1 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mt-4 sm:mt-6 bg-white rounded-xl shadow-sm border border-slate-200 p-3 sm:p-4">
-          <p className="text-xs sm:text-sm text-slate-500">{((currentPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSortedPayments.length)} de {filteredAndSortedPayments.length}</p>
+          <p className="text-xs sm:text-sm text-slate-500">{((currentPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, unifiedItems.length)} de {unifiedItems.length}</p>
           <div className="flex items-center gap-2">
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-slate-200 rounded-lg disabled:opacity-50">Anterior</button>
             <span className="text-xs sm:text-sm text-slate-600">{currentPage}/{totalPages}</span>

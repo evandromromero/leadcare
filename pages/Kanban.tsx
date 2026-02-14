@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { usePipelineStages, PipelineStage } from '../hooks/usePipelineStages';
 import { supabase } from '../lib/supabase';
 import { hasPermission } from '../lib/permissions';
+import { parseLocalDate } from '../lib/dates';
 
 interface KanbanProps {
   state: GlobalState;
@@ -1493,7 +1494,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
                       <div>
                         <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">Data de Nascimento</p>
                         <p className="text-xs md:text-sm font-medium text-slate-700">
-                          {new Date(selectedLeadInfo.leadData.birth_date).toLocaleDateString('pt-BR')}
+                          {parseLocalDate(selectedLeadInfo.leadData.birth_date).toLocaleDateString('pt-BR')}
                         </p>
                       </div>
                     </div>

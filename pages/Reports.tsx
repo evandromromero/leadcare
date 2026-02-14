@@ -25,6 +25,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { GlobalState } from '../types';
 import { getDataAccess } from '../lib/permissions';
+import { parseLocalDate } from '../lib/dates';
 
 interface ReportsProps {
   state: GlobalState;
@@ -538,7 +539,7 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
     });
     csv += '\n\nCliente;Data;Origem;Comercial;Valor;Recebido;Status\n';
     details.forEach(d => {
-      csv += `${d.clientName};${new Date(d.paymentDate).toLocaleDateString('pt-BR')};${d.sourceName};${d.attendantName};${d.commercialValue.toFixed(2)};${d.receivedValue.toFixed(2)};${d.status}\n`;
+      csv += `${d.clientName};${parseLocalDate(d.paymentDate).toLocaleDateString('pt-BR')};${d.sourceName};${d.attendantName};${d.commercialValue.toFixed(2)};${d.receivedValue.toFixed(2)};${d.status}\n`;
     });
     
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -747,7 +748,7 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
                 </span>
                 <span className="text-xs font-medium text-amber-600">
                   {hoveredBar?.type === 'comercial' && dailyData[hoveredBar.idx] 
-                    ? `${new Date(dailyData[hoveredBar.idx].date).toLocaleDateString('pt-BR')}: ${formatCurrency(dailyData[hoveredBar.idx].comercial)}`
+                    ? `${parseLocalDate(dailyData[hoveredBar.idx].date).toLocaleDateString('pt-BR')}: ${formatCurrency(dailyData[hoveredBar.idx].comercial)}`
                     : formatCurrency(dailyData.reduce((sum, d) => sum + d.comercial, 0))
                   }
                 </span>
@@ -778,7 +779,7 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
                 </span>
                 <span className="text-xs font-medium text-emerald-600">
                   {hoveredBar?.type === 'recebido' && dailyData[hoveredBar.idx] 
-                    ? `${new Date(dailyData[hoveredBar.idx].date).toLocaleDateString('pt-BR')}: ${formatCurrency(dailyData[hoveredBar.idx].recebido)}`
+                    ? `${parseLocalDate(dailyData[hoveredBar.idx].date).toLocaleDateString('pt-BR')}: ${formatCurrency(dailyData[hoveredBar.idx].recebido)}`
                     : formatCurrency(dailyData.reduce((sum, d) => sum + d.recebido, 0))
                   }
                 </span>
@@ -1096,7 +1097,7 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
                         <tr key={sale.id} className="hover:bg-slate-50">
                           <td className="py-3 px-4 font-medium text-slate-800">{sale.clientName}</td>
                           <td className="py-3 px-4 text-center text-sm text-slate-600">
-                            {new Date(sale.paymentDate).toLocaleDateString('pt-BR')}
+                            {parseLocalDate(sale.paymentDate).toLocaleDateString('pt-BR')}
                           </td>
                           <td className="py-3 px-4 text-center text-sm text-slate-600">
                             {sale.description || '-'}
@@ -1148,7 +1149,7 @@ const Reports: React.FC<ReportsProps> = ({ state }) => {
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="min-w-0">
                           <p className="font-medium text-slate-800 truncate">{sale.clientName}</p>
-                          <p className="text-xs text-slate-500">{sale.attendantName} - {new Date(sale.paymentDate).toLocaleDateString('pt-BR')}</p>
+                          <p className="text-xs text-slate-500">{sale.attendantName} - {parseLocalDate(sale.paymentDate).toLocaleDateString('pt-BR')}</p>
                         </div>
                         {sale.status === 'received' && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700 shrink-0">

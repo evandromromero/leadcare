@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { parseLocalDate } from '../lib/dates';
 import { 
   TrendingUp,
   TrendingDown,
@@ -965,7 +966,7 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
                       key={idx}
                       className="flex-1 bg-emerald-500 rounded-t hover:bg-emerald-400 transition-colors cursor-pointer"
                       style={{ height: `${Math.max(height, 2)}%` }}
-                      title={`${new Date(day.date).toLocaleDateString('pt-BR')}: ${formatCurrency(day.revenue)}`}
+                      title={`${parseLocalDate(day.date).toLocaleDateString('pt-BR')}: ${formatCurrency(day.revenue)}`}
                     />
                   );
                 })}
@@ -993,7 +994,7 @@ const Metrics: React.FC<MetricsProps> = ({ state }) => {
                       key={idx}
                       className="flex-1 bg-cyan-500 rounded-t hover:bg-cyan-400 transition-colors cursor-pointer"
                       style={{ height: `${Math.max(height, 2)}%` }}
-                      title={`${new Date(day.date).toLocaleDateString('pt-BR')}: ${day.leads} leads`}
+                      title={`${parseLocalDate(day.date).toLocaleDateString('pt-BR')}: ${day.leads} leads`}
                     />
                   );
                 })}

@@ -11,6 +11,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import DashboardLeadsTab from '../components/DashboardLeadsTab';
 import DashboardChartsTab from '../components/DashboardChartsTab';
 import CommercialRevenueModal from '../components/CommercialRevenueModal';
+import { parseLocalDate } from '../lib/dates';
 
 interface DashboardProps {
   state: GlobalState;
@@ -2403,7 +2404,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                             <span className="font-medium text-slate-800">{sale.clientName}</span>
                           </td>
                           <td className="py-3 px-4 text-center text-sm text-slate-600">
-                            {new Date(sale.paymentDate).toLocaleDateString('pt-BR')}
+                            {parseLocalDate(sale.paymentDate).toLocaleDateString('pt-BR')}
                           </td>
                           <td className="py-3 px-4 text-center">
                             <span 
@@ -4178,7 +4179,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                           </div>
                           {showDate && task.due_date && (
                             <span className="text-[10px] sm:text-xs text-slate-400 flex-shrink-0">
-                              {new Date(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                              {parseLocalDate(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                             </span>
                           )}
                         </div>
@@ -4362,7 +4363,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                                 )}
                                 {task.due_date && (
                                   <span className="text-[10px] sm:text-xs text-slate-400">
-                                    {new Date(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                    {parseLocalDate(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                                   </span>
                                 )}
                               </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { parseLocalDate } from '../lib/dates';
 
 interface LeadDetailProps {
   state: { selectedClinic: { id: string } | null };
@@ -1049,7 +1050,7 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
                       <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-0.5 sm:gap-y-1 text-[9px] sm:text-xs text-slate-500">
                         <span className="flex items-center gap-0.5 sm:gap-1">
                           <span className="material-symbols-outlined text-xs sm:text-sm">calendar_today</span>
-                          {new Date(payment.payment_date).toLocaleDateString('pt-BR')}
+                          {parseLocalDate(payment.payment_date).toLocaleDateString('pt-BR')}
                         </span>
                         {payment.payment_method && (
                           <span className="flex items-center gap-0.5 sm:gap-1">
