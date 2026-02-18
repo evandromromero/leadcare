@@ -21,7 +21,7 @@ interface InboxProps {
   setState: React.Dispatch<React.SetStateAction<GlobalState>>;
 }
 
-type FilterType = 'todos' | 'nao_lidos' | 'aguardando' | 'followup' | 'grupos';
+type FilterType = 'todos' | 'nao_lidos' | 'followup' | 'grupos';
 type ChannelType = 'whatsapp' | 'instagram' | 'facebook';
 
 
@@ -1932,9 +1932,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     switch (activeFilter) {
       case 'nao_lidos':
         return !(chat as any).is_group && (chat.unread_count || 0) > 0;
-      case 'aguardando':
-        // Chats onde a última mensagem foi do cliente E já foi lida (aguardando resposta)
-        return !(chat as any).is_group && (chat as any).last_message_from_client === true && (chat.unread_count || 0) === 0;
       case 'followup':
         return !(chat as any).is_group && chat.id in followupData;
       case 'grupos':
@@ -3265,7 +3262,6 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
             {[
               { key: 'todos' as FilterType, label: 'Todos', count: chats.filter(c => !(c as any).is_group).length, tooltip: 'Todas as conversas individuais' },
               { key: 'nao_lidos' as FilterType, label: 'Não lidos', count: chats.filter(c => !(c as any).is_group && (c.unread_count || 0) > 0).length, tooltip: 'Conversas com mensagens não lidas' },
-              { key: 'aguardando' as FilterType, label: 'Aguardando', count: chats.filter(c => !(c as any).is_group && (c as any).last_message_from_client === true && (c.unread_count || 0) === 0).length, tooltip: 'Conversas lidas mas não respondidas - cliente aguardando sua resposta' },
               { key: 'grupos' as FilterType, label: 'Grupos', count: chats.filter(c => (c as any).is_group).length, tooltip: 'Grupos do WhatsApp' },
             ].map((f) => (
               <button 

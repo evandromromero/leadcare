@@ -2629,6 +2629,88 @@ O card "Receita Clínica" (R$ 41.200) mostra **todos** os lançamentos do mês. 
 
 ---
 
+### Melhorias - 13/02/2026: Lista Unificada de Lançamentos + Fix Fuso Horário
+
+#### 1. Lista Unificada de Lançamentos (Receipts.tsx)
+
+**Problema:** Os lançamentos diretos ("Receita Clínica") ficavam sempre no final da lista, separados dos pagamentos comerciais, sem respeitar a ordenação por data. Ex: um lançamento direto do dia 12 aparecia abaixo de pagamentos do dia 5.
+
+**Solução:** Criado tipo `UnifiedItem` que combina pagamentos comerciais e lançamentos diretos em uma única lista, com discriminador `kind: 'payment' | 'direct'`.
+
+**Como foi feito:**
+
+1. **Novos tipos** — `TypeFilter = 'all' | 'commercial' | 'direct'` e `UnifiedItem` com discriminador `kind`
+2. **Novo state** — `typeFilter` para controlar qual tipo de item exibir
+3. **useMemo `unifiedItems`** — combina `payments` e `directReceipts` em uma lista só, aplica todos os filtros (busca, data, origem, status, atendente, tipo) e ordena por campo selecionado
+4. **Compatibilidade** — `filteredAndSortedPayments` e `filteredDirectReceipts` derivados do `unifiedItems` para manter métricas funcionando
+5. **Paginação unificada** — `paginatedItems` conta ambos os tipos juntos
+6. **Renderização** — `paginatedItems.map()` com `if (item.kind === 'direct')` renderiza layout de direto, senão renderiza layout de pagamento
+7. **Filtro de tipo na UI** — 3 botões: "Todos", "Comercial" (com ícone DollarSign), "Receita Clínica" (com ícone CheckCircle), separados dos filtros de status por um divisor vertical
+
+**Métricas atualizadas:**
+- `totalItems` — total de itens na lista unificada
+- `totalVendas` — total de pagamentos comerciais filtrados
+- `totalDiretos` — total de lançamentos diretos filtrados
+- `totalRecebido` — soma de comercial + direto
+- `ticketMedio` — baseado no total combinado
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `pages/Receipts.tsx` | Tipos UnifiedItem/TypeFilter, state typeFilter, useMemo unifiedItems, filtros na UI, renderização unificada |
+
+---
+
+#### 2. Fix Fuso Horário — parseLocalDate (lib/dates.ts)
+
+**Problema:** Ao salvar uma data como "2026-02-13" (hoje), a lista mostrava "12/02/2026" (1 dia a menos).
+
+**Causa raiz:** `new Date("2026-02-13")` no JavaScript interpreta como UTC meia-noite (00:00:00Z). No fuso UTC-4 (Brasil), isso vira dia 12/02 às 20h, e `toLocaleDateString('pt-BR')` mostra o dia 12.
+
+**Solução:** Criado utilitário `lib/dates.ts` com função `parseLocalDate(d: string)`:
+```typescript
+export const parseLocalDate = (d: string): Date => {
+  if (!d) return new Date();
+  // Se for só data (YYYY-MM-DD), adicionar T12:00:00 para evitar shift de fuso
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return new Date(d + 'T12:00:00');
+  return new Date(d);
+};
+```
+
+**Como funciona:**
+- Detecta datas no formato `YYYY-MM-DD` (date-only, vindas de campos `date` do Supabase)
+- Adiciona `T12:00:00` para que o JS interprete como meio-dia local (nunca muda de dia)
+- Timestamps completos (com hora, vindos de campos `timestamptz`) passam direto sem alteração
+
+**Arquivos corrigidos (campos date-only vulneráveis):**
+
+| Arquivo | Campos corrigidos |
+|---------|-------------------|
+| `pages/Receipts.tsx` | `payment_date`, `receipt_date` |
+| `pages/Dashboard.tsx` | `paymentDate`, `due_date` |
+| `pages/admin/AdminClinicDetail.tsx` | `paymentDate`, `day.date`, `reference_month`, `formatDate` |
+| `pages/Reports.tsx` | `paymentDate`, `dailyData.date` |
+| `pages/Kanban.tsx` | `birth_date` |
+| `pages/Metrics.tsx` | `day.date` |
+| `pages/LeadDetail.tsx` | `payment_date` |
+
+**Arquivos seguros (timestamptz, não precisaram de fix):**
+- `Inbox.tsx`, `LinkConversations.tsx`, `LinkSettings.tsx`, `Integrations.tsx`
+- `AdminUsers.tsx`, `AdminClinics.tsx`, `AdminDashboard.tsx`, `SupportAgents.tsx`
+- `DashboardChartsTab.tsx`, `CommercialRevenueModal.tsx`, `Layout.tsx`, `DashboardLeadsTab.tsx`
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `lib/dates.ts` | **NOVO** — função `parseLocalDate` exportada |
+| `pages/Receipts.tsx` | Import + substituição de `new Date()` por `parseLocalDate()` em exibições, filtros, ordenação, CSV e recibos |
+| `pages/Dashboard.tsx` | Import + fix em `paymentDate` e `due_date` |
+| `pages/admin/AdminClinicDetail.tsx` | Import + fix em `paymentDate`, `day.date`, `reference_month`, `formatDate` |
+| `pages/Reports.tsx` | Import + fix em `paymentDate` e `dailyData.date` |
+| `pages/Kanban.tsx` | Import + fix em `birth_date` |
+| `pages/Metrics.tsx` | Import + fix em `day.date` |
+| `pages/LeadDetail.tsx` | Import + fix em `payment_date` |
+
+---
+
 ## Desenvolvido por
 
 **Betix** - CRM para Clínicas
