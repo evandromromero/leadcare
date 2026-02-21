@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GlobalState } from '../types';
 import { useChats, ChatWithMessages, DbTag } from '../hooks/useChats';
@@ -9,6 +9,7 @@ import { hasPermission } from '../lib/permissions';
 import { canSendMessage as checkRateLimit, recordMessageSent, waitForRateLimit } from '../lib/rateLimiter';
 import { SectionConfigModal, useSectionConfig, SectionKey, SECTION_KEYS, SECTION_LABELS } from '../components/InboxDetailsSections';
 import { usePipelineStages } from '../hooks/usePipelineStages';
+import NewChatModal from '../components/NewChatModal';
 
 const DEFAULT_QUICK_REPLIES = [
   { id: '1', text: 'Olá! Como posso ajudar você hoje?' },
@@ -45,7 +46,7 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages, togglePinChat, addOptimisticMessage, updateOptimisticMessage } = useChats(clinicId, user?.id);
+  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages, togglePinChat, addOptimisticMessage, updateOptimisticMessage, hasMoreChats, loadMoreChats } = useChats(clinicId, user?.id);
   const { stages } = usePipelineStages(clinicId);
   const PIPELINE_STAGES = stages.map(s => ({ value: s.status_key, label: s.label, color: s.color, hint: s.label }));
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -232,6 +233,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   // Estados para mensagens rápidas do banco
   const [quickReplies, setQuickReplies] = useState<Array<{ id: string; text: string }>>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  // Estado para modal de nova conversa
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
 
   // Estados para cadastro/edição de cliente
   const [showClientModal, setShowClientModal] = useState(false);
@@ -1913,8 +1917,8 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   }, [selectedChatId]);
 
-  // Filtrar chats baseado no filtro ativo e busca
-  const filteredChats = chats.filter(chat => {
+  // Filtrar chats baseado no filtro ativo e busca (memoizado)
+  const filteredChats = useMemo(() => chats.filter(chat => {
     // Filtro de canal
     const chatChannel = (chat as any).channel || 'whatsapp';
     if (chatChannel !== activeChannel) return false;
@@ -1940,7 +1944,14 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
       default:
         return !(chat as any).is_group; // Todos mostra apenas conversas individuais
     }
-  });
+  }), [chats, activeChannel, searchQuery, activeFilter, followupData]);
+
+  // Contadores memoizados para os filtros (evita recalcular a cada render)
+  const filterCounts = useMemo(() => ({
+    todos: chats.filter(c => !(c as any).is_group).length,
+    nao_lidos: chats.filter(c => !(c as any).is_group && (c.unread_count || 0) > 0).length,
+    grupos: chats.filter(c => (c as any).is_group).length,
+  }), [chats]);
 
   // Ler chatId da URL (vindo do Kanban) e selecionar automaticamente
   useEffect(() => {
@@ -3248,21 +3259,30 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         </div>
 
         <div className="p-4 border-b border-slate-100 space-y-4">
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined text-[20px]">search</span>
-            <input 
-              type="text" 
-              placeholder="Buscar conversa..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-cyan-600"
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined text-[20px]">search</span>
+              <input 
+                type="text" 
+                placeholder="Buscar conversa..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-cyan-600"
+              />
+            </div>
+            <button
+              onClick={() => setShowNewChatModal(true)}
+              className="size-9 flex items-center justify-center rounded-xl bg-cyan-600 text-white hover:bg-cyan-700 transition-colors shadow-sm shrink-0"
+              title="Nova conversa"
+            >
+              <span className="material-symbols-outlined text-[20px]">chat_add_on</span>
+            </button>
           </div>
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
             {[
-              { key: 'todos' as FilterType, label: 'Todos', count: chats.filter(c => !(c as any).is_group).length, tooltip: 'Todas as conversas individuais' },
-              { key: 'nao_lidos' as FilterType, label: 'Não lidos', count: chats.filter(c => !(c as any).is_group && (c.unread_count || 0) > 0).length, tooltip: 'Conversas com mensagens não lidas' },
-              { key: 'grupos' as FilterType, label: 'Grupos', count: chats.filter(c => (c as any).is_group).length, tooltip: 'Grupos do WhatsApp' },
+              { key: 'todos' as FilterType, label: 'Todos', count: filterCounts.todos, tooltip: 'Todas as conversas individuais' },
+              { key: 'nao_lidos' as FilterType, label: 'Não lidos', count: filterCounts.nao_lidos, tooltip: 'Conversas com mensagens não lidas' },
+              { key: 'grupos' as FilterType, label: 'Grupos', count: filterCounts.grupos, tooltip: 'Grupos do WhatsApp' },
             ].map((f) => (
               <button 
                 key={f.key}
@@ -3393,6 +3413,16 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
                 </div>
               </div>
             ))
+          )}
+          {/* Botão carregar mais conversas */}
+          {hasMoreChats && !searchQuery && (
+            <button
+              onClick={loadMoreChats}
+              className="w-full py-3 text-xs font-semibold text-cyan-600 hover:bg-cyan-50 transition-colors flex items-center justify-center gap-1.5 border-t border-slate-100"
+            >
+              <span className="material-symbols-outlined text-[16px]">expand_more</span>
+              Carregar mais conversas
+            </button>
           )}
         </div>
       </aside>
@@ -6437,6 +6467,21 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         onMoveUp={moveSectionUp}
         onMoveDown={moveSectionDown}
       />
+
+      {/* Modal de Nova Conversa */}
+      {showNewChatModal && clinicId && user && (
+        <NewChatModal
+          clinicId={clinicId}
+          userId={user.id}
+          onClose={() => setShowNewChatModal(false)}
+          onChatCreated={(chatId) => {
+            setShowNewChatModal(false);
+            refetch().then(() => {
+              setSelectedChatId(chatId);
+            });
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -441,19 +441,29 @@ serve(async (req) => {
         .single()
       
       if (chatError) {
-        console.error('ERRO CRÍTICO ao criar chat:', chatError, 'Dados:', JSON.stringify(chatData))
-        // Tentar novamente uma vez
-        const { data: retryChat, error: retryError } = await supabase
-          .from('chats')
-          .insert(chatData)
-          .select('id, unread_count')
-          .single()
+        // Race condition: outro webhook já criou o chat para este número
+        // Buscar o chat existente em vez de tentar inserir novamente
+        console.log('Insert falhou (provável race condition), buscando chat existente:', chatError.message)
+        const { data: existingChat } = isGroup
+          ? await supabase
+              .from('chats')
+              .select('id, unread_count, source_id')
+              .eq('clinic_id', clinicId)
+              .eq('group_id', groupId)
+              .single()
+          : await supabase
+              .from('chats')
+              .select('id, unread_count, source_id')
+              .eq('clinic_id', clinicId)
+              .eq('phone_number', phone)
+              .eq('is_group', false)
+              .single()
         
-        if (retryError) {
-          console.error('ERRO CRÍTICO (retry) ao criar chat:', retryError)
-          throw new Error(`Falha ao criar chat após retry: ${retryError.message}`)
+        if (!existingChat) {
+          console.error('ERRO CRÍTICO: Insert falhou e chat não encontrado:', chatError)
+          throw new Error(`Falha ao criar/buscar chat: ${chatError.message}`)
         }
-        chat = retryChat
+        chat = existingChat
       } else {
         chat = newChat
       }

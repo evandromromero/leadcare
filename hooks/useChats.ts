@@ -43,9 +43,12 @@ interface UseChatsReturn {
   togglePinChat: (chatId: string) => Promise<void>;
   addOptimisticMessage: (chatId: string, content: string, userId: string, replyingTo?: { id: string; content: string; senderName: string } | null) => string;
   updateOptimisticMessage: (chatId: string, tempId: string, realMessage: DbMessage | null) => void;
+  hasMoreChats: boolean;
+  loadMoreChats: () => Promise<void>;
 }
 
 const MESSAGES_PER_PAGE = 50;
+const CHATS_PER_PAGE = 100;
 
 export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
   const [chats, _setChats] = useState<ChatWithMessages[]>([]);
@@ -63,6 +66,8 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     });
   };
   const [loading, setLoading] = useState(true);
+  const [loadingMoreChats, setLoadingMoreChats] = useState(false);
+  const [hasMoreChats, setHasMoreChats] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [whatsappInstance, setWhatsappInstance] = useState<{ instanceName: string; status: string } | null>(null);
   const [evolutionSettings, setEvolutionSettings] = useState<{ apiUrl: string; apiKey: string } | null>(null);
@@ -112,7 +117,8 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
           )
         `)
         .eq('clinic_id', clinicId)
-        .order('last_message_time', { ascending: false });
+        .order('last_message_time', { ascending: false })
+        .limit(CHATS_PER_PAGE + 1);
 
       if (chatsError) {
         console.error('[useChats] Error fetching chats:', chatsError);
@@ -122,9 +128,14 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
       }
 
       
+      // Verificar se há mais chats além do limite
+      const hasMore = (chatsData || []).length > CHATS_PER_PAGE;
+      const chatsToProcess = hasMore ? (chatsData || []).slice(0, CHATS_PER_PAGE) : (chatsData || []);
+      setHasMoreChats(hasMore);
+
       // Preservar mensagens e last_message locais se forem mais recentes
       setChats(prevChats => {
-        const formattedChats: ChatWithMessages[] = (chatsData || []).map(chat => {
+        const formattedChats: ChatWithMessages[] = chatsToProcess.map(chat => {
           const existingChat = prevChats.find(c => c.id === chat.id);
           
           // Preservar mensagens locais
@@ -729,7 +740,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
       } catch (err) {
         console.error('[Realtime][poll] Error:', err);
       }
-    }, 5000);
+    }, 15000);
 
     return () => {
       supabase.removeChannel(broadcastChannel);
@@ -975,6 +986,68 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     await fetchMessages(chatId, MESSAGES_PER_PAGE, oldestMessage.created_at || undefined);
   };
 
+  // Carregar mais chats (paginação)
+  const loadMoreChats = async (): Promise<void> => {
+    if (!clinicId || loadingMoreChats || !hasMoreChats) return;
+    
+    setLoadingMoreChats(true);
+    try {
+      const lastChat = chats[chats.length - 1];
+      const lastTime = lastChat?.last_message_time || new Date().toISOString();
+
+      const { data: moreChatsData, error: moreError } = await (supabase as any)
+        .from('chats')
+        .select(`
+          id, clinic_id, lead_id, client_name, phone_number, avatar_url, avatar_updated_at, status,
+          unread_count, last_message, last_message_time, assigned_to, created_at,
+          updated_at, instance_id, locked_by, locked_at, last_message_from_client,
+          channel, is_pinned, is_group, group_id, source_id,
+          chat_tags (
+            tags (*)
+          )
+        `)
+        .eq('clinic_id', clinicId)
+        .lte('last_message_time', lastTime)
+        .order('last_message_time', { ascending: false })
+        .limit(CHATS_PER_PAGE + 1);
+
+      if (moreError) {
+        console.error('[useChats] Error loading more chats:', moreError);
+        return;
+      }
+
+      const hasMore = (moreChatsData || []).length > CHATS_PER_PAGE;
+      const newChats = hasMore ? (moreChatsData || []).slice(0, CHATS_PER_PAGE) : (moreChatsData || []);
+      setHasMoreChats(hasMore);
+
+      setChats(prev => {
+        const existingIds = new Set(prev.map(c => c.id));
+        const uniqueNewChats: ChatWithMessages[] = newChats
+          .filter((chat: any) => !existingIds.has(chat.id))
+          .map((chat: any) => ({
+            ...chat,
+            messages: [],
+            tags: chat.chat_tags?.map((ct: { tags: DbTag }) => ct.tags).filter(Boolean) || [],
+          }));
+
+        if (uniqueNewChats.length === 0) return prev;
+
+        const merged = [...prev, ...uniqueNewChats];
+        return merged.sort((a, b) => {
+          const aPinned = (a as any).is_pinned || false;
+          const bPinned = (b as any).is_pinned || false;
+          if (aPinned && !bPinned) return -1;
+          if (!aPinned && bPinned) return 1;
+          return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime();
+        });
+      });
+    } catch (err) {
+      console.error('[useChats] Exception loading more chats:', err);
+    } finally {
+      setLoadingMoreChats(false);
+    }
+  };
+
   // Fixar/desafixar chat
   const togglePinChat = async (chatId: string): Promise<void> => {
     const chat = chats.find(c => c.id === chatId);
@@ -1098,5 +1171,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
     togglePinChat,
     addOptimisticMessage,
     updateOptimisticMessage,
+    hasMoreChats,
+    loadMoreChats,
   };
 }
