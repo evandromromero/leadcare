@@ -152,8 +152,11 @@ serve(async (req) => {
       message = `${message} [${codeUpper}]`
     }
     
-    // Montar URLs do WhatsApp
-    const phoneClean = link.phone_number.replace(/\D/g, '')
+    // Montar URLs do WhatsApp (garantir código do país 55)
+    let phoneClean = link.phone_number.replace(/\D/g, '')
+    if (phoneClean.length <= 11 && !phoneClean.startsWith('55')) {
+      phoneClean = '55' + phoneClean
+    }
     const encodedMessage = encodeURIComponent(message)
     
     // URL para desktop (wa.me)
