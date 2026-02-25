@@ -243,13 +243,13 @@ serve(async (req) => {
     let { data: chat } = isGroup 
       ? await supabase
           .from('chats')
-          .select('id, unread_count, source_id')
+          .select('id, unread_count, source_id, lead_id')
           .eq('clinic_id', clinicId)
           .eq('group_id', groupId)
           .single()
       : await supabase
           .from('chats')
-          .select('id, unread_count, source_id')
+          .select('id, unread_count, source_id, lead_id')
           .eq('clinic_id', clinicId)
           .eq('phone_number', phone)
           .eq('is_group', false)
@@ -447,13 +447,13 @@ serve(async (req) => {
         const { data: existingChat } = isGroup
           ? await supabase
               .from('chats')
-              .select('id, unread_count, source_id')
+              .select('id, unread_count, source_id, lead_id')
               .eq('clinic_id', clinicId)
               .eq('group_id', groupId)
               .single()
           : await supabase
               .from('chats')
-              .select('id, unread_count, source_id')
+              .select('id, unread_count, source_id, lead_id')
               .eq('clinic_id', clinicId)
               .eq('phone_number', phone)
               .eq('is_group', false)
@@ -631,26 +631,32 @@ serve(async (req) => {
       
       // Se a mensagem é do cliente e temos pushName, atualizar o nome do cliente
       // Isso corrige casos onde o chat foi criado pelo atendente e o nome ficou como telefone
-      if (!isFromMe && !isGroup && pushName && pushName !== 'Cliente') {
+      // NUNCA sobrescrever se o chat tem lead_id (nome foi cadastrado manualmente)
+      if (!isFromMe && !isGroup && pushName && pushName !== 'Cliente' && !chat.lead_id) {
         // Buscar o nome atual do chat
         const { data: currentChat } = await supabase
           .from('chats')
-          .select('client_name')
+          .select('client_name, lead_id')
           .eq('id', chat.id)
           .single()
         
-        // Atualiza se o nome atual for: número de telefone, 'Cliente', vazio,
-        // ou contiver o telefone (ex: chat criado pelo atendente com número como nome)
-        const currentName = (currentChat as any)?.client_name || ''
-        const phoneDigits = phone.replace(/\D/g, '')
-        const isPhoneNumber = /^\d+$/.test(currentName)
-        const isGenericName = currentName === 'Cliente' || currentName === ''
-        const containsPhone = phoneDigits.length >= 8 && currentName.includes(phoneDigits.slice(-8))
-        const nameNeedsUpdate = isPhoneNumber || isGenericName || containsPhone
-        
-        if (nameNeedsUpdate) {
-          updateData.client_name = pushName
-          console.log('Atualizando client_name:', currentName, '->', pushName, 'chat:', chat.id)
+        // Verificar novamente lead_id (pode ter sido vinculado entre o fetch inicial e agora)
+        if (!(currentChat as any)?.lead_id) {
+          // Atualiza se o nome atual for: número de telefone, 'Cliente', vazio,
+          // ou contiver o telefone (ex: chat criado pelo atendente com número como nome)
+          const currentName = (currentChat as any)?.client_name || ''
+          const phoneDigits = phone.replace(/\D/g, '')
+          const isPhoneNumber = /^\d+$/.test(currentName)
+          const isGenericName = currentName === 'Cliente' || currentName === ''
+          const containsPhone = phoneDigits.length >= 8 && currentName.includes(phoneDigits.slice(-8))
+          const nameNeedsUpdate = isPhoneNumber || isGenericName || containsPhone
+          
+          if (nameNeedsUpdate) {
+            updateData.client_name = pushName
+            console.log('Atualizando client_name:', currentName, '->', pushName, 'chat:', chat.id)
+          }
+        } else {
+          console.log('Ignorando pushName - chat tem lead_id vinculado:', chat.id)
         }
       }
       

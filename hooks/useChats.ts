@@ -50,7 +50,7 @@ interface UseChatsReturn {
 const MESSAGES_PER_PAGE = 50;
 const CHATS_PER_PAGE = 100;
 
-export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
+export function useChats(clinicId?: string, userId?: string, paginate: boolean = true): UseChatsReturn {
   const [chats, _setChats] = useState<ChatWithMessages[]>([]);
   const chatsRef = useRef<ChatWithMessages[]>([]);
   const activeChatIdRef = useRef<string | null>(null);
@@ -118,7 +118,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
         `)
         .eq('clinic_id', clinicId)
         .order('last_message_time', { ascending: false })
-        .limit(CHATS_PER_PAGE + 1);
+        .limit(paginate ? CHATS_PER_PAGE + 1 : 10000);
 
       if (chatsError) {
         console.error('[useChats] Error fetching chats:', chatsError);
@@ -129,7 +129,7 @@ export function useChats(clinicId?: string, userId?: string): UseChatsReturn {
 
       
       // Verificar se há mais chats além do limite
-      const hasMore = (chatsData || []).length > CHATS_PER_PAGE;
+      const hasMore = paginate && (chatsData || []).length > CHATS_PER_PAGE;
       const chatsToProcess = hasMore ? (chatsData || []).slice(0, CHATS_PER_PAGE) : (chatsData || []);
       setHasMoreChats(hasMore);
 

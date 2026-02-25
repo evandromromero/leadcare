@@ -25,7 +25,7 @@ const Kanban: React.FC<KanbanProps> = ({ state, setState }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading, updateChatStatus, refetch } = useChats(clinicId, user?.id);
+  const { chats, loading, updateChatStatus, refetch } = useChats(clinicId, user?.id, false);
   const { stages, loading: stagesLoading, createStage, updateStage, deleteStage, reorderStages, fetchStages } = usePipelineStages(clinicId);
   const columns = stages.map(s => s.status_key);
   const [draggedId, setDraggedId] = useState<string | null>(null);
