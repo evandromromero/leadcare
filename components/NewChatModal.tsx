@@ -41,11 +41,6 @@ export default function NewChatModal({ clinicId, userId, onClose, onChatCreated 
       return;
     }
 
-    if (!message.trim()) {
-      setError('Digite uma mensagem para enviar.');
-      return;
-    }
-
     setSending(true);
 
     try {
@@ -93,7 +88,7 @@ export default function NewChatModal({ clinicId, userId, onClose, onChatCreated 
           is_group: false,
           status: 'Em Atendimento',
           unread_count: 0,
-          last_message: message.trim(),
+          last_message: message.trim() || null,
           last_message_time: new Date().toISOString(),
           instance_id: instance.id,
           assigned_to: userId,
@@ -120,8 +115,10 @@ export default function NewChatModal({ clinicId, userId, onClose, onChatCreated 
         throw new Error(chatError.message);
       }
 
-      // Enviar mensagem via WhatsApp e salvar no banco
-      await sendWhatsAppAndSave(newChat.id, fullPhone, message.trim());
+      // Enviar mensagem via WhatsApp e salvar no banco (apenas se tiver mensagem)
+      if (message.trim()) {
+        await sendWhatsAppAndSave(newChat.id, fullPhone, message.trim());
+      }
       onChatCreated(newChat.id);
     } catch (err: any) {
       console.error('Erro ao criar conversa:', err);
@@ -266,7 +263,7 @@ export default function NewChatModal({ clinicId, userId, onClose, onChatCreated 
           {/* Mensagem */}
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-              Mensagem <span className="text-red-500">*</span>
+              Mensagem <span className="text-slate-400 font-normal">(opcional)</span>
             </label>
             <textarea
               value={message}
@@ -289,18 +286,18 @@ export default function NewChatModal({ clinicId, userId, onClose, onChatCreated 
           </button>
           <button
             onClick={handleSubmit}
-            disabled={sending || !phone || !message.trim()}
+            disabled={sending || !phone}
             className="flex-1 px-4 py-2.5 bg-cyan-600 text-white rounded-xl text-sm font-medium hover:bg-cyan-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {sending ? (
               <>
                 <span className="material-symbols-outlined text-[18px] animate-spin">sync</span>
-                Enviando...
+                {message.trim() ? 'Enviando...' : 'Criando...'}
               </>
             ) : (
               <>
-                <span className="material-symbols-outlined text-[18px]">send</span>
-                Enviar
+                <span className="material-symbols-outlined text-[18px]">{message.trim() ? 'send' : 'chat_add_on'}</span>
+                {message.trim() ? 'Enviar' : 'Criar Conversa'}
               </>
             )}
           </button>
