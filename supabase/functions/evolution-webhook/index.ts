@@ -817,6 +817,99 @@ serve(async (req) => {
       }
     }
 
+    // Buscar e salvar avatar no Storage (apenas para conversas individuais, mensagem do cliente)
+    if (chat && !isFromMe && !isGroup) {
+      try {
+        // Verificar se já tem avatar permanente no Storage
+        const { data: chatAvatar } = await supabase
+          .from('chats')
+          .select('avatar_url, avatar_updated_at')
+          .eq('id', chat.id)
+          .single()
+        
+        const currentAvatarUrl = chatAvatar?.avatar_url || ''
+        const isStorageUrl = currentAvatarUrl.includes('supabase.co/storage')
+        const avatarUpdatedAt = chatAvatar?.avatar_updated_at
+        
+        // Pular se já tem URL do Storage e foi atualizada nos últimos 7 dias
+        let needsAvatar = !isStorageUrl
+        if (isStorageUrl && avatarUpdatedAt) {
+          const lastUpdate = new Date(avatarUpdatedAt).getTime()
+          const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000)
+          needsAvatar = lastUpdate < sevenDaysAgo
+        }
+        
+        if (needsAvatar) {
+          // Buscar settings da Evolution API
+          const { data: avatarSettings } = await supabase
+            .from('settings')
+            .select('evolution_api_url, evolution_api_key')
+            .eq('id', 1)
+            .single()
+          
+          if (avatarSettings?.evolution_api_url && avatarSettings?.evolution_api_key) {
+            const formattedPhone = phone.replace(/\D/g, '')
+            
+            // Buscar URL da foto de perfil via Evolution API
+            const avatarResponse = await fetch(
+              `${avatarSettings.evolution_api_url}/chat/fetchProfilePictureUrl/${instanceName}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': avatarSettings.evolution_api_key
+                },
+                body: JSON.stringify({ number: formattedPhone })
+              }
+            )
+            
+            if (avatarResponse.ok) {
+              const avatarData = await avatarResponse.json()
+              const tempAvatarUrl = avatarData?.profilePictureUrl || avatarData?.picture || avatarData?.profilePicUrl || null
+              
+              if (tempAvatarUrl) {
+                // Baixar a imagem
+                const imgResponse = await fetch(tempAvatarUrl, {
+                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+                })
+                
+                if (imgResponse.ok) {
+                  const imgBlob = await imgResponse.blob()
+                  const contentType = imgResponse.headers.get('content-type') || 'image/jpeg'
+                  let ext = 'jpg'
+                  if (contentType.includes('png')) ext = 'png'
+                  else if (contentType.includes('webp')) ext = 'webp'
+                  
+                  const fileName = `avatars/${chat.id}.${ext}`
+                  
+                  // Upload para o Storage
+                  const { error: uploadErr } = await supabase.storage
+                    .from('chat-media')
+                    .upload(fileName, imgBlob, { contentType, upsert: true })
+                  
+                  if (!uploadErr) {
+                    const { data: pubUrl } = supabase.storage.from('chat-media').getPublicUrl(fileName)
+                    const permanentUrl = pubUrl?.publicUrl
+                    
+                    if (permanentUrl) {
+                      await supabase
+                        .from('chats')
+                        .update({ avatar_url: permanentUrl, avatar_updated_at: new Date().toISOString() })
+                        .eq('id', chat.id)
+                      console.log('[Avatar] Saved to Storage for chat:', chat.id)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (avatarErr) {
+        // Erro no avatar nunca deve afetar o fluxo principal
+        console.error('[Avatar] Error (non-blocking):', avatarErr)
+      }
+    }
+
     // Enviar Broadcast para notificar o cliente em tempo real
     try {
       const channel = supabase.channel('leadcare-updates')

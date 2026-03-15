@@ -57,8 +57,10 @@ export default function NewChatModal({ clinicId, userId, onClose, onChatCreated 
         .maybeSingle();
 
       if (existingChat) {
-        // Chat já existe — abrir e enviar mensagem nele
-        await sendWhatsAppAndSave(existingChat.id, fullPhone, message.trim());
+        // Chat já existe — abrir e enviar mensagem apenas se tiver conteúdo
+        if (message.trim()) {
+          await sendWhatsAppAndSave(existingChat.id, fullPhone, message.trim());
+        }
         onChatCreated(existingChat.id);
         return;
       }
@@ -107,7 +109,9 @@ export default function NewChatModal({ clinicId, userId, onClose, onChatCreated 
           .maybeSingle();
 
         if (retryChat) {
-          await sendWhatsAppAndSave(retryChat.id, fullPhone, message.trim());
+          if (message.trim()) {
+            await sendWhatsAppAndSave(retryChat.id, fullPhone, message.trim());
+          }
           onChatCreated(retryChat.id);
           return;
         }

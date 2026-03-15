@@ -45,6 +45,7 @@ interface UseChatsReturn {
   updateOptimisticMessage: (chatId: string, tempId: string, realMessage: DbMessage | null) => void;
   hasMoreChats: boolean;
   loadMoreChats: () => Promise<void>;
+  searchChats: (query: string) => Promise<ChatWithMessages[]>;
 }
 
 const MESSAGES_PER_PAGE = 50;
@@ -104,10 +105,8 @@ export function useChats(clinicId?: string, userId?: string, paginate: boolean =
     setError(null);
 
     try {
-      // Carregar apenas metadados dos chats (sem mensagens)
-      const { data: chatsData, error: chatsError } = await (supabase as any)
-        .from('chats')
-        .select(`
+      const BATCH_SIZE = 5000;
+      const chatSelectQuery = `
           id, clinic_id, lead_id, client_name, phone_number, avatar_url, avatar_updated_at, status,
           unread_count, last_message, last_message_time, assigned_to, created_at,
           updated_at, instance_id, locked_by, locked_at, last_message_from_client,
@@ -115,22 +114,60 @@ export function useChats(clinicId?: string, userId?: string, paginate: boolean =
           chat_tags (
             tags (*)
           )
-        `)
-        .eq('clinic_id', clinicId)
-        .order('last_message_time', { ascending: false })
-        .limit(paginate ? CHATS_PER_PAGE + 1 : 10000);
+        `;
 
-      if (chatsError) {
-        console.error('[useChats] Error fetching chats:', chatsError);
-        setError('Erro ao carregar conversas');
-        setLoading(false);
-        return;
+      let chatsData: any[] = [];
+
+      if (paginate) {
+        // Modo paginado (Inbox): busca apenas 1 página
+        const { data, error: chatsError } = await (supabase as any)
+          .from('chats')
+          .select(chatSelectQuery)
+          .eq('clinic_id', clinicId)
+          .order('last_message_time', { ascending: false })
+          .limit(CHATS_PER_PAGE + 1);
+
+        if (chatsError) {
+          console.error('[useChats] Error fetching chats:', chatsError);
+          setError('Erro ao carregar conversas');
+          setLoading(false);
+          return;
+        }
+        chatsData = data || [];
+      } else {
+        // Modo completo (Kanban): busca em lotes até trazer todos
+        let offset = 0;
+        let hasMoreBatches = true;
+        while (hasMoreBatches) {
+          const { data: batch, error: batchError } = await (supabase as any)
+            .from('chats')
+            .select(chatSelectQuery)
+            .eq('clinic_id', clinicId)
+            .order('last_message_time', { ascending: false })
+            .range(offset, offset + BATCH_SIZE - 1);
+
+          if (batchError) {
+            console.error('[useChats] Error fetching chats batch:', batchError);
+            setError('Erro ao carregar conversas');
+            setLoading(false);
+            return;
+          }
+
+          const batchData = batch || [];
+          chatsData = [...chatsData, ...batchData];
+          console.log(`[useChats] Batch loaded: offset=${offset}, count=${batchData.length}, total=${chatsData.length}`);
+
+          if (batchData.length < BATCH_SIZE) {
+            hasMoreBatches = false;
+          } else {
+            offset += BATCH_SIZE;
+          }
+        }
       }
 
-      
-      // Verificar se há mais chats além do limite
-      const hasMore = paginate && (chatsData || []).length > CHATS_PER_PAGE;
-      const chatsToProcess = hasMore ? (chatsData || []).slice(0, CHATS_PER_PAGE) : (chatsData || []);
+      // Verificar se há mais chats além do limite (só para modo paginado)
+      const hasMore = paginate && chatsData.length > CHATS_PER_PAGE;
+      const chatsToProcess = hasMore ? chatsData.slice(0, CHATS_PER_PAGE) : chatsData;
       setHasMoreChats(hasMore);
 
       // Preservar mensagens e last_message locais se forem mais recentes
@@ -1154,6 +1191,62 @@ export function useChats(clinicId?: string, userId?: string, paginate: boolean =
     }));
   };
 
+  // Busca server-side por nome ou telefone (consulta o banco inteiro)
+  // Injeta resultados no array principal para que fetchMessages/selectedChat funcionem
+  const searchChats = async (query: string): Promise<ChatWithMessages[]> => {
+    if (!clinicId || !query.trim()) return [];
+
+    try {
+      const term = query.trim();
+      // Normalizar para busca por telefone: se contém dígitos, buscar também sem formatação
+      const digitsOnly = term.replace(/\D/g, '');
+      const phoneSearchTerm = digitsOnly.length >= 4 ? digitsOnly : term;
+      
+      const { data, error: searchError } = await (supabase as any)
+        .from('chats')
+        .select(`
+          id, clinic_id, lead_id, client_name, phone_number, avatar_url, avatar_updated_at, status,
+          unread_count, last_message, last_message_time, assigned_to, created_at,
+          updated_at, instance_id, locked_by, locked_at, last_message_from_client,
+          channel, is_pinned, is_group, group_id, source_id,
+          chat_tags (
+            tags (*)
+          )
+        `)
+        .eq('clinic_id', clinicId)
+        .or(`client_name.ilike.%${term}%,phone_number.ilike.%${phoneSearchTerm}%`)
+        .order('last_message_time', { ascending: false })
+        .limit(50);
+
+      if (searchError) {
+        console.error('[useChats] Search error:', searchError);
+        return [];
+      }
+
+      const results: ChatWithMessages[] = (data || []).map((chat: any) => ({
+        ...chat,
+        messages: [],
+        tags: chat.chat_tags?.map((ct: { tags: DbTag }) => ct.tags).filter(Boolean) || [],
+      }));
+
+      // Injetar chats que não existem no array principal
+      if (results.length > 0) {
+        setChats(prev => {
+          const existingIds = new Set(prev.map(c => c.id));
+          const newChats = results.filter(c => !existingIds.has(c.id));
+          if (newChats.length === 0) return prev;
+          console.log('[useChats] Injecting', newChats.length, 'search results into chats array');
+          return [...prev, ...newChats];
+        });
+      }
+
+      return results;
+    } catch (err) {
+      console.error('[useChats] Search exception:', err);
+      return [];
+    }
+  };
+
   return {
     chats,
     loading,
@@ -1173,5 +1266,6 @@ export function useChats(clinicId?: string, userId?: string, paginate: boolean =
     updateOptimisticMessage,
     hasMoreChats,
     loadMoreChats,
+    searchChats,
   };
 }

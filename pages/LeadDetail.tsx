@@ -451,7 +451,7 @@ const LeadDetail: React.FC<LeadDetailProps> = ({ state }) => {
             {lead.status}
           </span>
           <button
-            onClick={() => navigate(`/inbox?chat=${chatId}`)}
+            onClick={() => navigate(`/inbox?chatId=${chatId}`)}
             className="px-3 sm:px-4 py-1.5 sm:py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
           >
             <span className="material-symbols-outlined text-sm">chat</span>

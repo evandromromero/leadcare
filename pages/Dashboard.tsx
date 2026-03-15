@@ -2975,7 +2975,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     <div 
                       key={task.id}
                       className="flex items-start gap-2 p-2 rounded-lg bg-red-50 border border-red-100 cursor-pointer hover:bg-red-100 transition-colors"
-                      onClick={() => navigate(`/inbox?chat=${task.chat_id}`)}
+                      onClick={() => navigate(`/inbox?chatId=${task.chat_id}`)}
                     >
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleTask(task.id, task.completed); }}
@@ -3015,7 +3015,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     <div 
                       key={task.id}
                       className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 border border-amber-100 cursor-pointer hover:bg-amber-100 transition-colors"
-                      onClick={() => navigate(`/inbox?chat=${task.chat_id}`)}
+                      onClick={() => navigate(`/inbox?chatId=${task.chat_id}`)}
                     >
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleTask(task.id, task.completed); }}
@@ -3052,7 +3052,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                     <div 
                       key={task.id}
                       className="flex items-start gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors"
-                      onClick={() => navigate(`/inbox?chat=${task.chat_id}`)}
+                      onClick={() => navigate(`/inbox?chatId=${task.chat_id}`)}
                     >
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleTask(task.id, task.completed); }}
@@ -3093,7 +3093,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                   <div 
                     key={followup.id}
                     className="flex items-start gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
-                    onClick={() => navigate(`/inbox?chat=${followup.chat_id}`)}
+                    onClick={() => navigate(`/inbox?chatId=${followup.chat_id}`)}
                   >
                     <div className="size-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
                       <span className="material-symbols-outlined text-white text-lg">schedule</span>
@@ -4162,9 +4162,9 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
                       });
 
                       const renderTaskItem = (task: typeof tasks[0], showDate = true) => (
-                        <div key={task.id} className="p-2 sm:p-3 flex items-start gap-2 sm:gap-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                        <div key={task.id} className="p-2 sm:p-3 flex items-start gap-2 sm:gap-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0 cursor-pointer" onClick={() => task.chat_id && navigate(`/inbox?chatId=${task.chat_id}`)}>
                           <button
-                            onClick={async () => {
+                            onClick={async (e) => { e.stopPropagation();
                               await supabase
                                 .from('tasks' as any)
                                 .update({ completed: true, completed_at: new Date().toISOString() })
@@ -4740,7 +4740,7 @@ const Dashboard: React.FC<DashboardProps> = ({ state }) => {
               </button>
               <button
                 onClick={() => {
-                  window.location.href = `/inbox?chat=${selectedMetaAdLead.chat_id}`;
+                  window.location.href = `/inbox?chatId=${selectedMetaAdLead.chat_id}`;
                 }}
                 className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
               >

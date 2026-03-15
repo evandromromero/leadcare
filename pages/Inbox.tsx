@@ -46,7 +46,10 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const clinicId = state.selectedClinic?.id;
-  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages, togglePinChat, addOptimisticMessage, updateOptimisticMessage, hasMoreChats, loadMoreChats } = useChats(clinicId, user?.id);
+  const { chats, loading, sendMessage, editMessage, markAsRead, markAsUnread, updateChatStatus, refetch, fetchAndUpdateAvatar, fetchMessages, loadMoreMessages, togglePinChat, addOptimisticMessage, updateOptimisticMessage, hasMoreChats, loadMoreChats, searchChats } = useChats(clinicId, user?.id);
+  const [serverSearchResults, setServerSearchResults] = useState<ChatWithMessages[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { stages } = usePipelineStages(clinicId);
   const PIPELINE_STAGES = stages.map(s => ({ value: s.status_key, label: s.label, color: s.color, hint: s.label }));
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -1917,7 +1920,31 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     }
   }, [selectedChatId]);
 
+  // Busca server-side com debounce quando searchQuery muda
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setServerSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchTimerRef.current = setTimeout(async () => {
+      const results = await searchChats(searchQuery);
+      setServerSearchResults(results);
+      setIsSearching(false);
+    }, 400);
+
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  }, [searchQuery]);
+
+  // IDs dos resultados da busca server-side (atualiza a cada nova busca)
+  const serverSearchIds = useMemo(() => new Set(serverSearchResults.map(c => c.id)), [serverSearchResults]);
+
   // Filtrar chats baseado no filtro ativo e busca (memoizado)
+  // Nota: resultados da busca server-side já são injetados no array chats pelo hook
   const filteredChats = useMemo(() => chats.filter(chat => {
     // Filtro de canal
     const chatChannel = (chat as any).channel || 'whatsapp';
@@ -1925,11 +1952,19 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
 
     // Filtro de busca
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      const matchesName = chat.client_name?.toLowerCase().includes(query);
-      const matchesPhone = chat.phone_number?.toLowerCase().includes(query);
-      const matchesMessage = chat.last_message?.toLowerCase().includes(query);
-      if (!matchesName && !matchesPhone && !matchesMessage) return false;
+      // Se o chat veio da busca server-side ATUAL, ele passa direto
+      const isServerResult = serverSearchIds.has(chat.id);
+      if (!isServerResult) {
+        // Filtro local para chats que já estavam carregados
+        const query = searchQuery.toLowerCase();
+        const digitsOnly = query.replace(/\D/g, '');
+        const matchesName = chat.client_name?.toLowerCase().includes(query);
+        const matchesPhone = digitsOnly.length >= 4
+          ? chat.phone_number?.includes(digitsOnly)
+          : chat.phone_number?.toLowerCase().includes(query);
+        const matchesMessage = chat.last_message?.toLowerCase().includes(query);
+        if (!matchesName && !matchesPhone && !matchesMessage) return false;
+      }
     }
 
     // Filtros de categoria
@@ -1942,9 +1977,9 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         return (chat as any).is_group === true;
       case 'todos':
       default:
-        return !(chat as any).is_group; // Todos mostra apenas conversas individuais
+        return !(chat as any).is_group;
     }
-  }), [chats, activeChannel, searchQuery, activeFilter, followupData]);
+  }), [chats, serverSearchIds, activeChannel, searchQuery, activeFilter, followupData]);
 
   // Contadores memoizados para os filtros (evita recalcular a cada render)
   const filterCounts = useMemo(() => ({
@@ -1953,21 +1988,58 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
     grupos: chats.filter(c => (c as any).is_group).length,
   }), [chats]);
 
-  // Ler chatId da URL (vindo do Kanban) e selecionar automaticamente
+  // Ler chatId da URL (vindo do Kanban, Dashboard, etc.) e selecionar automaticamente
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const chatIdFromUrl = params.get('chatId');
     
-    if (chatIdFromUrl && chats?.length) {
-      const exists = chats.some(c => c.id === chatIdFromUrl);
-      if (exists) {
-        setSelectedChatId(chatIdFromUrl);
-        markAsRead(chatIdFromUrl);
-        // Limpar o parâmetro da URL após selecionar
-        navigate('/inbox', { replace: true });
-      }
+    if (!chatIdFromUrl || !chats?.length) return;
+
+    const exists = chats.some(c => c.id === chatIdFromUrl);
+    if (exists) {
+      setSelectedChatId(chatIdFromUrl);
+      markAsRead(chatIdFromUrl);
+      navigate('/inbox', { replace: true });
+    } else if (clinicId) {
+      // Chat não está nos 100 carregados — buscar do banco e injetar
+      (async () => {
+        try {
+          const { data } = await (supabase as any)
+            .from('chats')
+            .select(`
+              id, clinic_id, lead_id, client_name, phone_number, avatar_url, avatar_updated_at, status,
+              unread_count, last_message, last_message_time, assigned_to, created_at,
+              updated_at, instance_id, locked_by, locked_at, last_message_from_client,
+              channel, is_pinned, is_group, group_id, source_id,
+              chat_tags ( tags (*) )
+            `)
+            .eq('id', chatIdFromUrl)
+            .eq('clinic_id', clinicId)
+            .maybeSingle();
+
+          if (data) {
+            // Injetar via searchChats para que fique no array principal
+            const chatObj: ChatWithMessages = {
+              ...data,
+              messages: [],
+              tags: data.chat_tags?.map((ct: any) => ct.tags).filter(Boolean) || [],
+            };
+            // Adicionar ao array de chats se ainda não existe
+            const alreadyExists = chats.some(c => c.id === data.id);
+            if (!alreadyExists) {
+              // Forçar re-render com o chat injetado via searchChats
+              await searchChats(data.client_name || data.phone_number || chatIdFromUrl);
+            }
+            setSelectedChatId(chatIdFromUrl);
+            markAsRead(chatIdFromUrl);
+            navigate('/inbox', { replace: true });
+          }
+        } catch (err) {
+          console.error('[Inbox] Error fetching chat from URL:', err);
+        }
+      })();
     }
-  }, [location.search, chats]);
+  }, [location.search, chats, clinicId]);
 
   // Selecionar primeira conversa automaticamente apenas em telas maiores (não mobile)
   useEffect(() => {
@@ -3261,14 +3333,22 @@ const Inbox: React.FC<InboxProps> = ({ state, setState }) => {
         <div className="p-4 border-b border-slate-100 space-y-4">
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined text-[20px]">search</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined text-[20px]">
+                {isSearching ? 'hourglass_top' : 'search'}
+              </span>
               <input 
                 type="text" 
-                placeholder="Buscar conversa..." 
+                placeholder="Buscar por nome ou telefone..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-cyan-600"
+                className="w-full pl-9 sm:pl-10 pr-8 sm:pr-9 py-1.5 sm:py-2 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-cyan-600"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 material-symbols-outlined text-[16px]"
+                >close</button>
+              )}
             </div>
             <button
               onClick={() => setShowNewChatModal(true)}

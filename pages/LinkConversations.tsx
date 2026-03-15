@@ -769,7 +769,7 @@ export default function LinkConversations() {
                             Ler
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); navigate(`/inbox?chat=${conv.id}`); }}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/inbox?chatId=${conv.id}`); }}
                             className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-green-100 text-green-600 rounded-lg text-xs font-medium"
                           >
                             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -873,7 +873,7 @@ export default function LinkConversations() {
                             <span className="material-symbols-outlined text-lg">forum</span>
                           </button>
                           <button
-                            onClick={() => navigate(`/inbox?chat=${conv.id}`)}
+                            onClick={() => navigate(`/inbox?chatId=${conv.id}`)}
                             className="p-1.5 hover:bg-green-50 rounded text-green-600"
                             title="Ir para conversa"
                           >
